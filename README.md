@@ -42,10 +42,7 @@ Using **Ollama** for local AI processing, StratoSort intelligently categorizes a
 - **🔒 100% Privacy**: All AI processing happens locally on your machine
 - **🤖 Smart Organization**: Advanced AI content analysis and categorization
 - **🎨 Modern Interface**: Beautiful, accessible desktop app with Apple-inspired design
-- **↩️ Complete History**: Full undo/redo system with persistent action tracking
-- **🔍 Semantic Search**: Find documents by content, not just filename
 - **⚡ Batch Processing**: Handle thousands of files simultaneously
-- **♿ Accessibility**: Full screen reader and keyboard navigation support
 
 ---
 
@@ -57,13 +54,6 @@ Using **Ollama** for local AI processing, StratoSort intelligently categorizes a
 - **Batch Processing**: Handle multiple documents simultaneously
 - **Custom Naming Conventions**: Flexible file naming patterns
 - **Multi-format Support**: PDF, images, text documents, and more
-
-### Advanced Features
-- **RAG-Ready Search**: Semantic search across your document history
-- **Accessibility Suite**: Screen reader support, keyboard navigation, high contrast modes
-- **Undo/Redo System**: Complete action history with persistent storage
-- **Analysis History**: Track all document processing with searchable metadata
-- **Dark Mode**: Full theme support with system preference detection
 
 ## 🏗️ Architecture
 
@@ -92,14 +82,14 @@ stratosort/
 
 - **Node.js** 14.0.0 or higher
 - **npm** 6.0.0 or higher
-- **Ollama** (optional, for AI features)
+- **Ollama** (required for AI features)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
    git clone https://github.com/stratosort/stratosort.git
-cd stratosort
+   cd stratosort
    ```
 
 2. **Install dependencies**
@@ -107,14 +97,45 @@ cd stratosort
    npm run setup
    ```
 
-3. **Install Ollama (optional)**
+3. **Install Ollama and Gemma model**
    ```bash
-   # Download from https://ollama.ai
-   # Then install required models:
-   npm run setup:ollama
+   # Download and install Ollama from https://ollama.ai
+   # Or using package managers:
+   
+   # Windows (using winget)
+   winget install Ollama.Ollama
+   
+   # macOS (using Homebrew)
+   brew install ollama
+   
+   # Linux
+   curl -fsSL https://ollama.ai/install.sh | sh
    ```
 
-4. **Start the application**
+4. **Start Ollama service**
+   ```bash
+   ollama serve
+   ```
+
+5. **Install Gemma model**
+   ```bash
+   # Install Gemma 2B model (recommended for most systems)
+   ollama pull gemma:2b
+   
+   # Or install Gemma 7B model (requires more RAM)
+   ollama pull gemma:7b
+   ```
+
+6. **Verify installation**
+   ```bash
+   # Check if Ollama is running
+   ollama list
+   
+   # Test Gemma model
+   ollama run gemma:2b "Hello, how are you?"
+   ```
+
+7. **Start the application**
    ```bash
    npm start
    ```
@@ -195,12 +216,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ---
 
 <div align="center">
-
-### 🚀 **Ready to Organize Your Digital Life?**
-
-[**Download StratoSort**](#installation--setup) • [**View Documentation**](#complete-walkthrough) • [**Join Community**](#contributing)
-
----
 
 **Made with ❤️ by the StratoSort Team**
 

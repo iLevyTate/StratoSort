@@ -1,0 +1,42 @@
+SERVICE AGREEMENT
+
+Agreement Date: November 30, 2024
+Between: Tech Solutions Inc. (Provider)
+And: Business Corp. (Client)
+
+TERMS AND CONDITIONS
+
+1. SCOPE OF SERVICES
+The Provider agrees to deliver software development services including:
+- Application development
+- System integration
+- Technical support
+- Documentation
+
+2. PAYMENT TERMS
+Total Contract Value: $50,000
+Payment Schedule: Monthly installments
+Due Date: 30th of each month
+
+3. DURATION
+Contract Period: 12 months
+Start Date: January 1, 2025
+End Date: December 31, 2025
+
+4. TERMINATION
+Either party may terminate this agreement with 30 days written notice.
+
+5. CONFIDENTIALITY
+Both parties agree to maintain confidentiality of proprietary information.
+
+6. GOVERNING LAW
+This agreement shall be governed by the laws of the State of California.
+
+SIGNATURES
+Provider: _________________ Date: _________
+Client: _________________ Date: _________
+
+Keywords: contract, agreement, legal, services, terms, conditions, payment, confidentiality
+Category: Legal
+Expected Folder: Legal/Contracts
+Confidence: High (95%+) 

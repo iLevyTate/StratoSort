@@ -1,0 +1,280 @@
+{
+  "name": "stratosort",
+  "version": "1.0.0",
+  "description": "Stratosort - Local AI Document Organizer with Ollama integration. Privacy-focused document organization using AI-powered analysis.",
+  "keywords": [
+    "electron",
+    "ai",
+    "document-organization",
+    "ollama",
+    "local-ai",
+    "privacy",
+    "file-organizer",
+    "stratosort",
+    "fibonacci-ui",
+    "document-analysis"
+  ],
+  "homepage": "https://github.com/stratosort/stratosort#readme",
+  "bugs": {
+    "url": "https://github.com/stratosort/stratosort/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stratosort/stratosort.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Stratosort Team",
+    "email": "contact@stratosort.com",
+    "url": "https://stratosort.com"
+  },
+  "contributors": [
+    {
+      "name": "Amila Welihinda",
+      "email": "amilajack@gmail.com",
+      "url": "https://github.com/amilajack"
+    }
+  ],
+  "main": "./src/main/simple-main.js",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "dev": "npm run start:dev",
+    "build:dev": "webpack --mode=development",
+    "build:dll": "echo 'DLL build not required for current setup'",
+    "build:main": "webpack --mode=production --config webpack.config.js",
+    "build:renderer": "webpack --mode=production",
+    "postinstall-disabled": "electron-builder install-app-deps",
+    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "package": "rimraf dist && npm run build && electron-builder build --publish never",
+    "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
+    "start": "node scripts/verify-setup.js",
+    "start:verified": "cross-env NODE_ENV=development electron . --enable-logging",
+    "start:optimized": "node scripts/verify-setup.js",
+    "start:quick": "concurrently \"npm run start:renderer\" \"npm run start:main\"",
+    "electron": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
+    "start:simple": "electron .",
+    "start:dev": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
+    "start:debug": "cross-env NODE_ENV=development electron . --enable-logging --inspect",
+    "start:production": "cross-env NODE_ENV=production electron .",
+    "start:check": "node startup-check.js",
+    "start:no-check": "npm run start:simple",
+    "start:legacy": "npm run start:renderer",
+    "start:main": "cross-env NODE_ENV=development electron -r ts-node/register/transpile-only .",
+    "start:preload": "webpack --mode=development --config webpack.config.js",
+    "start:renderer": "webpack serve --mode=development --config webpack.config.js",
+    "test": "jest",
+    "test:run": "node run-tests.js",
+    "test:full": "node run-tests.js --coverage",
+    "test:quick": "node run-tests.js --bail",
+    "test:upload": "node run-tests.js --categories file-upload",
+    "test:ai": "node run-tests.js --categories ai-processing",
+    "test:performance": "node run-tests.js --categories performance",
+    "test:help": "node run-tests.js --help",
+    "test:functionality": "node -e \"console.log('🧪 Stratosort Comprehensive Test Suite'); console.log('=' .repeat(50)); console.log('\\n📋 Available Test Commands:'); console.log('   npm run test:run        - Run all tests with reporting'); console.log('   npm run test:full       - Full test suite with coverage'); console.log('   npm run test:quick      - Quick test run (stop on first failure)'); console.log('   npm run test:upload     - Test file upload functionality'); console.log('   npm run test:ai         - Test AI processing pipeline'); console.log('   npm run test:performance - Test performance & resources'); console.log('\\n🔍 Test Coverage:'); console.log('   • File upload & validation (drag-drop, size limits)'); console.log('   • Ollama AI integration (document analysis, categorization)'); console.log('   • Document lifecycle (state management, concurrency)'); console.log('   • UI behavior (progress tracking, empty states)'); console.log('   • Configuration (custom settings, folder naming)'); console.log('   • Error handling (corrupted files, network issues)'); console.log('   • Performance (memory usage, processing speed)'); console.log('\\n🚀 Quick Start:'); console.log('   npm run test:run'); console.log('\\n✅ Expected Results:'); console.log('   • 95%+ test pass rate'); console.log('   • Detailed HTML/JSON reports'); console.log('   • Performance metrics'); console.log('   • Error diagnostics');\"",
+    "verify": "npm run test:functionality",
+    "setup:ollama": "node setup-ollama.js",
+    "setup:ollama:full": "node setup-ollama.js",
+    "check:ollama": "node setup-ollama.js --check",
+    "start:ollama": "node setup-ollama.js --start",
+    "ollama:serve": "ollama serve",
+    "ollama:models": "ollama pull gemma3:4b",
+    "ollama:status": "npm run check:ollama",
+    "help": "node -e \"console.log('🎯 STRATOSORT - NPM COMMANDS'); console.log('=' .repeat(30)); console.log('\\n🚀 Starting the App:'); console.log('   npm start          - Full startup check + launch'); console.log('   npm run start:quick - Quick launch (no checks)'); console.log('   npm run start:dev   - Development mode with logging'); console.log('   npm run start:debug - Debug mode with inspector'); console.log('\\n🤖 Ollama AI Management:'); console.log('   npm run setup:ollama  - Complete Ollama setup'); console.log('   npm run check:ollama  - Check Ollama status'); console.log('   npm run start:ollama  - Start Ollama service'); console.log('   npm run ollama:models - Install required models'); console.log('\\n🧪 Testing:'); console.log('   npm run test:functionality - View test guide'); console.log('   npm run verify             - Run verification'); console.log('\\n⚙️  Development:'); console.log('   npm run start:legacy - Legacy webpack mode'); console.log('   npm run build        - Build for production'); console.log('   npm run package      - Create distributable'); console.log('\\n💡 Tips:'); console.log('   • Install Ollama: https://ollama.ai'); console.log('   • Install models: ollama pull gemma3:4b'); console.log('   • Start Ollama: ollama serve'); console.log('   • App works without Ollama (mock mode)');\"",
+    "icon": "eib  -i assets/icon.png -o assets"
+  },
+  "browserslist": [],
+  "prettier": {
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": [
+          ".prettierrc",
+          ".eslintrc"
+        ],
+        "options": {
+          "parser": "json"
+        }
+      }
+    ]
+  },
+  "jest": {
+    "projects": [
+      "<rootDir>/test/jest.config.js"
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "electron-debug": "^3.2.0",
+    "electron-log": "^4.4.8",
+    "electron-updater": "^6.1.4",
+    "framer-motion": "^12.18.1",
+    "mammoth": "^1.9.1",
+    "node-tesseract-ocr": "^2.2.1",
+    "officeparser": "^5.1.1",
+    "ollama": "^0.5.15",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sharp": "^0.33.2",
+    "xlsx-populate": "^1.21.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/plugin-transform-react-jsx": "^7.27.1",
+    "@babel/preset-react": "^7.27.1",
+    "@electron/notarize": "^2.1.0",
+    "@electron/rebuild": "^3.7.2",
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
+    "@svgr/webpack": "^8.1.0",
+    "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
+    "@testing-library/jest-dom": "^6.1.3",
+    "@testing-library/react": "^14.0.0",
+    "@types/debug": "^4.1.12",
+    "@types/graceful-fs": "^4.1.9",
+    "@types/jest": "^29.5.5",
+    "@types/node": "20.6.2",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
+    "@types/react-dropzone": "^4.2.2",
+    "@types/react-test-renderer": "^18.0.1",
+    "@types/react-window": "^1.8.8",
+    "@types/semver": "^7.7.0",
+    "@types/terser-webpack-plugin": "^5.0.4",
+    "@types/tough-cookie": "^4.0.5",
+    "@types/uuid": "^10.0.0",
+    "@types/webpack-bundle-analyzer": "^4.6.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "assert": "^2.1.0",
+    "autoprefixer": "^10.4.21",
+    "babel-loader": "^10.0.0",
+    "browserslist-config-erb": "^0.0.3",
+    "buffer": "^6.0.3",
+    "chalk": "^4.1.2",
+    "concurrently": "^8.2.1",
+    "core-js": "^3.32.2",
+    "cross-env": "^7.0.3",
+    "crypto-browserify": "^3.12.1",
+    "css-loader": "^6.11.0",
+    "css-minimizer-webpack-plugin": "^5.0.1",
+    "detect-port": "^1.5.1",
+    "electron": "^26.2.1",
+    "electron-builder": "^24.6.4",
+    "electron-devtools-installer": "^3.2.0",
+    "eslint": "^8.49.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-erb": "^4.1.0-0",
+    "eslint-import-resolver-typescript": "^3.6.0",
+    "eslint-import-resolver-webpack": "^0.13.7",
+    "eslint-plugin-compat": "^4.2.0",
+    "eslint-plugin-import": "^2.28.1",
+    "eslint-plugin-jest": "^27.4.0",
+    "eslint-plugin-jsx-a11y": "^6.7.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.5.3",
+    "https-browserify": "^1.0.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "mini-css-extract-plugin": "^2.7.6",
+    "os-browserify": "^0.3.0",
+    "path-browserify": "^1.0.1",
+    "postcss": "^8.4.24",
+    "postcss-loader": "^8.1.1",
+    "prettier": "^3.0.3",
+    "process": "^0.11.10",
+    "querystring-es3": "^0.2.1",
+    "react-refresh": "^0.14.0",
+    "react-test-renderer": "^18.2.0",
+    "rimraf": "^5.0.1",
+    "sass": "^1.67.0",
+    "sass-loader": "^13.3.2",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "style-loader": "^3.3.4",
+    "tailwindcss": "^3.4.3",
+    "terser-webpack-plugin": "^5.3.9",
+    "ts-jest": "^29.1.1",
+    "ts-loader": "^9.4.4",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths-webpack-plugin": "^4.1.0",
+    "typescript": "^5.2.2",
+    "url": "^0.11.4",
+    "url-loader": "^4.1.1",
+    "util": "^0.12.5",
+    "webpack": "^5.99.9",
+    "webpack-bundle-analyzer": "^4.9.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.1",
+    "webpack-merge": "^5.9.0"
+  },
+  "build": {
+    "productName": "Stratosort",
+    "appId": "com.stratosort.app",
+    "asar": true,
+    "asarUnpack": "**\\*.{node,dll}",
+    "files": [
+      "src",
+      "assets",
+      "startup-check.js",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "assets/icons/icons/mac/icon.icns",
+      "target": {
+        "target": "default",
+        "arch": [
+          "arm64",
+          "x64"
+        ]
+      },
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/icons/win/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "directories": {
+      "app": "release/app",
+      "buildResources": "assets",
+      "output": "release/build"
+    },
+    "extraResources": [
+      "./assets/**"
+    ]
+  },
+  "collective": {
+    "url": "https://opencollective.com/electron-react-boilerplate-594"
+  }
+}

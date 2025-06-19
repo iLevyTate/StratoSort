@@ -1,0 +1,27 @@
+STRATOSORT TEST DOCUMENT
+
+Invoice #12345
+Date: November 30, 2024
+From: Acme Corporation
+To: Test Customer
+
+Service Description: AI Document Processing Services
+Amount: $1,250.00
+Due Date: December 30, 2024
+
+Payment Terms: Net 30 days
+Payment Method: Bank transfer
+
+This is a sample financial document for testing the AI categorization system.
+Keywords: invoice, payment, financial, billing, services, AI, processing
+
+Category: Financial
+Expected Folder: Financial/Invoices
+Confidence: High (90%+)
+
+Additional metadata:
+- Document type: Invoice
+- Date extracted: 2024
+- Vendor: Acme Corporation
+- Amount: $1,250.00
+- Currency: USD 

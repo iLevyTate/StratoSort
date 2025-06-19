@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Production builds
+dist/
+release/
+build/
+out/
+
+# Development
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+junit.xml
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Electron
+electron-builder.yml
+!electron-builder.yml
+
+# Debug files
+debug-analysis.js
+startup-validation.js
+verify-*.js
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Package files
+*.tgz
+*.zip
+*.tar.gz
+
+# Lock files (optional - uncomment if you want to ignore)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml 

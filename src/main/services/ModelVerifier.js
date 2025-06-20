@@ -5,203 +5,287 @@
 
 const { Ollama } = require('ollama');
 const { ModelMissingError, OllamaConnectionError } = require('../errors/AnalysisError');
+const { DEFAULT_AI_MODELS } = require('../../shared/constants');
 
 class ModelVerifier {
-  constructor(host = 'http://127.0.0.1:11434') {
-    this.ollamaClient = new Ollama({ host });
-    this.verifiedModels = new Set();
-    this.lastCheck = null;
-    this.cacheTimeout = 300000; // 5 minutes
-    
-    // Required models for different analysis types
-    this.requiredModels = {
-      'document': ['gemma3:4b', 'llama3.2', 'llama3'],
-      'image': ['gemma3:4b', 'llava'],
-      'audio': [], // Audio transcription not available through Ollama
-      'all': ['gemma3:4b', 'llama3.2', 'llama3', 'llava']
-    };
+  constructor() {
+    this.ollamaHost = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+    this.ollama = new Ollama({ host: this.ollamaHost });
+    this.essentialModels = [
+      DEFAULT_AI_MODELS.TEXT_ANALYSIS, // gemma3:4b
+      DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // gemma3:4b (multimodal)
+      DEFAULT_AI_MODELS.AUDIO_ANALYSIS, // whisper
+      'mxbai-embed-large' // For semantic search
+    ];
+    this.recommendedModels = [
+      ...DEFAULT_AI_MODELS.FALLBACK_MODELS, // llama3.2, llama3, mistral, phi3
+      'whisper:medium', // Better accuracy Whisper model
+      'whisper:large' // Highest accuracy Whisper model
+    ];
   }
 
-  /**
-   * Verify Ollama connection
-   */
-  async verifyConnection() {
+  async checkOllamaConnection() {
     try {
-      await this.ollamaClient.list();
-      return true;
+      const response = await fetch(`${this.ollamaHost}/api/tags`);
+      if (response.ok) {
+        return { connected: true };
+      }
+      return { connected: false, error: 'HTTP error: ' + response.status };
     } catch (error) {
-      throw new OllamaConnectionError();
+      return { 
+        connected: false, 
+        error: error.message,
+        suggestion: 'Make sure Ollama is running. Use: ollama serve'
+      };
     }
   }
 
-  /**
-   * Get available models from Ollama
-   */
-  async getAvailableModels() {
+  async getInstalledModels() {
     try {
-      const response = await this.ollamaClient.list();
-      return response.models.map(model => model.name);
+      const models = await this.ollama.list();
+      return {
+        success: true,
+        models: models.models || [],
+        total: models.models?.length || 0
+      };
     } catch (error) {
-      throw new OllamaConnectionError();
+      return {
+        success: false,
+        error: error.message,
+        models: [],
+        total: 0
+      };
     }
   }
 
-  /**
-   * Verify if a specific model is available
-   */
-  async verifyModel(modelName, useCache = true) {
-    const now = Date.now();
+  async verifyEssentialModels() {
+    console.log('[ModelVerifier] Checking essential models...');
     
-    // Check cache first
-    if (useCache && 
-        this.verifiedModels.has(modelName) && 
-        this.lastCheck && 
-        (now - this.lastCheck) < this.cacheTimeout) {
-      return true;
+    const connectionCheck = await this.checkOllamaConnection();
+    if (!connectionCheck.connected) {
+      return {
+        success: false,
+        error: 'Ollama connection failed',
+        details: connectionCheck,
+        missingModels: this.essentialModels
+      };
     }
 
-    try {
-      const availableModels = await this.getAvailableModels();
-      const hasModel = availableModels.some(available => 
-        available.includes(modelName) || modelName.includes(available.split(':')[0])
+    const modelsResult = await this.getInstalledModels();
+    if (!modelsResult.success) {
+      return {
+        success: false,
+        error: 'Could not fetch model list',
+        details: modelsResult,
+        missingModels: this.essentialModels
+      };
+    }
+
+    const installedModelNames = modelsResult.models.map(m => m.name.toLowerCase());
+    const missingModels = [];
+    const availableModels = [];
+
+    for (const modelName of this.essentialModels) {
+      const normalizedName = modelName.toLowerCase();
+      const isInstalled = installedModelNames.some(installed => 
+        installed === normalizedName || 
+        installed.startsWith(normalizedName + ':') ||
+        normalizedName.startsWith(installed.split(':')[0])
       );
 
-      if (!hasModel) {
-        throw new ModelMissingError(modelName);
+      if (isInstalled) {
+        availableModels.push(modelName);
+      } else {
+        missingModels.push(modelName);
       }
-
-      // Update cache
-      this.verifiedModels.add(modelName);
-      this.lastCheck = now;
-      
-      console.log(`✅ Model verified: ${modelName}`);
-      return true;
-    } catch (error) {
-      if (error instanceof ModelMissingError) {
-        throw error;
-      }
-      throw new OllamaConnectionError();
-    }
-  }
-
-  /**
-   * Verify models required for specific analysis type
-   */
-  async verifyAnalysisType(analysisType) {
-    const requiredModels = this.requiredModels[analysisType];
-    
-    if (!requiredModels) {
-      throw new Error(`Unknown analysis type: ${analysisType}`);
     }
 
-    const verificationPromises = requiredModels.map(model => 
-      this.verifyModel(model).catch(error => ({ error, model }))
+    // Special check for Whisper models
+    const whisperVariants = ['whisper', 'whisper:base', 'whisper:small', 'whisper:medium', 'whisper:large'];
+    const hasWhisper = whisperVariants.some(variant => 
+      installedModelNames.some(installed => 
+        installed === variant.toLowerCase() || installed.startsWith('whisper')
+      )
     );
-    
-    const results = await Promise.all(verificationPromises);
-    const failures = results.filter(result => result.error);
-    
-    if (failures.length > 0) {
-      // Try to find at least one working model for the analysis type
-      const successfulModels = results.filter(result => !result.error);
-      
-      if (successfulModels.length === 0) {
-        throw failures[0].error; // Throw first failure
-      }
-      
-      console.log(`⚠️ Some models missing for ${analysisType}, but proceeding with available models`);
-      return true;
-    }
-    
-    console.log(`✅ All models verified for ${analysisType} analysis`);
-    return true;
-  }
 
-  /**
-   * Verify all required models
-   */
-  async verifyAllModels() {
-    try {
-      await this.verifyConnection();
-      
-      const availableModels = await this.getAvailableModels();
-      console.log(`📋 Available models: ${availableModels.join(', ')}`);
-      
-      // Check for essential models
-      const essentialModels = ['gemma3:4b', 'llama3.2', 'llama3', 'llava'];
-      const missingEssential = [];
-      
-      for (const model of essentialModels) {
-        const hasModel = availableModels.some(available => 
-          available.includes(model) || model.includes(available.split(':')[0])
-        );
-        
-        if (!hasModel) {
-          missingEssential.push(model);
-        } else {
-          this.verifiedModels.add(model);
-        }
-      }
-      
-      if (missingEssential.length > 0) {
-        console.log(`⚠️ Missing essential models: ${missingEssential.join(', ')}`);
-        console.log(`💡 Install with: ${missingEssential.map(m => `ollama pull ${m}`).join(' && ')}`);
-        
-        // Only fail if NO models are available
-        if (availableModels.length === 0) {
-          throw new ModelMissingError(missingEssential[0]);
-        }
-      }
-      
-      this.lastCheck = Date.now();
-      return {
-        available: availableModels,
-        missing: missingEssential,
-        hasEssentials: missingEssential.length === 0
-      };
-      
-    } catch (error) {
-      if (error instanceof ModelMissingError || error instanceof OllamaConnectionError) {
-        throw error;
-      }
-      throw new OllamaConnectionError();
-    }
-  }
+    console.log(`[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`);
+    console.log(`[ModelVerifier] Whisper available: ${hasWhisper}`);
 
-  /**
-   * Get recommended model for analysis type
-   */
-  getRecommendedModel(analysisType) {
-    const recommendations = {
-      'document': 'gemma3:4b',
-      'image': 'gemma3:4b',
-      'audio': null // Audio transcription not available through Ollama
-    };
-    
-    return recommendations[analysisType] || 'gemma3:4b';
-  }
-
-  /**
-   * Clear verification cache
-   */
-  clearCache() {
-    this.verifiedModels.clear();
-    this.lastCheck = null;
-    console.log('🧹 Model verification cache cleared');
-  }
-
-  /**
-   * Get cache status
-   */
-  getCacheStatus() {
-    const now = Date.now();
-    const isValid = this.lastCheck && (now - this.lastCheck) < this.cacheTimeout;
-    
     return {
-      verifiedModels: Array.from(this.verifiedModels),
-      lastCheck: this.lastCheck,
-      cacheValid: isValid,
-      cacheAge: this.lastCheck ? now - this.lastCheck : null
+      success: missingModels.length === 0,
+      availableModels,
+      missingModels,
+      hasWhisper,
+      installationCommands: this.generateInstallCommands(missingModels),
+      recommendations: this.generateRecommendations(missingModels, hasWhisper)
+    };
+  }
+
+  generateInstallCommands(missingModels) {
+    if (missingModels.length === 0) return [];
+
+    return [
+      '# Install missing models with these commands:',
+      '',
+      ...missingModels.map(model => {
+        // Special handling for Whisper
+        if (model === 'whisper') {
+          return [
+            `ollama pull whisper`,
+            `# Alternative Whisper models:`,
+            `# ollama pull whisper:medium  # Better accuracy`,
+            `# ollama pull whisper:large   # Highest accuracy`
+          ].join('\n');
+        }
+        return `ollama pull ${model}`;
+      }),
+      '',
+      '# Verify installation:',
+      'ollama list'
+    ];
+  }
+
+  generateRecommendations(missingModels, hasWhisper) {
+    const recommendations = [];
+
+    if (missingModels.includes('gemma3:4b')) {
+      recommendations.push({
+        type: 'critical',
+        message: 'Gemma3:4b is required for document and image analysis',
+        action: 'Run: ollama pull gemma3:4b'
+      });
+    }
+
+    if (!hasWhisper) {
+      recommendations.push({
+        type: 'important',
+        message: 'Whisper is required for audio transcription and analysis',
+        action: 'Run: ollama pull whisper (or whisper:medium for better accuracy)'
+      });
+    }
+
+    if (missingModels.includes('mxbai-embed-large')) {
+      recommendations.push({
+        type: 'feature',
+        message: 'mxbai-embed-large enables semantic search capabilities',
+        action: 'Run: ollama pull mxbai-embed-large'
+      });
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push({
+        type: 'success',
+        message: 'All essential models are installed and ready!',
+        action: null
+      });
+    }
+
+    return recommendations;
+  }
+
+  async testModelFunctionality() {
+    console.log('[ModelVerifier] Testing model functionality...');
+    
+    const tests = [];
+
+    // Test text analysis
+    try {
+      const textTest = await this.ollama.generate({
+        model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
+        prompt: 'Respond with just "OK" if you can process this message.',
+        options: { temperature: 0 }
+      });
+      
+      tests.push({
+        model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
+        type: 'text',
+        success: textTest.response?.toLowerCase().includes('ok'),
+        response: textTest.response?.substring(0, 100)
+      });
+    } catch (error) {
+      tests.push({
+        model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
+        type: 'text',
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Test Whisper (if available)
+    try {
+      // We can't easily test audio without a file, so just check if model responds
+      const whisperTest = await this.ollama.list();
+      const hasWhisper = whisperTest.models?.some(m => m.name.toLowerCase().includes('whisper'));
+      
+      tests.push({
+        model: 'whisper',
+        type: 'audio',
+        success: hasWhisper,
+        response: hasWhisper ? 'Model available' : 'Model not found'
+      });
+    } catch (error) {
+      tests.push({
+        model: 'whisper',
+        type: 'audio',
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Test embeddings model
+    try {
+      const embeddingTest = await this.ollama.embeddings({
+        model: 'mxbai-embed-large',
+        prompt: 'test'
+      });
+      
+      tests.push({
+        model: 'mxbai-embed-large',
+        type: 'embeddings',
+        success: Array.isArray(embeddingTest.embedding) && embeddingTest.embedding.length > 0,
+        response: `Generated ${embeddingTest.embedding?.length || 0} dimensions`
+      });
+    } catch (error) {
+      tests.push({
+        model: 'mxbai-embed-large',
+        type: 'embeddings',
+        success: false,
+        error: error.message
+      });
+    }
+
+    const successfulTests = tests.filter(t => t.success).length;
+    console.log(`[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`);
+
+    return {
+      success: successfulTests >= Math.ceil(tests.length * 0.5), // At least half should work
+      tests,
+      summary: {
+        total: tests.length,
+        successful: successfulTests,
+        failed: tests.length - successfulTests
+      }
+    };
+  }
+
+  async getSystemStatus() {
+    const connection = await this.checkOllamaConnection();
+    const models = await this.verifyEssentialModels();
+    const functionality = await this.testModelFunctionality();
+
+    return {
+      timestamp: new Date().toISOString(),
+      connection,
+      models,
+      functionality,
+      overall: {
+        healthy: connection.connected && models.success && functionality.success,
+        issues: [
+          ...(!connection.connected ? ['Ollama not connected'] : []),
+          ...(models.missingModels.length > 0 ? [`Missing models: ${models.missingModels.join(', ')}`] : []),
+          ...(!functionality.success ? ['Model functionality issues'] : [])
+        ]
+      }
     };
   }
 }

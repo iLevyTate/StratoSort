@@ -181,12 +181,18 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/preload.js'),
       webSecurity: true,
       allowRunningInsecureContent: false,
-      experimentalFeatures: false
+      experimentalFeatures: false,
+      // Production optimizations
+      backgroundThrottling: false,
+      devTools: isDev, // Only enable dev tools in development
+      // GPU acceleration settings
+      hardwareAcceleration: true,
+      enableWebGL: true
     },
     icon: path.join(__dirname, '../../assets/stratosort-logo.png'),
     show: false,
     titleBarStyle: 'default',
-    autoHideMenuBar: false
+    autoHideMenuBar: !isDev // Hide menu bar in production
   });
   
   console.log('[DEBUG] BrowserWindow created');
@@ -203,7 +209,10 @@ function createWindow() {
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
       });
     });
-    mainWindow.webContents.openDevTools();
+    // Only open dev tools in development mode if explicitly requested
+    if (process.env.FORCE_DEV_TOOLS === 'true') {
+      mainWindow.webContents.openDevTools();
+    }
   } else {
     // In production, load from built files
     const distPath = path.join(__dirname, '../../dist/index.html');
@@ -1670,16 +1679,70 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
   }
 });
 
-// Audio transcription handler REMOVED - audio analysis disabled
-// ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) => {
-//   try {
-//     const result = await analyzeAudioFile(filePath, { transcriptOnly: true });
-//     return { success: true, transcript: result.transcript || result.text || '' };
-//   } catch (error) {
-//     console.error('Audio transcription failed:', error);
-//     return { success: false, error: error.message };
-//   }
-// });
+// Audio analysis handlers
+ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
+  console.log('[IPC] Audio analysis requested for:', filePath);
+  
+  try {
+    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
+    const smartFolders = await getSmartFolders();
+    
+    const startTime = Date.now();
+    const result = await analyzeAudioFile(filePath, smartFolders);
+    const processingTime = Date.now() - startTime;
+    
+    systemAnalytics.recordProcessingTime(processingTime);
+    systemAnalytics.recordSuccess();
+    
+    // Record in analysis history
+    if (serviceIntegration?.analysisHistory) {
+      await serviceIntegration.analysisHistory.recordAnalysis({
+        path: filePath,
+        size: await getFileSize(filePath),
+        lastModified: await getFileModified(filePath),
+        mimeType: 'audio/*'
+      }, {
+        ...result,
+        processingTime
+      });
+    }
+    
+    console.log(`[IPC] Audio analysis completed in ${processingTime}ms`);
+    mainWindow?.webContents.send('analysis-progress', {
+      filePath,
+      status: 'completed',
+      result
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('[IPC] Audio analysis failed:', error);
+    systemAnalytics.recordFailure(error);
+    mainWindow?.webContents.send('analysis-error', {
+      filePath,
+      error: error.message,
+      type: 'audio'
+    });
+    throw error;
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) => {
+  console.log('[IPC] Audio transcription requested for:', filePath);
+  
+  try {
+    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
+    const result = await analyzeAudioFile(filePath, [], { transcriptOnly: true });
+    
+    return { 
+      success: true, 
+      transcript: result.transcript || result.text || result.summary || ''
+    };
+  } catch (error) {
+    console.error('[IPC] Audio transcription failed:', error);
+    return { success: false, error: error.message };
+  }
+});
 
 // Settings handlers
 ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
@@ -1727,6 +1790,24 @@ if (!gotTheLock) {
     }
   });
 
+  // Production optimizations - ensure GPU acceleration
+  if (!isDev) {
+    // Production GPU optimizations
+    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    app.commandLine.appendSwitch('enable-gpu-memory-buffer-compositor-resources');
+    app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+    app.commandLine.appendSwitch('ignore-gpu-blacklist');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+    
+    // Performance optimizations
+    app.commandLine.appendSwitch('enable-zero-copy');
+    app.commandLine.appendSwitch('enable-hardware-overlays');
+    
+    console.log('[PRODUCTION] GPU acceleration optimizations enabled');
+  } else {
+    console.log('[DEVELOPMENT] GPU acceleration using default settings');
+  }
+
   // Initialize services after app is ready
   app.whenReady().then(async () => {
     try {
@@ -1738,6 +1819,22 @@ if (!gotTheLock) {
       serviceIntegration = new ServiceIntegration();
       await serviceIntegration.initialize();
       console.log('[MAIN] Service integration initialized successfully');
+      
+      // Verify AI models on startup
+      const { ModelVerifier } = require('./services/ModelVerifier');
+      const modelVerifier = new ModelVerifier();
+      const modelStatus = await modelVerifier.verifyEssentialModels();
+      
+      if (!modelStatus.success) {
+        console.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
+        console.log('[STARTUP] Install missing models:');
+        modelStatus.installationCommands.forEach(cmd => console.log('  ', cmd));
+      } else {
+        console.log('[STARTUP] ✅ All essential AI models verified and ready');
+        if (modelStatus.hasWhisper) {
+          console.log('[STARTUP] ✅ Whisper model available for audio analysis');
+        }
+      }
       
       createWindow();
       

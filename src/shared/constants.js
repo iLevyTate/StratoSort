@@ -68,9 +68,9 @@ const IPC_CHANNELS = {
   ANALYSIS: {
     ANALYZE_DOCUMENT: 'analyze-document',
     ANALYZE_IMAGE: 'analyze-image',
-    // ANALYZE_AUDIO: 'analyze-audio', // REMOVED - audio analysis disabled
+    ANALYZE_AUDIO: 'analyze-audio',
     EXTRACT_IMAGE_TEXT: 'extract-text-from-image',
-    // TRANSCRIBE_AUDIO: 'transcribe-audio' // REMOVED - audio analysis disabled
+    TRANSCRIBE_AUDIO: 'transcribe-audio'
   },
   
   // Settings
@@ -151,13 +151,14 @@ const FILE_STATES = {
 
 // Error types
 const ERROR_TYPES = {
+  UNKNOWN: 'UNKNOWN',
   FILE_NOT_FOUND: 'FILE_NOT_FOUND',
-  INVALID_FORMAT: 'INVALID_FORMAT',
-  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
-  AI_UNAVAILABLE: 'AI_UNAVAILABLE',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   NETWORK_ERROR: 'NETWORK_ERROR',
-  UNKNOWN: 'UNKNOWN'
+  AI_UNAVAILABLE: 'AI_UNAVAILABLE',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  PROCESSING_FAILED: 'PROCESSING_FAILED'
 };
 
 // Action types for undo/redo
@@ -205,6 +206,53 @@ const TIMEOUTS = {
   THROTTLE: 100
 };
 
+// File type mappings
+const SUPPORTED_TEXT_EXTENSIONS = ['.txt', '.md', '.rtf', '.json', '.csv', '.xml', '.html', '.htm', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bat', '.ps1', '.yaml', '.yml', '.ini', '.conf', '.log'];
+
+const SUPPORTED_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx', '.pptx'];
+
+const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
+
+const SUPPORTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+
+const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv'];
+
+const SUPPORTED_ARCHIVE_EXTENSIONS = ['.zip', '.rar', '.7z', '.tar', '.gz'];
+
+// All supported extensions combined
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_TEXT_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_AUDIO_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+  ...SUPPORTED_ARCHIVE_EXTENSIONS
+];
+
+// AI Model configurations
+const DEFAULT_AI_MODELS = {
+  TEXT_ANALYSIS: 'gemma3:4b',
+  IMAGE_ANALYSIS: 'gemma3:4b',
+  AUDIO_ANALYSIS: 'whisper',
+  FALLBACK_MODELS: ['llama3.2', 'llama3', 'mistral', 'phi3']
+};
+
+// File size limits
+const FILE_SIZE_LIMITS = {
+  MAX_TEXT_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+  MAX_IMAGE_FILE_SIZE: 100 * 1024 * 1024, // 100MB
+  MAX_AUDIO_FILE_SIZE: 500 * 1024 * 1024, // 500MB
+  MAX_DOCUMENT_FILE_SIZE: 200 * 1024 * 1024 // 200MB
+};
+
+// Processing limits
+const PROCESSING_LIMITS = {
+  MAX_CONCURRENT_ANALYSIS: 3,
+  MAX_BATCH_SIZE: 100,
+  ANALYSIS_TIMEOUT: 180000, // 3 minutes
+  RETRY_ATTEMPTS: 3
+};
+
 // CommonJS exports for Node.js compatibility (main process)
 module.exports = {
   PHASES,
@@ -219,5 +267,15 @@ module.exports = {
   THEMES,
   SHORTCUTS,
   LIMITS,
-  TIMEOUTS
+  TIMEOUTS,
+  SUPPORTED_TEXT_EXTENSIONS,
+  SUPPORTED_DOCUMENT_EXTENSIONS,
+  SUPPORTED_IMAGE_EXTENSIONS,
+  SUPPORTED_AUDIO_EXTENSIONS,
+  SUPPORTED_VIDEO_EXTENSIONS,
+  SUPPORTED_ARCHIVE_EXTENSIONS,
+  ALL_SUPPORTED_EXTENSIONS,
+  DEFAULT_AI_MODELS,
+  FILE_SIZE_LIMITS,
+  PROCESSING_LIMITS
 }; 

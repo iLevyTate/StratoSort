@@ -1,8 +1,55 @@
-const {
-  getOllama, // Function to get the Ollama instance (you might have this elsewhere)
-  getOllamaModel, // Function to get the selected Ollama model (you might have this elsewhere)
-  // ... any other necessary Ollama utilities
-} = require('./ollamaUtils'); // Assuming ollama utilities are in ollamaUtils.js
+const { Ollama } = require('ollama');
+const { logger } = require('../shared/logger');
+const { DEFAULT_AI_MODELS } = require('../shared/constants');
+
+// Initialize Ollama instance
+let ollamaInstance = null;
+let selectedModel = DEFAULT_AI_MODELS.TEXT_ANALYSIS;
+
+/**
+ * Get or create Ollama instance
+ */
+function getOllama() {
+  if (!ollamaInstance) {
+    const host = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+    ollamaInstance = new Ollama({ host });
+    logger.info('Ollama instance initialized', { host });
+  }
+  return ollamaInstance;
+}
+
+/**
+ * Get the currently selected Ollama model
+ */
+function getOllamaModel() {
+  return selectedModel;
+}
+
+/**
+ * Set the selected Ollama model
+ */
+function setOllamaModel(modelName) {
+  selectedModel = modelName;
+  logger.info('Ollama model updated', { model: modelName });
+}
+
+/**
+ * Test if Ollama is available and the model is working
+ */
+async function testOllamaConnection() {
+  try {
+    const ollama = getOllama();
+    const response = await ollama.generate({
+      model: selectedModel,
+      prompt: 'Hello',
+      options: { num_predict: 1 }
+    });
+    return { success: true, model: selectedModel };
+  } catch (error) {
+    logger.error('Ollama connection test failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+}
 
 /**
  * Formats the scanned directory structure into a prompt for the LLM.
@@ -11,21 +58,40 @@ const {
  */
 function formatPromptForLLM(directoryStructure) {
   let prompt = "Analyze the following file and folder structure:\n\n";
-  prompt += JSON.stringify(directoryStructure, (key, value) => {
-    // Custom replacer to avoid overly verbose output or circular structures if any
-    if (key === 'path' && typeof value === 'string') {
-      // Optionally, you might want to simplify paths or make them relative
-      // For now, keeping them as is, but be mindful of very long paths
-    }
-    return value;
-  }, 2);
+  
+  // Simplify the structure to avoid overly verbose output
+  const simplifiedStructure = simplifyDirectoryStructure(directoryStructure);
+  prompt += JSON.stringify(simplifiedStructure, null, 2);
 
-  prompt += "\n\nPlease suggest logical organization patterns to improve this structure. "
-  prompt += "For each suggestion, explain your reasoning and list concrete actions "
-  prompt += "(e.g., create new folders, move files/folders, rename items). "
-  prompt += "Focus on clarity and ease of future navigation.";
+  prompt += "\n\nPlease suggest logical organization patterns to improve this structure. ";
+  prompt += "For each suggestion, explain your reasoning and list concrete actions ";
+  prompt += "(e.g., create new folders, move files/folders, rename items). ";
+  prompt += "Focus on clarity and ease of future navigation. ";
+  prompt += "Return your response as a JSON object with 'suggestions' array containing objects with 'action', 'reasoning', and 'priority' fields.";
 
   return prompt;
+}
+
+/**
+ * Simplify directory structure for more efficient LLM processing
+ */
+function simplifyDirectoryStructure(structure, maxDepth = 3, currentDepth = 0) {
+  if (currentDepth >= maxDepth) return '[... truncated ...]';
+  
+  return structure.map(item => {
+    const simplified = {
+      name: item.name,
+      type: item.type,
+      size: item.size
+    };
+    
+    if (item.type === 'folder' && item.children && item.children.length > 0) {
+      simplified.children = simplifyDirectoryStructure(item.children, maxDepth, currentDepth + 1);
+      simplified.childCount = item.children.length;
+    }
+    
+    return simplified;
+  });
 }
 
 /**
@@ -34,11 +100,11 @@ function formatPromptForLLM(directoryStructure) {
  * @returns {Promise<Object>} An object containing the LLM's suggestions.
  */
 async function getOrganizationSuggestions(directoryStructure) {
-  const ollama = getOllama(); // You'll need to implement or import this
-  const model = getOllamaModel(); // You'll need to implement or import this
+  const ollama = getOllama();
+  const model = getOllamaModel();
 
   if (!ollama || !model) {
-    console.error('Ollama instance or model not configured.');
+    logger.error('Ollama instance or model not configured');
     return {
       error: 'LLM not configured',
       suggestions: []
@@ -48,37 +114,136 @@ async function getOrganizationSuggestions(directoryStructure) {
   const prompt = formatPromptForLLM(directoryStructure);
 
   try {
-    console.log(`Sending prompt to LLM (${model}):\n`, prompt.substring(0, 500) + '...'); // Log a snippet
+    logger.info('Sending organization request to LLM', { 
+      model, 
+      structureSize: directoryStructure.length 
+    });
     
-    // This is a placeholder for the actual Ollama API call
-    // You'll need to replace this with the correct way to stream or get a response
-    // from your Ollama setup, using the 'prompt' variable.
+    const startTime = Date.now();
+    
     const response = await ollama.generate({
       model: model,
       prompt: prompt,
-      stream: false, // Set to true if you want to stream and handle chunks
-      // Add any other parameters required by your Ollama setup (e.g. system prompt, options)
+      format: 'json',
+      options: {
+        temperature: 0.3, // Lower temperature for more consistent suggestions
+        num_predict: 1000,
+        stop: ['\n\n', '###']
+      }
     });
 
-    console.log('LLM response received.');
+    const duration = Date.now() - startTime;
+    logger.performance('LLM organization suggestions', duration, { model });
 
-    // Basic parsing assuming the response.response is a string containing suggestions.
-    // You'll likely need more sophisticated parsing based on how your LLM formats its output.
-    // It's often better to ask the LLM to format its output as JSON if possible.
-    const suggestionsText = response.response; 
-    
-    // For now, we'll return the raw text. Ideally, parse this into a structured array.
+    if (!response.response) {
+      throw new Error('Empty response from LLM');
+    }
+
+    // Parse the JSON response
+    let suggestions;
+    try {
+      const parsedResponse = JSON.parse(response.response);
+      suggestions = parsedResponse.suggestions || parsedResponse;
+    } catch (parseError) {
+      logger.warn('Failed to parse LLM JSON response, using text parsing', { 
+        error: parseError.message 
+      });
+      suggestions = parseTextResponse(response.response);
+    }
+
+    logger.info('LLM organization suggestions received', { 
+      suggestionsCount: Array.isArray(suggestions) ? suggestions.length : 0 
+    });
+
     return {
-      suggestions: suggestionsText // Or parsedSuggestions (e.g., JSON.parse(suggestionsText))
+      suggestions: Array.isArray(suggestions) ? suggestions : [suggestions],
+      model: model,
+      processingTime: duration
     };
 
   } catch (error) {
-    console.error('Error getting suggestions from LLM:', error);
+    logger.error('Error getting suggestions from LLM', { 
+      error: error.message,
+      model 
+    });
+    
     return {
       error: error.message || 'Failed to get suggestions from LLM',
-      suggestions: []
+      suggestions: [],
+      fallbackSuggestions: getFallbackSuggestions(directoryStructure)
     };
   }
 }
 
-module.exports = { getOrganizationSuggestions, formatPromptForLLM }; 
+/**
+ * Parse text response when JSON parsing fails
+ */
+function parseTextResponse(responseText) {
+  const suggestions = [];
+  const lines = responseText.split('\n');
+  
+  let currentSuggestion = null;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    // Look for suggestion patterns
+    if (trimmed.toLowerCase().includes('suggestion') || 
+        trimmed.toLowerCase().includes('organize') ||
+        trimmed.toLowerCase().includes('create folder')) {
+      
+      if (currentSuggestion) {
+        suggestions.push(currentSuggestion);
+      }
+      
+      currentSuggestion = {
+        action: trimmed,
+        reasoning: '',
+        priority: 'medium'
+      };
+    } else if (currentSuggestion && 
+               (trimmed.toLowerCase().includes('reason') || 
+                trimmed.toLowerCase().includes('because'))) {
+      currentSuggestion.reasoning = trimmed;
+    }
+  }
+  
+  if (currentSuggestion) {
+    suggestions.push(currentSuggestion);
+  }
+  
+  return suggestions;
+}
+
+/**
+ * Provide fallback suggestions when LLM fails
+ */
+function getFallbackSuggestions(directoryStructure) {
+  return [
+    {
+      action: "Create 'Documents' folder for text files",
+      reasoning: "Group all text-based files for easier access",
+      priority: "high"
+    },
+    {
+      action: "Create 'Media' folder for images and videos", 
+      reasoning: "Separate media files from documents",
+      priority: "medium"
+    },
+    {
+      action: "Create 'Archives' folder for compressed files",
+      reasoning: "Keep archive files organized and separate",
+      priority: "low"
+    }
+  ];
+}
+
+module.exports = { 
+  getOrganizationSuggestions, 
+  formatPromptForLLM,
+  getOllama,
+  getOllamaModel,
+  setOllamaModel,
+  testOllamaConnection
+}; 

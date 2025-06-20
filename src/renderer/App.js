@@ -1497,6 +1497,13 @@ function DiscoverPhase() {
   // Load persisted data from previous sessions
   useEffect(() => {
     const loadPersistedData = () => {
+      console.log('[DISCOVER-PHASE] Loading persisted data:', {
+        analysisResultsCount: (phaseData.analysisResults || []).length,
+        selectedFilesCount: (phaseData.selectedFiles || []).length,
+        fileStatesCount: Object.keys(phaseData.fileStates || {}).length,
+        hasNamingConvention: !!phaseData.namingConvention
+      });
+      
       // Load previous analysis results if they exist
       const persistedResults = phaseData.analysisResults || [];
       const persistedFiles = phaseData.selectedFiles || [];
@@ -1504,6 +1511,7 @@ function DiscoverPhase() {
       const persistedNaming = phaseData.namingConvention || {};
       
       if (persistedResults.length > 0) {
+        console.log('[DISCOVER-PHASE] Restoring persisted data');
         setAnalysisResults(persistedResults);
         setSelectedFiles(persistedFiles);
         setFileStates(persistedStates);
@@ -1513,6 +1521,14 @@ function DiscoverPhase() {
         setDateFormat(persistedNaming.dateFormat || 'YYYY-MM-DD');
         setCaseConvention(persistedNaming.caseConvention || 'kebab-case');
         setSeparator(persistedNaming.separator || '-');
+        
+        console.log('[DISCOVER-PHASE] State restored successfully', {
+          analysisResults: persistedResults.length,
+          selectedFiles: persistedFiles.length,
+          fileStates: Object.keys(persistedStates).length
+        });
+      } else {
+        console.log('[DISCOVER-PHASE] No persisted data to restore');
       }
     };
     
@@ -2136,14 +2152,43 @@ function DiscoverPhase() {
       setAnalysisResults(results);
       
       // Persist data for use in organize phase
-      actions.setPhaseData('analysisResults', results);
-      actions.setPhaseData('selectedFiles', files);
-      actions.setPhaseData('fileStates', fileStates);
-      actions.setPhaseData('namingConvention', {
-        convention: namingConvention,
-        dateFormat,
-        caseConvention,
-        separator
+      setAnalysisResults(results);
+      
+      // Use functional state update to ensure we get the latest fileStates
+      setFileStates(currentFileStates => {
+        const updatedStates = { ...currentFileStates };
+        
+        // Ensure all files have their final states updated
+        results.forEach(result => {
+          if (result.analysis && !result.error) {
+            updatedStates[result.path] = {
+              state: 'ready',
+              timestamp: new Date().toISOString(),
+              analysis: result.analysis,
+              analyzedAt: result.analyzedAt
+            };
+          } else if (result.error) {
+            updatedStates[result.path] = {
+              state: 'error',
+              timestamp: new Date().toISOString(),
+              error: result.error,
+              analyzedAt: result.analyzedAt
+            };
+          }
+        });
+        
+        // Persist the updated states to phase data
+        actions.setPhaseData('analysisResults', results);
+        actions.setPhaseData('selectedFiles', files);
+        actions.setPhaseData('fileStates', updatedStates);
+        actions.setPhaseData('namingConvention', {
+          convention: namingConvention,
+          dateFormat,
+          caseConvention,
+          separator
+        });
+        
+        return updatedStates;
       });
       
       const successCount = results.filter(r => r.analysis).length;
@@ -2538,30 +2583,41 @@ function DiscoverPhase() {
             console.log('[DISCOVER-PHASE] fileStates:', Object.keys(fileStates).length);
             console.log('[DISCOVER-PHASE] smartFolders:', phaseData.smartFolders?.length || 0);
             
-            // Save all phase data before advancing (including current analysis state)
-            actions.setPhaseData('analysisResults', analysisResults);
-            actions.setPhaseData('fileStates', fileStates);
-            actions.setPhaseData('isAnalyzing', isAnalyzing); // Preserve analysis state
-            actions.setPhaseData('analysisProgress', analysisProgress); // Preserve progress
-            actions.setPhaseData('namingConvention', {
-              convention: namingConvention,
-              dateFormat,
-              caseConvention,
-              separator
-            });
-            
-            // Advance to organize phase
-            actions.advancePhase(PHASES.ORGANIZE, {
-              analysisResults,
-              fileStates,
-              isAnalyzing,
-              analysisProgress,
-              namingConvention: {
+            // Use functional state update to ensure we capture the most current state
+            setFileStates(currentFileStates => {
+              const finalData = {
+                analysisResults,
+                fileStates: currentFileStates,
+                selectedFiles,
+                isAnalyzing,
+                analysisProgress,
+                namingConvention: {
+                  convention: namingConvention,
+                  dateFormat,
+                  caseConvention,
+                  separator
+                }
+              };
+              
+              console.log('[DISCOVER-PHASE] Final data being passed:', finalData);
+              
+              // Save all phase data before advancing (including current analysis state)
+              actions.setPhaseData('analysisResults', analysisResults);
+              actions.setPhaseData('fileStates', currentFileStates);
+              actions.setPhaseData('selectedFiles', selectedFiles);
+              actions.setPhaseData('isAnalyzing', isAnalyzing);
+              actions.setPhaseData('analysisProgress', analysisProgress);
+              actions.setPhaseData('namingConvention', {
                 convention: namingConvention,
                 dateFormat,
                 caseConvention,
                 separator
-              }
+              });
+              
+              // Advance to organize phase with the complete data
+              actions.advancePhase(PHASES.ORGANIZE, finalData);
+              
+              return currentFileStates; // Return unchanged state
             });
           }}
           disabled={analysisResults.length === 0} // Only disable if no files analyzed yet
@@ -2823,9 +2879,49 @@ function OrganizePhase() {
   // NEW: Load persisted file states and processed files
   useEffect(() => {
     const loadPersistedData = () => {
+      console.log('[ORGANIZE-PHASE] Loading persisted data:', {
+        analysisResultsCount: (phaseData.analysisResults || []).length,
+        fileStatesCount: Object.keys(phaseData.fileStates || {}).length,
+        selectedFilesCount: (phaseData.selectedFiles || []).length,
+        organizedFilesCount: (phaseData.organizedFiles || []).length
+      });
+      
       // Load file states from discover phase
       const persistedStates = phaseData.fileStates || {};
       setFileStates(persistedStates);
+      
+      // If we don't have file states but we have analysis results, reconstruct them
+      if (Object.keys(persistedStates).length === 0 && analysisResults.length > 0) {
+        console.log('[ORGANIZE-PHASE] Reconstructing file states from analysis results');
+        const reconstructedStates = {};
+        
+        analysisResults.forEach(file => {
+          if (file.analysis && !file.error) {
+            reconstructedStates[file.path] = {
+              state: 'ready',
+              timestamp: file.analyzedAt || new Date().toISOString(),
+              analysis: file.analysis,
+              analyzedAt: file.analyzedAt
+            };
+          } else if (file.error) {
+            reconstructedStates[file.path] = {
+              state: 'error',
+              timestamp: file.analyzedAt || new Date().toISOString(),
+              error: file.error,
+              analyzedAt: file.analyzedAt
+            };
+          } else {
+            reconstructedStates[file.path] = {
+              state: 'pending',
+              timestamp: new Date().toISOString()
+            };
+          }
+        });
+        
+        setFileStates(reconstructedStates);
+        // Update phase data with reconstructed states
+        actions.setPhaseData('fileStates', reconstructedStates);
+      }
       
       // Load previously organized files to avoid re-processing
       const previouslyOrganized = phaseData.organizedFiles || [];
@@ -2838,7 +2934,7 @@ function OrganizePhase() {
     };
     
     loadPersistedData();
-  }, [phaseData]);
+  }, [phaseData, analysisResults, actions]);
 
   // Show analysis status if analysis is still running from discover phase
   const isAnalysisRunning = phaseData.isAnalyzing || false;

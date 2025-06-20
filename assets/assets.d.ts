@@ -1,4 +1,5 @@
-type Styles = Record<string, string>;
+/* eslint-disable */
+// type Styles = Record<string, string>;
 
 declare module '*.svg' {
   import React = require('react');

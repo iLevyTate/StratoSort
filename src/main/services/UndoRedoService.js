@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+
 const { app } = require('electron');
 
 class UndoRedoService {
@@ -96,7 +97,7 @@ class UndoRedoService {
       await this.saveActions();
       return {
         success: true,
-        action: action,
+        action,
         message: `Undid: ${action.description}`
       };
     } catch (error) {
@@ -120,7 +121,7 @@ class UndoRedoService {
       await this.saveActions();
       return {
         success: true,
-        action: action,
+        action,
         message: `Redid: ${action.description}`
       };
     } catch (error) {
@@ -284,7 +285,7 @@ class UndoRedoService {
 
   getActionHistory(limit = 10) {
     const history = this.actions.slice(Math.max(0, this.currentIndex - limit + 1), this.currentIndex + 1);
-    return history.map(action => ({
+    return history.map((action) => ({
       id: action.id,
       description: action.description,
       timestamp: action.timestamp,
@@ -294,7 +295,7 @@ class UndoRedoService {
 
   getRedoHistory(limit = 10) {
     const history = this.actions.slice(this.currentIndex + 1, this.currentIndex + 1 + limit);
-    return history.map(action => ({
+    return history.map((action) => ({
       id: action.id,
       description: action.description,
       timestamp: action.timestamp,

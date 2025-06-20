@@ -1,20 +1,14 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { Ollama } = require('ollama');
 
-// Enforce required dependency for AI-first operation
-const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 const officeParser = require('officeparser');
+const { Ollama } = require('ollama');
+const pdf = require('pdf-parse');
 const XLSX = require('xlsx-populate');
 
 // Import error handling system
-const { 
-  AnalysisError, 
-  ModelMissingError, 
-  FileProcessingError,
-  OllamaConnectionError 
-} = require('../errors/AnalysisError');
+const { FileProcessingError } = require('../errors/AnalysisError');
 const ModelVerifier = require('../services/ModelVerifier');
 
 // App configuration (simplified)
@@ -26,7 +20,7 @@ const AppConfig = {
       timeout: 120000, // 2 minutes for multimodal text analysis
       maxContentLength: 12000,
       temperature: 0.1,
-      maxTokens: 800,
+      maxTokens: 800
     }
   }
 };
@@ -44,7 +38,7 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       // Validate that smart folders exist and have valid names
-      const validFolders = smartFolders.filter(f => 
+      const validFolders = smartFolders.filter((f) => 
         f && 
         f.name && 
         typeof f.name === 'string' && 
@@ -54,7 +48,7 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
       
       if (validFolders.length > 0) {
         const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
+          .map((f) => `"${f.name.trim()}"`)
           .slice(0, 10) // Limit to 10 folders to avoid prompt bloat
           .join(', ');
         
@@ -85,9 +79,9 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       prompt,
       options: {
         temperature: AppConfig.ai.textAnalysis.temperature,
-        num_predict: AppConfig.ai.textAnalysis.maxTokens,
+        num_predict: AppConfig.ai.textAnalysis.maxTokens
       },
-      format: 'json',
+      format: 'json'
     });
 
     if (response.response) {
@@ -115,7 +109,7 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
         return {
           rawText: textContent.substring(0, 2000),
           ...parsedJson,
-          keywords: finalKeywords,
+          keywords: finalKeywords
         };
       } catch (e) {
         console.error('Error parsing Ollama JSON response for document:', e.message);
@@ -187,7 +181,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
             extractedText = result.value;
             console.log(`Extracted ${extractedText.length} characters from .doc file using mammoth`);
           } catch (docError) {
-            console.warn(`Mammoth failed for .doc file, trying text extraction:`, docError.message);
+            console.warn('Mammoth failed for .doc file, trying text extraction:', docError.message);
             extractedText = await fs.readFile(filePath, 'utf8');
           }
         } else {
@@ -236,7 +230,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
               if (Array.isArray(values)) {
                 for (const row of values) {
                   if (Array.isArray(row)) {
-                    allText += row.filter(cell => cell !== null && cell !== undefined).join(' ') + '\n';
+                    allText += `${row.filter((cell) => cell !== null && cell !== undefined).join(' ')  }\n`;
                   }
                 }
               }
@@ -263,30 +257,30 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         console.error(`Error extracting content from ${fileName}:`, officeError.message);
         
         // Fall back to intelligent filename-based analysis
-      const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
-      const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
+        const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
+        const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
       
         let purpose = 'Office document (content extraction failed)';
-        let confidence = 70;
+        const confidence = 70;
       
-      if (fileExtension === '.docx') {
+        if (fileExtension === '.docx') {
           purpose = 'Word document - content extraction failed, using filename analysis';
-      } else if (fileExtension === '.xlsx') {
+        } else if (fileExtension === '.xlsx') {
           purpose = 'Excel spreadsheet - content extraction failed, using filename analysis';
-      } else if (fileExtension === '.pptx') {
+        } else if (fileExtension === '.pptx') {
           purpose = 'PowerPoint presentation - content extraction failed, using filename analysis';
-      }
+        }
       
-      return {
-        purpose,
-        project: fileName.replace(fileExtension, ''),
-        category: intelligentCategory,
-        date: new Date().toISOString().split('T')[0],
-        keywords: intelligentKeywords,
-        confidence,
+        return {
+          purpose,
+          project: fileName.replace(fileExtension, ''),
+          category: intelligentCategory,
+          date: new Date().toISOString().split('T')[0],
+          keywords: intelligentKeywords,
+          confidence,
           suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
           extractionError: officeError.message
-      };
+        };
       }
     } else {
       // Placeholder for other document types
@@ -373,7 +367,7 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
   
   // Enhanced smart folder matching with LLM-like scoring
   if (smartFolders && smartFolders.length > 0) {
-    const validFolders = smartFolders.filter(f => 
+    const validFolders = smartFolders.filter((f) => 
       f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
     );
     
@@ -391,7 +385,7 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
       }
       
       // Partial name matching (8 points)
-      const folderWords = folderNameLower.split(/[\s_-]+/).filter(w => w.length > 2);
+      const folderWords = folderNameLower.split(/[\s_-]+/).filter((w) => w.length > 2);
       for (const word of folderWords) {
         if (lowerFileName.includes(word)) {
           score += 8;
@@ -402,7 +396,7 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
       if (folder.description) {
         const descWords = folder.description.toLowerCase()
           .split(/[\s,.-]+/)
-          .filter(word => word.length > 3);
+          .filter((word) => word.length > 3);
         
         for (const word of descWords) {
           if (lowerFileName.includes(word)) {
@@ -431,7 +425,7 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
       
       // File path context matching (3 points)
       if (folder.path) {
-        const pathParts = folder.path.toLowerCase().split(/[/\\]/).filter(p => p.length > 2);
+        const pathParts = folder.path.toLowerCase().split(/[/\\]/).filter((p) => p.length > 2);
         for (const part of pathParts) {
           if (lowerFileName.includes(part)) {
             score += 3;
@@ -603,7 +597,7 @@ function getIntelligentKeywords(fileName, extension) {
     'image': ['image', 'visual', 'graphic']
   };
   
-  let keywords = baseKeywords[category] || ['file', 'document'];
+  const keywords = baseKeywords[category] || ['file', 'document'];
   
   // Add filename-based keywords
   if (lowerFileName.includes('report')) keywords.push('report');

@@ -4,7 +4,7 @@
  */
 
 const { Ollama } = require('ollama');
-const { ModelMissingError, OllamaConnectionError } = require('../errors/AnalysisError');
+
 const { DEFAULT_AI_MODELS } = require('../../shared/constants');
 
 class ModelVerifier {
@@ -30,7 +30,7 @@ class ModelVerifier {
       if (response.ok) {
         return { connected: true };
       }
-      return { connected: false, error: 'HTTP error: ' + response.status };
+      return { connected: false, error: `HTTP error: ${  response.status}` };
     } catch (error) {
       return { 
         connected: false, 
@@ -81,15 +81,15 @@ class ModelVerifier {
       };
     }
 
-    const installedModelNames = modelsResult.models.map(m => m.name.toLowerCase());
+    const installedModelNames = modelsResult.models.map((m) => m.name.toLowerCase());
     const missingModels = [];
     const availableModels = [];
 
     for (const modelName of this.essentialModels) {
       const normalizedName = modelName.toLowerCase();
-      const isInstalled = installedModelNames.some(installed => 
+      const isInstalled = installedModelNames.some((installed) => 
         installed === normalizedName || 
-        installed.startsWith(normalizedName + ':') ||
+        installed.startsWith(`${normalizedName  }:`) ||
         normalizedName.startsWith(installed.split(':')[0])
       );
 
@@ -102,8 +102,8 @@ class ModelVerifier {
 
     // Special check for Whisper models
     const whisperVariants = ['whisper', 'whisper:base', 'whisper:small', 'whisper:medium', 'whisper:large'];
-    const hasWhisper = whisperVariants.some(variant => 
-      installedModelNames.some(installed => 
+    const hasWhisper = whisperVariants.some((variant) => 
+      installedModelNames.some((installed) => 
         installed === variant.toLowerCase() || installed.startsWith('whisper')
       )
     );
@@ -127,14 +127,14 @@ class ModelVerifier {
     return [
       '# Install missing models with these commands:',
       '',
-      ...missingModels.map(model => {
+      ...missingModels.map((model) => {
         // Special handling for Whisper
         if (model === 'whisper') {
           return [
-            `ollama pull whisper`,
-            `# Alternative Whisper models:`,
-            `# ollama pull whisper:medium  # Better accuracy`,
-            `# ollama pull whisper:large   # Highest accuracy`
+            'ollama pull whisper',
+            '# Alternative Whisper models:',
+            '# ollama pull whisper:medium  # Better accuracy',
+            '# ollama pull whisper:large   # Highest accuracy'
           ].join('\n');
         }
         return `ollama pull ${model}`;
@@ -215,7 +215,7 @@ class ModelVerifier {
     try {
       // We can't easily test audio without a file, so just check if model responds
       const whisperTest = await this.ollama.list();
-      const hasWhisper = whisperTest.models?.some(m => m.name.toLowerCase().includes('whisper'));
+      const hasWhisper = whisperTest.models?.some((m) => m.name.toLowerCase().includes('whisper'));
       
       tests.push({
         model: 'whisper',
@@ -254,7 +254,7 @@ class ModelVerifier {
       });
     }
 
-    const successfulTests = tests.filter(t => t.success).length;
+    const successfulTests = tests.filter((t) => t.success).length;
     console.log(`[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`);
 
     return {

@@ -17,7 +17,7 @@ class ServiceIntegration {
     try {
       await Promise.all([
         this.analysisHistoryService.initialize(),
-        this.undoRedoService.initialize(),
+        this.undoRedoService.initialize()
 
       ]);
       
@@ -41,7 +41,7 @@ class ServiceIntegration {
       // Return enhanced results
       return {
         ...analysisResults,
-        analysisId: analysisId,
+        analysisId,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -58,7 +58,7 @@ class ServiceIntegration {
         originalPath: sourceFile.path,
         newPath: targetPath,
         fileInfo: sourceFile,
-        organizationOptions: organizationOptions
+        organizationOptions
       };
 
       // Perform the file move/organization
@@ -109,14 +109,14 @@ class ServiceIntegration {
       
       // Record the batch operation for undo
       await this.undoRedoService.recordAction('BATCH_ORGANIZE', {
-        operations: operations,
+        operations,
         rules: organizationRules
       });
       
       return {
         success: true,
         operations: results.length,
-        results: results
+        results
       };
     } catch (error) {
       console.error('Batch organization failed:', error);
@@ -138,7 +138,7 @@ class ServiceIntegration {
       const enhancedResults = await this.enhanceWithSemanticSearch(analysisResults, query, options);
       
       return {
-        query: query,
+        query,
         totalResults: enhancedResults.length,
         results: enhancedResults,
         searchTime: Date.now()
@@ -164,8 +164,8 @@ class ServiceIntegration {
       return {
         path: filePath,
         stats: fileStats,
-        analysisHistory: analysisHistory,
-        relatedFiles: relatedFiles,
+        analysisHistory,
+        relatedFiles,
         lastAccessed: new Date().toISOString()
       };
     } catch (error) {
@@ -177,16 +177,16 @@ class ServiceIntegration {
   // Get application statistics
   async getApplicationStatistics() {
     try {
-          const [analysisStats, actionHistory] = await Promise.all([
-      this.analysisHistoryService.getStatistics(),
-      this.undoRedoService.getActionHistory(20)
-    ]);
+      const [analysisStats, actionHistory] = await Promise.all([
+        this.analysisHistoryService.getStatistics(),
+        this.undoRedoService.getActionHistory(20)
+      ]);
     
-    return {
-      analysis: analysisStats,
-      recentActions: actionHistory,
-      timestamp: new Date().toISOString()
-    };
+      return {
+        analysis: analysisStats,
+        recentActions: actionHistory,
+        timestamp: new Date().toISOString()
+      };
     } catch (error) {
       console.error('Failed to get application statistics:', error);
       throw error;
@@ -306,7 +306,7 @@ class ServiceIntegration {
     }
   }
 
-  async performFileOrganization(file, targetPath, options) {
+  async performFileOrganization(file, targetPath, _options) {
     const fs = require('fs').promises;
     
     // Ensure target directory exists
@@ -326,7 +326,7 @@ class ServiceIntegration {
       const suggestedName = file.analysis?.subject || file.subject || path.basename(file.path);
       
       // Find matching smart folder
-      const smartFolder = rules.smartFolders?.find(folder => 
+      const smartFolder = rules.smartFolders?.find((folder) => 
         folder.name.toLowerCase() === suggestedCategory.toLowerCase() ||
         folder.path.toLowerCase().includes(suggestedCategory.toLowerCase())
       );
@@ -335,7 +335,8 @@ class ServiceIntegration {
       
       // Create a clean filename
       const extension = path.extname(file.path);
-      const cleanName = suggestedName.replace(/[<>:"|?*\x00-\x1f]/g, '_').substring(0, 200);
+      // eslint-disable-next-line no-control-regex
+      const cleanName = suggestedName.replace(/[<>:"|?*\u0000-\u001F]/g, '_').substring(0, 200);
       const finalName = cleanName.endsWith(extension) ? cleanName : cleanName + extension;
       
       return path.join(basePath, finalName);
@@ -360,7 +361,7 @@ class ServiceIntegration {
     }
   }
 
-  async enhanceWithSemanticSearch(results, query, options) {
+  async enhanceWithSemanticSearch(results, query, _options) {
     const { Ollama } = require('ollama');
     
     try {
@@ -415,7 +416,7 @@ class ServiceIntegration {
     } catch (error) {
       console.error('Semantic search enhancement failed:', error);
       // Fallback to text-based scoring
-      return results.map(result => ({
+      return results.map((result) => ({
         ...result,
         semanticScore: this.calculateTextSimilarity(query, result.subject || result.summary || '')
       }));
@@ -445,7 +446,7 @@ class ServiceIntegration {
     const querySet = new Set(queryWords);
     const textSet = new Set(textWords);
     
-    const intersection = [...querySet].filter(word => textSet.has(word));
+    const intersection = [...querySet].filter((word) => textSet.has(word));
     const union = new Set([...querySet, ...textSet]);
     
     return intersection.length / union.size;
@@ -463,7 +464,7 @@ class ServiceIntegration {
     };
   }
 
-  async findRelatedFiles(filePath) {
+  async findRelatedFiles(_filePath) {
     // This would implement file relationship logic
     // For now, return empty array
     return [];

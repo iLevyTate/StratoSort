@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+
 const { Ollama } = require('ollama');
 
 // App configuration for image analysis
@@ -10,7 +11,7 @@ const AppConfig = {
       defaultHost: 'http://127.0.0.1:11434',
       timeout: 180000, // 3 minutes for multimodal analysis (Gemma 3:4b needs more time)
       temperature: 0.2,
-      maxTokens: 1000,
+      maxTokens: 1000
     }
   }
 };
@@ -26,13 +27,13 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
     // Build folder categories string for the prompt
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
-      const validFolders = smartFolders.filter(f => 
+      const validFolders = smartFolders.filter((f) => 
         f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
       );
       
       if (validFolders.length > 0) {
         const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
+          .map((f) => `"${f.name.trim()}"`)
           .slice(0, 10)
           .join(', ');
         
@@ -64,9 +65,9 @@ Analyze this image:`;
       images: [imageBase64],
       options: {
         temperature: AppConfig.ai.imageAnalysis.temperature,
-        num_predict: AppConfig.ai.imageAnalysis.maxTokens,
+        num_predict: AppConfig.ai.imageAnalysis.maxTokens
       },
-      format: 'json',
+      format: 'json'
     });
 
     if (response.response) {
@@ -96,7 +97,7 @@ Analyze this image:`;
           ...parsedJson,
           keywords: finalKeywords,
           colors: finalColors,
-          has_text: Boolean(parsedJson.has_text),
+          has_text: Boolean(parsedJson.has_text)
         };
       } catch (e) {
         console.error('Error parsing Ollama JSON response for image:', e.message);
@@ -219,7 +220,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       date: new Date().toISOString().split('T')[0],
       category: intelligentCategory,
       confidence: 60,
-      error: analysis?.error || 'Ollama image analysis failed.',
+      error: analysis?.error || 'Ollama image analysis failed.'
     };
 
   } catch (error) {
@@ -240,7 +241,7 @@ async function extractTextFromImage(filePath) {
     const imageBuffer = await fs.readFile(filePath);
     const imageBase64 = imageBuffer.toString('base64');
 
-    const prompt = `Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".`;
+    const prompt = 'Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".';
 
     const response = await ollamaClient.generate({
       model: AppConfig.ai.imageAnalysis.defaultModel,
@@ -248,11 +249,11 @@ async function extractTextFromImage(filePath) {
       images: [imageBase64],
       options: {
         temperature: 0.1, // Lower temperature for text extraction
-        num_predict: 2000,
-      },
+        num_predict: 2000
+      }
     });
 
-    if (response.response && response.response.trim() !== "NO_TEXT_FOUND") {
+    if (response.response && response.response.trim() !== 'NO_TEXT_FOUND') {
       return response.response.trim();
     }
     
@@ -326,7 +327,7 @@ function getIntelligentImageKeywords(fileName, extension) {
     'image': ['image', 'visual', 'graphic']
   };
   
-  let keywords = baseKeywords[category] || ['image', 'visual'];
+  const keywords = baseKeywords[category] || ['image', 'visual'];
   
   // Add filename-based keywords
   if (lowerFileName.includes('work')) keywords.push('work');

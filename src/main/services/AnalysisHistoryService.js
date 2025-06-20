@@ -1,7 +1,8 @@
+const crypto = require('crypto');
 const fs = require('fs').promises;
 const path = require('path');
+
 const { app } = require('electron');
-const crypto = require('crypto');
 
 class AnalysisHistoryService {
   constructor() {
@@ -16,7 +17,7 @@ class AnalysisHistoryService {
     this.initialized = false;
     
     // Schema version for future migration support
-    this.SCHEMA_VERSION = "1.0.0";
+    this.SCHEMA_VERSION = '1.0.0';
     this.MAX_HISTORY_ENTRIES = 10000; // Configurable limit
   }
 
@@ -125,8 +126,8 @@ class AnalysisHistoryService {
     
     const analysisEntry = {
       id: crypto.randomUUID(),
-      fileHash: fileHash,
-      timestamp: timestamp,
+      fileHash,
+      timestamp,
       
       // File information
       originalPath: fileInfo.path,
@@ -212,7 +213,7 @@ class AnalysisHistoryService {
     
     // Tag index
     if (entry.analysis.tags) {
-      entry.analysis.tags.forEach(tag => {
+      entry.analysis.tags.forEach((tag) => {
         if (!this.analysisIndex.tagIndex[tag]) {
           this.analysisIndex.tagIndex[tag] = [];
         }
@@ -260,9 +261,8 @@ class AnalysisHistoryService {
     await this.initialize();
     
     const results = [];
-    const searchTerms = query.toLowerCase().split(' ');
     
-    for (const [id, entry] of Object.entries(this.analysisHistory.entries)) {
+    for (const [, entry] of Object.entries(this.analysisHistory.entries)) {
       let score = 0;
       
       // Search in file name
@@ -280,7 +280,7 @@ class AnalysisHistoryService {
       }
       
       // Search in tags
-      const tagMatches = entry.analysis.tags?.filter(tag => 
+      const tagMatches = entry.analysis.tags?.filter((tag) => 
         tag.toLowerCase().includes(query.toLowerCase())
       ) || [];
       score += tagMatches.length * 4;
@@ -310,13 +310,13 @@ class AnalysisHistoryService {
   async getAnalysisByCategory(category) {
     await this.initialize();
     const entryIds = this.analysisIndex.categoryIndex[category] || [];
-    return entryIds.map(id => this.analysisHistory.entries[id]).filter(Boolean);
+    return entryIds.map((id) => this.analysisHistory.entries[id]).filter(Boolean);
   }
 
   async getAnalysisByTag(tag) {
     await this.initialize();
     const entryIds = this.analysisIndex.tagIndex[tag] || [];
-    return entryIds.map(id => this.analysisHistory.entries[id]).filter(Boolean);
+    return entryIds.map((id) => this.analysisHistory.entries[id]).filter(Boolean);
   }
 
   async getRecentAnalysis(limit = 50) {
@@ -405,9 +405,9 @@ class AnalysisHistoryService {
     
     // Remove from tag index
     if (entry.analysis.tags) {
-      entry.analysis.tags.forEach(tag => {
+      entry.analysis.tags.forEach((tag) => {
         const tagEntries = this.analysisIndex.tagIndex[tag] || [];
-        this.analysisIndex.tagIndex[tag] = tagEntries.filter(id => id !== entry.id);
+        this.analysisIndex.tagIndex[tag] = tagEntries.filter((id) => id !== entry.id);
         if (this.analysisIndex.tagIndex[tag].length === 0) {
           delete this.analysisIndex.tagIndex[tag];
         }
@@ -417,7 +417,7 @@ class AnalysisHistoryService {
     // Remove from category index
     if (entry.analysis.category) {
       const categoryEntries = this.analysisIndex.categoryIndex[entry.analysis.category] || [];
-      this.analysisIndex.categoryIndex[entry.analysis.category] = categoryEntries.filter(id => id !== entry.id);
+      this.analysisIndex.categoryIndex[entry.analysis.category] = categoryEntries.filter((id) => id !== entry.id);
       if (this.analysisIndex.categoryIndex[entry.analysis.category].length === 0) {
         delete this.analysisIndex.categoryIndex[entry.analysis.category];
       }

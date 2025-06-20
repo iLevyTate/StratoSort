@@ -32,12 +32,21 @@ class ModelVerifier {
       }
       return { connected: false, error: 'HTTP error: ' + response.status };
     } catch (error) {
-      return { 
-        connected: false, 
+      return {
+        connected: false,
         error: error.message,
         suggestion: 'Make sure Ollama is running. Use: ollama serve'
       };
     }
+  }
+
+  // Compatibility wrapper used by existing analysers
+  async verifyConnection() {
+    const status = await this.checkOllamaConnection();
+    if (!status.connected) {
+      throw new OllamaConnectionError(this.ollamaHost);
+    }
+    return true;
   }
 
   async getInstalledModels() {
@@ -119,6 +128,40 @@ class ModelVerifier {
       installationCommands: this.generateInstallCommands(missingModels),
       recommendations: this.generateRecommendations(missingModels, hasWhisper)
     };
+  }
+
+  // Compatibility wrapper around verifyEssentialModels used by analysers
+  async verifyAnalysisType(type = 'document') {
+    // Ensure connection first
+    await this.verifyConnection();
+
+    const result = await this.verifyEssentialModels();
+
+    if (result.success || result.availableModels.length > 0) {
+      return true;
+    }
+
+    // Fallback: allow recommended models if available
+    const installed = await this.getInstalledModels();
+    if (installed.success) {
+      const installedNames = installed.models.map(m => m.name.toLowerCase());
+      const hasRecommended = this.recommendedModels.some(rec =>
+        installedNames.some(name =>
+          name === rec.toLowerCase() ||
+          name.startsWith(rec.toLowerCase() + ':') ||
+          rec.toLowerCase().startsWith(name.split(':')[0])
+        )
+      );
+
+      if (hasRecommended) {
+        console.log(
+          `[ModelVerifier] Proceeding with recommended model for ${type} analysis`
+        );
+        return true;
+      }
+    }
+
+    throw new ModelMissingError(result.missingModels[0] || this.essentialModels[0]);
   }
 
   generateInstallCommands(missingModels) {
@@ -290,4 +333,5 @@ class ModelVerifier {
   }
 }
 
-module.exports = ModelVerifier; 
+module.exports = ModelVerifier;
+module.exports.ModelVerifier = ModelVerifier;

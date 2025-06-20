@@ -6,6 +6,9 @@ const os = require('os');
 const { performance } = require('perf_hooks');
 const isDev = process.env.NODE_ENV === 'development';
 
+// Logging utility
+const logger = require('./utils/logger');
+
 // Import error handling system
 const { 
   AnalysisError, 
@@ -51,7 +54,7 @@ async function loadCustomFolders() {
     const data = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    console.log('[STARTUP] No saved custom folders found, using defaults');
+    logger.info('[STARTUP] No saved custom folders found, using defaults');
     // Return default smart folders
     return [
       {
@@ -77,9 +80,9 @@ async function saveCustomFolders(folders) {
   try {
     const filePath = getCustomFoldersPath();
     await fs.writeFile(filePath, JSON.stringify(folders, null, 2));
-    console.log('[STORAGE] Saved custom folders to:', filePath);
+    logger.info('[STORAGE] Saved custom folders to:', filePath);
   } catch (error) {
-    console.error('[ERROR] Failed to save custom folders:', error);
+    logger.error('[ERROR] Failed to save custom folders:', error);
   }
 }
 
@@ -140,7 +143,7 @@ const systemAnalytics = {
         rss: Math.round(memUsage.rss / 1024 / 1024) // MB
       };
     } catch (error) {
-      console.warn('Could not collect memory metrics:', error.message);
+      logger.warn('Could not collect memory metrics:', error.message);
     }
 
     return metrics;
@@ -153,22 +156,22 @@ const systemAnalytics = {
   destroy() {
     // Cleanup analytics data
     this.errors = [];
-    console.log('[ANALYTICS] System analytics cleaned up');
+    logger.info('[ANALYTICS] System analytics cleaned up');
   }
 };
 
 // Create the browser window
 function createWindow() {
-  console.log('[DEBUG] createWindow() called');
+  logger.debug('[DEBUG] createWindow() called');
   
   // Prevent creating multiple windows
   if (mainWindow && !mainWindow.isDestroyed()) {
-    console.log('[DEBUG] Window already exists, focusing...');
+    logger.debug('[DEBUG] Window already exists, focusing...');
     mainWindow.focus();
     return;
   }
   
-  console.log('[DEBUG] Creating new window...');
+  logger.debug('[DEBUG] Creating new window...');
   
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -195,17 +198,17 @@ function createWindow() {
     autoHideMenuBar: !isDev // Hide menu bar in production
   });
   
-  console.log('[DEBUG] BrowserWindow created');
+  logger.debug('[DEBUG] BrowserWindow created');
 
   // Load the app
   if (isDev) {
     // Try to load from webpack dev server, fallback to built files
     mainWindow.loadURL('http://localhost:3000').catch((error) => {
-      console.log('Development server not available:', error.message);
-      console.log('Loading from built files instead...');
+      logger.info('Development server not available:', error.message);
+      logger.info('Loading from built files instead...');
       const distPath = path.join(__dirname, '../../dist/index.html');
       mainWindow.loadFile(distPath).catch((fileError) => {
-        console.error('Failed to load from built files, trying original:', fileError);
+        logger.error('Failed to load from built files, trying original:', fileError);
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
       });
     });
@@ -217,7 +220,7 @@ function createWindow() {
     // In production, load from built files
     const distPath = path.join(__dirname, '../../dist/index.html');
     mainWindow.loadFile(distPath).catch((error) => {
-      console.error('Failed to load from dist, falling back:', error);
+      logger.error('Failed to load from dist, falling back:', error);
       mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
     });
   }
@@ -237,8 +240,8 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus(); // Ensure window is focused
-    console.log('✅ StratoSort window ready and focused');
-    console.log('[DEBUG] Window state:', {
+    logger.info('✅ StratoSort window ready and focused');
+    logger.debug('[DEBUG] Window state:', {
       isVisible: mainWindow.isVisible(),
       isFocused: mainWindow.isFocused(),
       isMinimized: mainWindow.isMinimized()
@@ -281,10 +284,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, basePath, folderN
   try {
     const folderPath = path.join(basePath, folderName);
     await fs.mkdir(folderPath, { recursive: true });
-    console.log('[FILE-OPS] Created folder:', folderPath);
+    logger.info('[FILE-OPS] Created folder:', folderPath);
     return { success: true, path: folderPath };
   } catch (error) {
-    console.error('[FILE-OPS] Error creating folder:', error);
+    logger.error('[FILE-OPS] Error creating folder:', error);
     return { success: false, error: error.message };
   }
 });
@@ -299,7 +302,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) 
     try {
       const stats = await fs.stat(normalizedPath);
       if (stats.isDirectory()) {
-        console.log('[FILE-OPS] Folder already exists:', normalizedPath);
+        logger.info('[FILE-OPS] Folder already exists:', normalizedPath);
         return { success: true, path: normalizedPath, existed: true };
       }
     } catch (statError) {
@@ -307,10 +310,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) 
     }
     
     await fs.mkdir(normalizedPath, { recursive: true });
-    console.log('[FILE-OPS] Created folder:', normalizedPath);
+    logger.info('[FILE-OPS] Created folder:', normalizedPath);
     return { success: true, path: normalizedPath, existed: false };
   } catch (error) {
-    console.error('[FILE-OPS] Error creating folder:', error);
+    logger.error('[FILE-OPS] Error creating folder:', error);
     
     // Provide more specific error information
     let userMessage = 'Failed to create folder';
@@ -371,14 +374,14 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
     
     // Delete the empty folder
     await fs.rmdir(normalizedPath);
-    console.log('[FILE-OPS] Deleted folder:', normalizedPath);
+    logger.info('[FILE-OPS] Deleted folder:', normalizedPath);
     return { 
       success: true, 
       path: normalizedPath, 
       message: 'Folder deleted successfully' 
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error deleting folder:', error);
+    logger.error('[FILE-OPS] Error deleting folder:', error);
     
     // Provide specific error information
     let userMessage = 'Failed to delete folder';
@@ -408,40 +411,40 @@ ipcMain.handle(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, async (event, dirPath)
       isDirectory: item.isDirectory(),
       isFile: item.isFile()
     }));
-    console.log('[FILE-OPS] Listed directory contents:', dirPath, result.length, 'items');
+    logger.info('[FILE-OPS] Listed directory contents:', dirPath, result.length, 'items');
     return result;
   } catch (error) {
-    console.error('[FILE-OPS] Error reading directory:', error);
+    logger.error('[FILE-OPS] Error reading directory:', error);
     return { error: error.message };
   }
 });
 
 ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) => {
   try {
-    console.log('[FILE-OPS] Performing operation:', operation.type);
-    console.log('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
+    logger.info('[FILE-OPS] Performing operation:', operation.type);
+    logger.info('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
     
     switch (operation.type) {
       case 'move':
-        console.log(`[FILE-OPS] Moving file: ${operation.source} → ${operation.destination}`);
+        logger.info(`[FILE-OPS] Moving file: ${operation.source} → ${operation.destination}`);
         await fs.rename(operation.source, operation.destination);
-        console.log(`[FILE-OPS] ✅ Successfully moved: ${operation.source} → ${operation.destination}`);
+        logger.info(`[FILE-OPS] ✅ Successfully moved: ${operation.source} → ${operation.destination}`);
         return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
         
       case 'copy':
-        console.log(`[FILE-OPS] Copying file: ${operation.source} → ${operation.destination}`);
+        logger.info(`[FILE-OPS] Copying file: ${operation.source} → ${operation.destination}`);
         await fs.copyFile(operation.source, operation.destination);
-        console.log(`[FILE-OPS] ✅ Successfully copied: ${operation.source} → ${operation.destination}`);
+        logger.info(`[FILE-OPS] ✅ Successfully copied: ${operation.source} → ${operation.destination}`);
         return { success: true, message: `Copied ${operation.source} to ${operation.destination}` };
         
       case 'delete':
-        console.log(`[FILE-OPS] Deleting file: ${operation.source}`);
+        logger.info(`[FILE-OPS] Deleting file: ${operation.source}`);
         await fs.unlink(operation.source);
-        console.log(`[FILE-OPS] ✅ Successfully deleted: ${operation.source}`);
+        logger.info(`[FILE-OPS] ✅ Successfully deleted: ${operation.source}`);
         return { success: true, message: `Deleted ${operation.source}` };
         
       case 'batch_organize':
-        console.log(`[FILE-OPS] Starting batch organization of ${operation.operations.length} files`);
+        logger.info(`[FILE-OPS] Starting batch organization of ${operation.operations.length} files`);
         const results = [];
         let successCount = 0;
         let failCount = 0;
@@ -449,8 +452,8 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
         for (let i = 0; i < operation.operations.length; i++) {
           const op = operation.operations[i];
           try {
-            console.log(`[FILE-OPS] [${i+1}/${operation.operations.length}] Processing: ${op.source}`);
-            console.log(`[FILE-OPS] Target: ${op.destination}`);
+            logger.info(`[FILE-OPS] [${i+1}/${operation.operations.length}] Processing: ${op.source}`);
+            logger.info(`[FILE-OPS] Target: ${op.destination}`);
             
             // Validate operation data
             if (!op.source || !op.destination) {
@@ -459,14 +462,14 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
             
             // Ensure destination directory exists
             const destDir = path.dirname(op.destination);
-            console.log(`[FILE-OPS] Creating directory if needed: ${destDir}`);
+            logger.info(`[FILE-OPS] Creating directory if needed: ${destDir}`);
             await fs.mkdir(destDir, { recursive: true });
             
             // Check if source file exists
             try {
               await fs.access(op.source);
               const sourceStats = await fs.stat(op.source);
-              console.log(`[FILE-OPS] ✅ Source file exists: ${op.source} (${sourceStats.size} bytes)`);
+              logger.info(`[FILE-OPS] ✅ Source file exists: ${op.source} (${sourceStats.size} bytes)`);
             } catch (accessError) {
               throw new Error(`Source file does not exist: ${op.source}`);
             }
@@ -474,7 +477,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
             // Check if destination already exists
             try {
               await fs.access(op.destination);
-              console.log(`[FILE-OPS] ⚠️  Destination already exists: ${op.destination}`);
+              logger.info(`[FILE-OPS] ⚠️  Destination already exists: ${op.destination}`);
               // Generate unique filename if destination exists
               let counter = 1;
               let uniqueDestination = op.destination;
@@ -487,23 +490,23 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
               }
               
               if (uniqueDestination !== op.destination) {
-                console.log(`[FILE-OPS] Using unique name: ${uniqueDestination}`);
+                logger.info(`[FILE-OPS] Using unique name: ${uniqueDestination}`);
                 op.destination = uniqueDestination;
               }
             } catch (accessError) {
-              console.log(`[FILE-OPS] ✅ Destination path is clear: ${op.destination}`);
+              logger.info(`[FILE-OPS] ✅ Destination path is clear: ${op.destination}`);
             }
             
             // Move the file (handle cross-drive moves on Windows)
-            console.log(`[FILE-OPS] Moving: ${op.source} → ${op.destination}`);
+            logger.info(`[FILE-OPS] Moving: ${op.source} → ${op.destination}`);
             
             try {
               await fs.rename(op.source, op.destination);
-              console.log(`[FILE-OPS] ✅ Successfully moved: ${path.basename(op.source)}`);
+              logger.info(`[FILE-OPS] ✅ Successfully moved: ${path.basename(op.source)}`);
             } catch (renameError) {
               if (renameError.code === 'EXDEV') {
                 // Cross-device link error - copy then delete
-                console.log(`[FILE-OPS] Cross-device move detected, using copy+delete`);
+                logger.info(`[FILE-OPS] Cross-device move detected, using copy+delete`);
                 await fs.copyFile(op.source, op.destination);
                 
                 // Verify copy was successful
@@ -514,7 +517,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
                 }
                 
                 await fs.unlink(op.source);
-                console.log(`[FILE-OPS] ✅ Successfully copied and removed: ${path.basename(op.source)}`);
+                logger.info(`[FILE-OPS] ✅ Successfully copied and removed: ${path.basename(op.source)}`);
               } else {
                 throw renameError;
               }
@@ -539,7 +542,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
             }
             
           } catch (error) {
-            console.error(`[FILE-OPS] ❌ Operation ${i+1} failed:`, error.message);
+            logger.error(`[FILE-OPS] ❌ Operation ${i+1} failed:`, error.message);
             
             results.push({
               success: false,
@@ -553,7 +556,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
           }
         }
         
-        console.log(`[FILE-OPS] Batch operation complete: ${successCount} success, ${failCount} failed`);
+        logger.info(`[FILE-OPS] Batch operation complete: ${successCount} success, ${failCount} failed`);
         
         return {
           success: successCount > 0,
@@ -564,11 +567,11 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
         };
         
       default:
-        console.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
+        logger.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
         return { success: false, error: `Unknown operation type: ${operation.type}` };
     }
   } catch (error) {
-    console.error('[FILE-OPS] Error performing operation:', error);
+    logger.error('[FILE-OPS] Error performing operation:', error);
     return { success: false, error: error.message };
   }
 });
@@ -600,7 +603,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
     const stats = await fs.stat(filePath);
     
     await fs.unlink(filePath);
-    console.log('[FILE-OPS] Deleted file:', filePath, `(${stats.size} bytes)`);
+    logger.info('[FILE-OPS] Deleted file:', filePath, `(${stats.size} bytes)`);
     
     return { 
       success: true, 
@@ -612,7 +615,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
       }
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error deleting file:', error);
+    logger.error('[FILE-OPS] Error deleting file:', error);
     
     // Provide specific error codes for different failure types
     let errorCode = 'DELETE_FAILED';
@@ -643,10 +646,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
 ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FILE, async (event, filePath) => {
   try {
     await shell.openPath(filePath);
-    console.log('[FILE-OPS] Opened file:', filePath);
+    logger.info('[FILE-OPS] Opened file:', filePath);
     return { success: true };
   } catch (error) {
-    console.error('[FILE-OPS] Error opening file:', error);
+    logger.error('[FILE-OPS] Error opening file:', error);
     return { success: false, error: error.message };
   }
 });
@@ -655,10 +658,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FILE, async (event, filePath) => {
 ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_FILE, async (event, filePath) => {
   try {
     await shell.showItemInFolder(filePath);
-    console.log('[FILE-OPS] Revealed file in folder:', filePath);
+    logger.info('[FILE-OPS] Revealed file in folder:', filePath);
     return { success: true };
   } catch (error) {
-    console.error('[FILE-OPS] Error revealing file:', error);
+    logger.error('[FILE-OPS] Error revealing file:', error);
     return { success: false, error: error.message };
   }
 });
@@ -699,7 +702,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, async (event, sourcePath, destinati
     const sourceStats = await fs.stat(normalizedSource);
     
     await fs.copyFile(normalizedSource, normalizedDestination);
-    console.log('[FILE-OPS] Copied file:', normalizedSource, 'to', normalizedDestination);
+    logger.info('[FILE-OPS] Copied file:', normalizedSource, 'to', normalizedDestination);
     
     return { 
       success: true,
@@ -712,7 +715,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, async (event, sourcePath, destinati
       }
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error copying file:', error);
+    logger.error('[FILE-OPS] Error copying file:', error);
     
     let errorCode = 'COPY_FAILED';
     let userMessage = 'Failed to copy file';
@@ -772,7 +775,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
     }
 
     await shell.openPath(normalizedPath);
-    console.log('[FILE-OPS] Opened folder:', normalizedPath);
+    logger.info('[FILE-OPS] Opened folder:', normalizedPath);
     
     return { 
       success: true,
@@ -780,7 +783,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
       openedPath: normalizedPath
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error opening folder:', error);
+    logger.error('[FILE-OPS] Error opening folder:', error);
     return { 
       success: false, 
       error: 'Failed to open folder',
@@ -792,7 +795,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
 
 // Enhanced Smart Folders with comprehensive validation and atomic operations
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
-  console.log('[SMART-FOLDERS] Getting Smart Folders for UI:', customFolders.length);
+  logger.info('[SMART-FOLDERS] Getting Smart Folders for UI:', customFolders.length);
   
   // Check physical existence of each folder
   const foldersWithStatus = await Promise.all(
@@ -816,7 +819,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, async () => {
-  console.log('[SMART-FOLDERS] Getting Custom Folders for UI:', customFolders.length);
+  logger.info('[SMART-FOLDERS] Getting Custom Folders for UI:', customFolders.length);
   return customFolders;
 });
 
@@ -833,7 +836,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
     try {
       customFolders = folders;
       await saveCustomFolders(folders);
-      console.log('[SMART-FOLDERS] Saved Smart Folders:', folders.length);
+      logger.info('[SMART-FOLDERS] Saved Smart Folders:', folders.length);
       return { success: true, folders: customFolders };
     } catch (saveError) {
       // Rollback on failure
@@ -841,7 +844,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to save smart folders:', error);
+    logger.error('[ERROR] Failed to save smart folders:', error);
     return { success: false, error: error.message, errorCode: 'SAVE_FAILED' };
   }
 });
@@ -859,7 +862,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) 
     try {
       customFolders = folders;
       await saveCustomFolders(folders);
-      console.log('[SMART-FOLDERS] Updated Custom Folders:', folders.length);
+      logger.info('[SMART-FOLDERS] Updated Custom Folders:', folders.length);
       return { success: true, folders: customFolders };
     } catch (saveError) {
       // Rollback on failure
@@ -867,7 +870,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) 
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to update custom folders:', error);
+    logger.error('[ERROR] Failed to update custom folders:', error);
     return { success: false, error: error.message, errorCode: 'UPDATE_FAILED' };
   }
 });
@@ -956,9 +959,9 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
 
         // Attempt rename
         await fs.rename(oldPath, newPath);
-        console.log(`[SMART-FOLDERS] Renamed directory \"${oldPath}\" -> \"${newPath}\"`);
+        logger.info(`[SMART-FOLDERS] Renamed directory \"${oldPath}\" -> \"${newPath}\"`);
       } catch (renameErr) {
-        console.error('[SMART-FOLDERS] Directory rename failed:', renameErr.message);
+        logger.error('[SMART-FOLDERS] Directory rename failed:', renameErr.message);
         return { success: false, error: 'Failed to rename directory', errorCode: 'RENAME_FAILED', details: renameErr.message };
       }
     }
@@ -972,7 +975,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       };
       
       await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Edited Smart Folder:', folderId);
+      logger.info('[SMART-FOLDERS] Edited Smart Folder:', folderId);
       
       return { 
         success: true, 
@@ -985,7 +988,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to edit smart folder:', error);
+    logger.error('[ERROR] Failed to edit smart folder:', error);
     return { 
       success: false, 
       error: error.message,
@@ -1013,7 +1016,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
     try {
       customFolders = customFolders.filter(f => f.id !== folderId);
       await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Deleted Smart Folder:', folderId);
+      logger.info('[SMART-FOLDERS] Deleted Smart Folder:', folderId);
       
       let directoryRemoved = false;
       let removalError = null;
@@ -1030,7 +1033,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
       } catch (dirErr) {
         // If directory missing, that's fine; otherwise record error
         if (dirErr.code !== 'ENOENT') {
-          console.warn('[SMART-FOLDERS] Directory removal failed:', dirErr.message);
+          logger.warn('[SMART-FOLDERS] Directory removal failed:', dirErr.message);
           removalError = dirErr.message;
         }
       }
@@ -1049,7 +1052,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to delete smart folder:', error);
+    logger.error('[ERROR] Failed to delete smart folder:', error);
     return { 
       success: false, 
       error: error.message,
@@ -1065,7 +1068,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
 // Folder scanning
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath) => {
   try {
-    console.log('[FOLDER-SCAN] Scanning folder structure:', rootPath);
+    logger.info('[FOLDER-SCAN] Scanning folder structure:', rootPath);
     
     const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
       if (depth > maxDepth) return [];
@@ -1098,17 +1101,17 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
         
         return files;
       } catch (error) {
-        console.warn('[FOLDER-SCAN] Error scanning folder:', folderPath, error.message);
+        logger.warn('[FOLDER-SCAN] Error scanning folder:', folderPath, error.message);
         return [];
       }
     };
     
     const files = await scanFolder(rootPath);
-    console.log('[FOLDER-SCAN] Found', files.length, 'supported files');
+    logger.info('[FOLDER-SCAN] Found', files.length, 'supported files');
     return files;
     
   } catch (error) {
-    console.error('[FOLDER-SCAN] Error scanning folder structure:', error);
+    logger.error('[FOLDER-SCAN] Error scanning folder structure:', error);
     return { error: error.message };
   }
 });
@@ -1162,7 +1165,7 @@ Respond with only a number between 0.0 and 1.0:`;
           }
         }
       } catch (folderError) {
-        console.warn(`[SEMANTIC] Failed to analyze folder ${folder.name}:`, folderError.message);
+        logger.warn(`[SEMANTIC] Failed to analyze folder ${folder.name}:`, folderError.message);
         // Fallback to basic string similarity
         const basicSimilarity = calculateBasicSimilarity(suggestedCategory, folder.name);
         similarities.push({
@@ -1178,7 +1181,7 @@ Respond with only a number between 0.0 and 1.0:`;
     // Sort by confidence descending
     return similarities.sort((a, b) => b.confidence - a.confidence);
   } catch (error) {
-    console.error('[SEMANTIC] Folder similarity calculation failed:', error);
+    logger.error('[SEMANTIC] Folder similarity calculation failed:', error);
     return [];
   }
 }
@@ -1213,7 +1216,7 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
       ollamaHealth: systemAnalytics.ollamaHealth 
     };
   } catch (error) {
-    console.error('[IPC] Error fetching Ollama models:', error);
+    logger.error('[IPC] Error fetching Ollama models:', error);
     if (error.cause && error.cause.code === 'ECONNREFUSED') {
       systemAnalytics.ollamaHealth = { 
         status: 'unhealthy', 
@@ -1254,7 +1257,7 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async (event, hostUrl) => {
       ollamaHealth: systemAnalytics.ollamaHealth
     };
   } catch (error) {
-    console.error('[IPC] Ollama connection test failed:', error);
+    logger.error('[IPC] Ollama connection test failed:', error);
     
     systemAnalytics.ollamaHealth = {
       status: 'unhealthy',
@@ -1281,7 +1284,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.UNDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.undo() || { success: false, message: 'Undo service unavailable' };
   } catch (error) {
-    console.error('Failed to execute undo:', error);
+    logger.error('Failed to execute undo:', error);
     return { success: false, message: error.message };
   }
 });
@@ -1290,7 +1293,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.REDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.redo() || { success: false, message: 'Redo service unavailable' };
   } catch (error) {
-    console.error('Failed to execute redo:', error);
+    logger.error('Failed to execute redo:', error);
     return { success: false, message: error.message };
   }
 });
@@ -1299,7 +1302,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, async (event, limit = 50) => 
   try {
     return await serviceIntegration?.undoRedo?.getHistory(limit) || [];
   } catch (error) {
-    console.error('Failed to get action history:', error);
+    logger.error('Failed to get action history:', error);
     return [];
   }
 });
@@ -1308,7 +1311,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CLEAR_HISTORY, async () => {
   try {
     return await serviceIntegration?.undoRedo?.clearHistory() || { success: true };
   } catch (error) {
-    console.error('Failed to clear action history:', error);
+    logger.error('Failed to clear action history:', error);
     return { success: false, message: error.message };
   }
 });
@@ -1318,7 +1321,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CAN_UNDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.canUndo() || false;
   } catch (error) {
-    console.error('Failed to check undo status:', error);
+    logger.error('Failed to check undo status:', error);
     return false;
   }
 });
@@ -1327,7 +1330,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CAN_REDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.canRedo() || false;
   } catch (error) {
-    console.error('Failed to check redo status:', error);
+    logger.error('Failed to check redo status:', error);
     return false;
   }
 });
@@ -1339,7 +1342,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
   try {
     return await serviceIntegration?.analysisHistory?.getStatistics() || {};
   } catch (error) {
-    console.error('Failed to get analysis statistics:', error);
+    logger.error('Failed to get analysis statistics:', error);
     return {};
   }
 });
@@ -1351,39 +1354,39 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
   try {
     return systemAnalytics.getApplicationStatistics();
   } catch (error) {
-    console.error('Failed to get system statistics:', error);
+    logger.error('Failed to get system statistics:', error);
     return {};
   }
 });
 
 // File operation handlers
 ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
-  console.log('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
-  console.log('[MAIN-FILE-SELECT] mainWindow exists?', !!mainWindow);
-  console.log('[MAIN-FILE-SELECT] mainWindow visible?', mainWindow?.isVisible());
-  console.log('[MAIN-FILE-SELECT] mainWindow focused?', mainWindow?.isFocused());
+  logger.info('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
+  logger.info('[MAIN-FILE-SELECT] mainWindow exists?', !!mainWindow);
+  logger.info('[MAIN-FILE-SELECT] mainWindow visible?', mainWindow?.isVisible());
+  logger.info('[MAIN-FILE-SELECT] mainWindow focused?', mainWindow?.isFocused());
   
   try {
     // Make sure window is focused before opening dialog
     if (mainWindow && !mainWindow.isFocused()) {
-      console.log('[MAIN-FILE-SELECT] Focusing window before dialog...');
+      logger.info('[MAIN-FILE-SELECT] Focusing window before dialog...');
       mainWindow.focus();
     }
     
-    console.log('[MAIN-FILE-SELECT] Opening file dialog...');
+    logger.info('[MAIN-FILE-SELECT] Opening file dialog...');
     
     // Try to ensure window is visible and focused before showing dialog
     if (mainWindow) {
       if (mainWindow.isMinimized()) {
-        console.log('[MAIN-FILE-SELECT] Restoring minimized window');
+        logger.info('[MAIN-FILE-SELECT] Restoring minimized window');
         mainWindow.restore();
       }
       if (!mainWindow.isVisible()) {
-        console.log('[MAIN-FILE-SELECT] Showing hidden window');
+        logger.info('[MAIN-FILE-SELECT] Showing hidden window');
         mainWindow.show();
       }
       if (!mainWindow.isFocused()) {
-        console.log('[MAIN-FILE-SELECT] Focusing window');
+        logger.info('[MAIN-FILE-SELECT] Focusing window');
         mainWindow.focus();
       }
       
@@ -1407,13 +1410,13 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
       ]
     });
     
-    console.log('[MAIN-FILE-SELECT] Dialog closed, result:', result);
+    logger.info('[MAIN-FILE-SELECT] Dialog closed, result:', result);
     
     if (result.canceled || !result.filePaths.length) {
       return { success: false, files: [] };
     }
     
-    console.log(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
+    logger.info(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
     
     const allFiles = [];
     const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
@@ -1442,7 +1445,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
         
         return foundFiles;
       } catch (error) {
-        console.warn(`[FILE-SELECTION] Error scanning folder ${folderPath}:`, error.message);
+        logger.warn(`[FILE-SELECTION] Error scanning folder ${folderPath}:`, error.message);
         return [];
       }
     };
@@ -1457,23 +1460,23 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
           const ext = path.extname(selectedPath).toLowerCase();
           if (supportedExts.includes(ext)) {
             allFiles.push(selectedPath);
-            console.log(`[FILE-SELECTION] Added file: ${path.basename(selectedPath)}`);
+            logger.info(`[FILE-SELECTION] Added file: ${path.basename(selectedPath)}`);
           }
         } else if (stats.isDirectory()) {
           // It's a folder - scan for supported files
-          console.log(`[FILE-SELECTION] Scanning folder: ${selectedPath}`);
+          logger.info(`[FILE-SELECTION] Scanning folder: ${selectedPath}`);
           const folderFiles = await scanFolder(selectedPath);
           allFiles.push(...folderFiles);
-          console.log(`[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${path.basename(selectedPath)}`);
+          logger.info(`[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${path.basename(selectedPath)}`);
         }
       } catch (error) {
-        console.warn(`[FILE-SELECTION] Error processing ${selectedPath}:`, error.message);
+        logger.warn(`[FILE-SELECTION] Error processing ${selectedPath}:`, error.message);
       }
     }
     
     // Remove duplicates
     const uniqueFiles = [...new Set(allFiles)];
-    console.log(`[FILE-SELECTION] Total files collected: ${uniqueFiles.length} (${allFiles.length - uniqueFiles.length} duplicates removed)`);
+    logger.info(`[FILE-SELECTION] Total files collected: ${uniqueFiles.length} (${allFiles.length - uniqueFiles.length} duplicates removed)`);
     
     return { 
       success: true, 
@@ -1485,8 +1488,8 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
       }
     };
   } catch (error) {
-    console.error('[MAIN-FILE-SELECT] Failed to select files:', error);
-    console.error('[MAIN-FILE-SELECT] Error stack:', error.stack);
+    logger.error('[MAIN-FILE-SELECT] Failed to select files:', error);
+    logger.error('[MAIN-FILE-SELECT] Error stack:', error.stack);
     
     // Provide more helpful error messages
     let userMessage = error.message;
@@ -1512,7 +1515,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
 
 ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
   try {
-    console.log('[IPC] Opening directory selection dialog');
+    logger.info('[IPC] Opening directory selection dialog');
     
     const result = await dialog.showOpenDialog(mainWindow || null, {
       properties: ['openDirectory', 'dontAddToRecent'],
@@ -1520,21 +1523,21 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
       buttonLabel: 'Select Directory'
     });
     
-    console.log('[IPC] Directory selection result:', result);
+    logger.info('[IPC] Directory selection result:', result);
     
     if (result.canceled || !result.filePaths.length) {
       return { success: false, folder: null };
     }
     
     const selectedFolder = result.filePaths[0];
-    console.log('[IPC] Selected directory:', selectedFolder);
+    logger.info('[IPC] Selected directory:', selectedFolder);
     
     return { 
       success: true, 
       folder: selectedFolder
     };
   } catch (error) {
-    console.error('[IPC] Directory selection failed:', error);
+    logger.error('[IPC] Directory selection failed:', error);
     return { 
       success: false, 
       folder: null,
@@ -1547,7 +1550,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, async () => {
   try {
     return app.getPath('documents');
   } catch (error) {
-    console.error('Failed to get documents path:', error);
+    logger.error('Failed to get documents path:', error);
     return null;
   }
 });
@@ -1563,7 +1566,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
       created: stats.birthtime
     };
   } catch (error) {
-    console.error('Failed to get file stats:', error);
+    logger.error('Failed to get file stats:', error);
     return null;
   }
 });
@@ -1572,14 +1575,14 @@ ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
 ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) => {
   try {
     const startTime = performance.now();
-    console.log(`[IPC-ANALYSIS] Starting document analysis for: ${filePath}`);
+    logger.info(`[IPC-ANALYSIS] Starting document analysis for: ${filePath}`);
     
     // Check if file exists
     try {
       await fs.access(filePath);
-      console.log(`[IPC-ANALYSIS] ✅ File exists: ${filePath}`);
+      logger.info(`[IPC-ANALYSIS] ✅ File exists: ${filePath}`);
     } catch (accessError) {
-      console.error(`[IPC-ANALYSIS] ❌ File not found: ${filePath}`);
+      logger.error(`[IPC-ANALYSIS] ❌ File not found: ${filePath}`);
       return {
         error: `File not found: ${filePath}`,
         suggestedName: path.basename(filePath, path.extname(filePath)),
@@ -1597,15 +1600,15 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
       id: f.id
     }));
     
-    console.log(`[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
+    logger.info(`[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
     
     const result = await analyzeDocumentFile(filePath, folderCategories);
     
     const duration = performance.now() - startTime;
     systemAnalytics.recordProcessingTime(duration);
     
-    console.log(`[IPC-ANALYSIS] Document analysis completed for: ${filePath}`);
-    console.log(`[IPC-ANALYSIS] Result summary:`, {
+    logger.info(`[IPC-ANALYSIS] Document analysis completed for: ${filePath}`);
+    logger.info(`[IPC-ANALYSIS] Result summary:`, {
       success: !result.error,
       category: result.category,
       keywords: result.keywords?.length || 0,
@@ -1615,7 +1618,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
     
     return result;
   } catch (error) {
-    console.error(`[IPC] Document analysis failed for ${filePath}:`, error);
+    logger.error(`[IPC] Document analysis failed for ${filePath}:`, error);
     systemAnalytics.recordFailure(error);
     return {
       error: error.message,
@@ -1630,7 +1633,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
 // Image analysis handler
 ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
   try {
-    console.log(`[IPC] Starting image analysis for: ${filePath}`);
+    logger.info(`[IPC] Starting image analysis for: ${filePath}`);
     
     // Get current smart folders to pass to analysis
     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
@@ -1640,11 +1643,11 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
       id: f.id
     }));
     
-    console.log(`[IPC-IMAGE-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
+    logger.info(`[IPC-IMAGE-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
     
     const result = await analyzeImageFile(filePath, folderCategories);
     
-    console.log(`[IPC-IMAGE-ANALYSIS] Result:`, {
+    logger.info(`[IPC-IMAGE-ANALYSIS] Result:`, {
       success: !result.error,
       category: result.category,
       keywords: result.keywords?.length || 0,
@@ -1653,7 +1656,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
     
     return result;
   } catch (error) {
-    console.error(`[IPC] Image analysis failed for ${filePath}:`, error);
+    logger.error(`[IPC] Image analysis failed for ${filePath}:`, error);
     return {
       error: error.message,
       suggestedName: path.basename(filePath, path.extname(filePath)),
@@ -1673,7 +1676,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
     systemAnalytics.recordProcessingTime(duration);
     return { success: true, text };
   } catch (error) {
-    console.error('OCR failed:', error);
+    logger.error('OCR failed:', error);
     systemAnalytics.recordFailure(error);
     return { success: false, error: error.message };
   }
@@ -1681,7 +1684,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
 
 // Audio analysis handlers
 ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-  console.log('[IPC] Audio analysis requested for:', filePath);
+  logger.info('[IPC] Audio analysis requested for:', filePath);
   
   try {
     const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
@@ -1707,7 +1710,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
       });
     }
     
-    console.log(`[IPC] Audio analysis completed in ${processingTime}ms`);
+    logger.info(`[IPC] Audio analysis completed in ${processingTime}ms`);
     mainWindow?.webContents.send('analysis-progress', {
       filePath,
       status: 'completed',
@@ -1716,7 +1719,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
     
     return result;
   } catch (error) {
-    console.error('[IPC] Audio analysis failed:', error);
+    logger.error('[IPC] Audio analysis failed:', error);
     systemAnalytics.recordFailure(error);
     mainWindow?.webContents.send('analysis-error', {
       filePath,
@@ -1728,7 +1731,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
 });
 
 ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) => {
-  console.log('[IPC] Audio transcription requested for:', filePath);
+  logger.info('[IPC] Audio transcription requested for:', filePath);
   
   try {
     const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
@@ -1739,7 +1742,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) =
       transcript: result.transcript || result.text || result.summary || ''
     };
   } catch (error) {
-    console.error('[IPC] Audio transcription failed:', error);
+    logger.error('[IPC] Audio transcription failed:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1756,7 +1759,7 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
       notifications: true
     };
   } catch (error) {
-    console.error('Failed to get settings:', error);
+    logger.error('Failed to get settings:', error);
     return {};
   }
 });
@@ -1764,10 +1767,10 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
 ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
   try {
     // For now, just return success - could be expanded to persist settings
-    console.log('[SETTINGS] Saving settings:', settings);
+    logger.info('[SETTINGS] Saving settings:', settings);
     return { success: true, settings };
   } catch (error) {
-    console.error('Failed to save settings:', error);
+    logger.error('Failed to save settings:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1803,9 +1806,9 @@ if (!gotTheLock) {
     app.commandLine.appendSwitch('enable-zero-copy');
     app.commandLine.appendSwitch('enable-hardware-overlays');
     
-    console.log('[PRODUCTION] GPU acceleration optimizations enabled');
+    logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
   } else {
-    console.log('[DEVELOPMENT] GPU acceleration using default settings');
+    logger.info('[DEVELOPMENT] GPU acceleration using default settings');
   }
 
   // Initialize services after app is ready
@@ -1813,12 +1816,12 @@ if (!gotTheLock) {
     try {
       // Load custom folders
       customFolders = await loadCustomFolders();
-      console.log('[STARTUP] Loaded custom folders:', customFolders.length, 'folders');
+      logger.info('[STARTUP] Loaded custom folders:', customFolders.length, 'folders');
       
       // Initialize service integration
       serviceIntegration = new ServiceIntegration();
       await serviceIntegration.initialize();
-      console.log('[MAIN] Service integration initialized successfully');
+      logger.info('[MAIN] Service integration initialized successfully');
       
       // Verify AI models on startup
       const { ModelVerifier } = require('./services/ModelVerifier');
@@ -1826,13 +1829,13 @@ if (!gotTheLock) {
       const modelStatus = await modelVerifier.verifyEssentialModels();
       
       if (!modelStatus.success) {
-        console.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
-        console.log('[STARTUP] Install missing models:');
-        modelStatus.installationCommands.forEach(cmd => console.log('  ', cmd));
+        logger.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
+        logger.info('[STARTUP] Install missing models:');
+        modelStatus.installationCommands.forEach(cmd => logger.info('  ', cmd));
       } else {
-        console.log('[STARTUP] ✅ All essential AI models verified and ready');
+        logger.info('[STARTUP] ✅ All essential AI models verified and ready');
         if (modelStatus.hasWhisper) {
-          console.log('[STARTUP] ✅ Whisper model available for audio analysis');
+          logger.info('[STARTUP] ✅ Whisper model available for audio analysis');
         }
       }
       
@@ -1840,18 +1843,18 @@ if (!gotTheLock) {
       
       // Load Ollama config
       await loadOllamaConfig();
-      console.log('[STARTUP] Ollama configuration loaded');
+      logger.info('[STARTUP] Ollama configuration loaded');
       
     } catch (error) {
-      console.error('[STARTUP] Failed to initialize:', error);
+      logger.error('[STARTUP] Failed to initialize:', error);
       createWindow();
     }
   });
 }
 
 // ===== APP LIFECYCLE =====
-console.log('[STARTUP] Organizer AI App - Main Process Started with Full AI Features');
-console.log('[UI] Modern UI loaded with GPU acceleration');
+logger.info('[STARTUP] Organizer AI App - Main Process Started with Full AI Features');
+logger.info('[UI] Modern UI loaded with GPU acceleration');
 
 // App lifecycle
 app.on('window-all-closed', () => {
@@ -1966,7 +1969,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
         llmEnhancedData = llmAnalysis;
       }
     } catch (llmError) {
-      console.warn('[SMART-FOLDERS] LLM enhancement failed, continuing with basic data:', llmError.message);
+      logger.warn('[SMART-FOLDERS] LLM enhancement failed, continuing with basic data:', llmError.message);
     }
     
     const newFolder = {
@@ -1994,7 +1997,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
     try {
       const existingStats = await fs.stat(normalizedPath);
       if (existingStats.isDirectory()) {
-        console.log('[SMART-FOLDERS] Directory already exists:', normalizedPath);
+        logger.info('[SMART-FOLDERS] Directory already exists:', normalizedPath);
         directoryExisted = true;
       } else {
         return { 
@@ -2008,7 +2011,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
       if (statError.code === 'ENOENT') {
         try {
           await fs.mkdir(normalizedPath, { recursive: true });
-          console.log('[SMART-FOLDERS] Created directory:', normalizedPath);
+          logger.info('[SMART-FOLDERS] Created directory:', normalizedPath);
           directoryCreated = true;
           
           // Verify directory was created and is accessible
@@ -2017,7 +2020,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
             throw new Error('Created path is not a directory');
           }
         } catch (dirError) {
-          console.error('[SMART-FOLDERS] Directory creation failed:', dirError.message);
+          logger.error('[SMART-FOLDERS] Directory creation failed:', dirError.message);
           return { 
             success: false, 
             error: 'Failed to create directory',
@@ -2040,7 +2043,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
     try {
       customFolders.push(newFolder);
       await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Added Smart Folder:', newFolder.id);
+      logger.info('[SMART-FOLDERS] Added Smart Folder:', newFolder.id);
       
       return { 
         success: true, 
@@ -2060,9 +2063,9 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
       if (directoryCreated && !directoryExisted) {
         try {
           await fs.rmdir(normalizedPath);
-          console.log('[SMART-FOLDERS] Rolled back directory creation:', normalizedPath);
+          logger.info('[SMART-FOLDERS] Rolled back directory creation:', normalizedPath);
         } catch (rollbackError) {
-          console.error('[SMART-FOLDERS] Failed to rollback directory:', rollbackError.message);
+          logger.error('[SMART-FOLDERS] Failed to rollback directory:', rollbackError.message);
         }
       }
       
@@ -2074,7 +2077,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
       };
     }
   } catch (error) {
-    console.error('[ERROR] Failed to add smart folder:', error);
+    logger.error('[ERROR] Failed to add smart folder:', error);
     return { 
       success: false, 
       error: 'Failed to add smart folder',
@@ -2087,7 +2090,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
 // Enhanced LLM integration for smart folder optimization
 async function enhanceSmartFolderWithLLM(folderData, existingFolders) {
   try {
-    console.log('[LLM-ENHANCEMENT] Analyzing smart folder for optimization:', folderData.name);
+    logger.info('[LLM-ENHANCEMENT] Analyzing smart folder for optimization:', folderData.name);
     
     // Build context about existing folders
     const existingFolderContext = existingFolders.map(f => ({
@@ -2136,41 +2139,41 @@ Please provide a JSON response with the following enhancements:
       
       // Validate the response structure
       if (enhancement && typeof enhancement === 'object') {
-        console.log('[LLM-ENHANCEMENT] Successfully enhanced smart folder:', enhancement.reasoning);
+        logger.info('[LLM-ENHANCEMENT] Successfully enhanced smart folder:', enhancement.reasoning);
         return enhancement;
       }
     }
     
     return { error: 'Invalid LLM response format' };
   } catch (error) {
-    console.error('[LLM-ENHANCEMENT] Failed to enhance smart folder:', error.message);
+    logger.error('[LLM-ENHANCEMENT] Failed to enhance smart folder:', error.message);
     return { error: error.message };
   }
 }
 
 // Error handling
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.error('Uncaught Exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-console.log('✅ StratoSort main process initialized');
+logger.info('✅ StratoSort main process initialized');
 
 // Add comprehensive error handling
 process.on('uncaughtException', (error) => {
-  console.error('🔥 UNCAUGHT EXCEPTION:', error);
-  console.error('Stack:', error.stack);
+  logger.error('🔥 UNCAUGHT EXCEPTION:', error);
+  logger.error('Stack:', error.stack);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('🔥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  logger.error('🔥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });
 
 // Keep the process alive for debugging
-console.log('[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.');
+logger.debug('[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.');
 
 // Analysis History handlers
 ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async (event, options = {}) => {
@@ -2178,7 +2181,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async (event, options = {}) =>
     const limit = options.limit || 50;
     return await serviceIntegration?.analysisHistory?.getRecentAnalysis(limit) || [];
   } catch (error) {
-    console.error('Failed to get analysis history:', error);
+    logger.error('Failed to get analysis history:', error);
     return [];
   }
 });
@@ -2187,7 +2190,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, async (event, query = '', o
   try {
     return await serviceIntegration?.analysisHistory?.searchAnalysis(query, options) || [];
   } catch (error) {
-    console.error('Failed to search analysis history:', error);
+    logger.error('Failed to search analysis history:', error);
     return [];
   }
 });
@@ -2196,7 +2199,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, async (event, fil
   try {
     return await serviceIntegration?.analysisHistory?.getAnalysisByPath(filePath) || null;
   } catch (error) {
-    console.error('Failed to get file analysis history:', error);
+    logger.error('Failed to get file analysis history:', error);
     return null;
   }
 });
@@ -2206,7 +2209,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR, async () => {
     await serviceIntegration?.analysisHistory?.createDefaultStructures();
     return { success: true };
   } catch (error) {
-    console.error('Failed to clear analysis history:', error);
+    logger.error('Failed to clear analysis history:', error);
     return { success: false, error: error.message };
   }
 });
@@ -2220,7 +2223,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, async (event, format = 'jso
     // Future: handle csv or other formats
     return { success: true, data: history };
   } catch (error) {
-    console.error('Failed to export analysis history:', error);
+    logger.error('Failed to export analysis history:', error);
     return { success: false, error: error.message };
   }
 });
@@ -2230,7 +2233,7 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
   try {
     return await systemAnalytics.collectMetrics();
   } catch (error) {
-    console.error('Failed to collect system metrics:', error);
+    logger.error('Failed to collect system metrics:', error);
     return {};
   }
 });
@@ -2238,7 +2241,7 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
 // Audio analysis handler REMOVED - audio analysis disabled
 // ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
 //   try {
-//     console.log(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
+//     logger.info(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
 //     
 //     // Get current smart folders to pass to analysis
 //     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
@@ -2248,11 +2251,11 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
 //       id: f.id
 //     }));
 //     
-//     console.log(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
+//     logger.info(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
 //     
 //     const result = await analyzeAudioFile(filePath, folderCategories);
 //     
-//     console.log(`[IPC-AUDIO-ANALYSIS] Result:`, {
+//     logger.info(`[IPC-AUDIO-ANALYSIS] Result:`, {
 //       success: !result.error,
 //       category: result.category,
 //       keywords: result.keywords?.length || 0,
@@ -2262,7 +2265,7 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
 //     
 //     return result;
 //   } catch (error) {
-//     console.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
+//     logger.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
 //     return {
 //       error: error.message,
 //       suggestedName: path.basename(filePath, path.extname(filePath)),

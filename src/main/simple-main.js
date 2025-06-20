@@ -1340,7 +1340,13 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
 // System handlers
 ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
   try {
-    return systemAnalytics.getApplicationStatistics();
+    // Prefer the aggregated statistics from ServiceIntegration if available
+    if (serviceIntegration && serviceIntegration.initialized) {
+      return await serviceIntegration.getApplicationStatistics();
+    }
+
+    // Fallback to basic system metrics if ServiceIntegration isn't ready
+    return await systemAnalytics.collectMetrics();
   } catch (error) {
     console.error('Failed to get system statistics:', error);
     return {};

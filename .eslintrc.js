@@ -35,10 +35,10 @@ module.exports = {
       },
       alias: {
         map: [
-          ['@', './electron-react-app/src'],
-          ['@main', './electron-react-app/src/main'],
-          ['@renderer', './electron-react-app/src/renderer'],
-          ['@shared', './electron-react-app/src/shared']
+          ['@', './src'],
+          ['@main', './src/main'],
+          ['@renderer', './src/renderer'],
+          ['@shared', './src/shared']
         ]
       }
     }
@@ -112,11 +112,11 @@ module.exports = {
       }
     },
     {
-      files: ['electron-react-app/src/main/**/*.js'],
+      files: ['src/main/**/*.js'],
       env: {
         browser: false,
         node: true
       }
     }
   ]
-}; 
+};

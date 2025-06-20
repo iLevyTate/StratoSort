@@ -233,6 +233,11 @@
   .toast-info {
     @apply border-stratosort-blue/40 bg-stratosort-blue/5 text-stratosort-blue/90;
   }
+
+  .toast-progress {
+    @apply absolute bottom-0 left-0 w-full h-[2px] bg-current pointer-events-none;
+    animation: toast-progress linear forwards;
+  }
   
   /* Enhanced Progress Components */
   .progress-enhanced {
@@ -395,9 +400,27 @@ select:focus {
   }
 }
 
-/* Dark mode support (future-proofing) */
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  /* Dark mode styles would go here */
+  body {
+    @apply bg-system-gray-900 text-system-gray-100;
+  }
+
+  .card-enhanced {
+    @apply bg-system-gray-800 border-system-gray-700 text-system-gray-100;
+  }
+
+  .btn-primary {
+    @apply bg-stratosort-dark-blue hover:bg-stratosort-deep-blue text-white;
+  }
+
+  .btn-secondary {
+    @apply bg-system-gray-800 border-system-gray-600 text-system-gray-200 hover:bg-system-gray-700;
+  }
+
+  .toast-enhanced {
+    @apply bg-system-gray-800 border-system-gray-600 text-system-gray-100;
+  }
 }
 
 /* High contrast mode support */
@@ -737,6 +760,11 @@ select:focus {
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+@keyframes toast-progress {
+  from { width: 100%; }
+  to { width: 0%; }
 }
 
 /* ===== MODERN LAYOUT COMPONENTS ===== */

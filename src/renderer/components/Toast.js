@@ -69,7 +69,7 @@ const Toast = ({
 
   return (
     <div
-      className={`toast-enhanced ${getSeverityClasses()} ${isVisible ? 'show' : ''}`}
+      className={`toast-enhanced relative ${getSeverityClasses()} ${isVisible ? 'show' : ''}`}
       style={fallbackStyle}
       role="alert"
       aria-live="polite"
@@ -95,6 +95,14 @@ const Toast = ({
           <span className="text-sm leading-none">×</span>
         </button>
       </div>
+      {duration > 0 && (
+        <div
+          className="toast-progress pointer-events-none"
+          style={{ animationDuration: `${duration}ms` }}
+          aria-hidden="true"
+          role="presentation"
+        />
+      )}
     </div>
   );
 };

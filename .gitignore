@@ -61,6 +61,7 @@ electron-builder.yml
 debug-analysis.js
 startup-validation.js
 verify-*.js
+!scripts/verify-setup.js
 
 # Documentation build
 docs/_build/

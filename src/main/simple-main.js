@@ -588,9 +588,7 @@ app.on('before-quit', () => {
 
 // Error handling
 process.on('uncaughtException', (error) => {
-
-// Add comprehensive error handling
-process.on('uncaughtException', (error) => {
+  // Add comprehensive error handling
   console.error('🔥 UNCAUGHT EXCEPTION:', error);
   console.error('Stack:', error.stack);
 });

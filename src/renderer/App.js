@@ -3106,10 +3106,13 @@ function OrganizePhase() {
 
   // Find smart folder for category with enhanced matching
   const findSmartFolderForCategory = (category) => {
-    if (!category) return null;
+    if (!category) {
+      console.warn('[FOLDER-MATCH] No category provided');
+      return null;
+    }
     
     console.log(`[FOLDER-MATCH] Finding smart folder for category: "${category}"`);
-    console.log(`[FOLDER-MATCH] Available smart folders:`, smartFolders.map(f => f.name));
+    console.log(`[FOLDER-MATCH] Available smart folders:`, smartFolders.map(f => ({ name: f.name, path: f.path })));
     
     // Normalize category for matching
     const normalizedCategory = category.toLowerCase().trim();
@@ -3119,7 +3122,7 @@ function OrganizePhase() {
       f.name.toLowerCase().trim() === normalizedCategory
     );
     if (folder) {
-      console.log(`[FOLDER-MATCH] Exact match found: "${folder.name}"`);
+      console.log(`[FOLDER-MATCH] ✅ Exact match found: "${folder.name}"`);
       return folder;
     }
     
@@ -3133,6 +3136,8 @@ function OrganizePhase() {
       normalizedCategory.replace(/\s+/g, '_'), // Replace spaces with underscores
     ];
     
+    console.log(`[FOLDER-MATCH] Trying variations: [${categoryVariations.join(', ')}]`);
+    
     for (const variant of categoryVariations) {
       folder = smartFolders.find(f => 
         f.name.toLowerCase().trim() === variant ||
@@ -3141,7 +3146,7 @@ function OrganizePhase() {
         f.name.toLowerCase().replace(/\s+/g, '_') === variant
       );
       if (folder) {
-        console.log(`[FOLDER-MATCH] Variation match found: "${folder.name}" for variant "${variant}"`);
+        console.log(`[FOLDER-MATCH] ✅ Variation match found: "${folder.name}" for variant "${variant}"`);
         return folder;
       }
     }
@@ -3150,6 +3155,8 @@ function OrganizePhase() {
     let bestMatch = null;
     let bestScore = 0;
     
+    console.log(`[FOLDER-MATCH] Attempting fuzzy matching...`);
+    
     smartFolders.forEach(f => {
       let score = 0;
       const folderName = f.name.toLowerCase();
@@ -3157,11 +3164,13 @@ function OrganizePhase() {
       // Check if category is contained in folder name
       if (folderName.includes(normalizedCategory)) {
         score += 10;
+        console.log(`[FOLDER-MATCH] "${f.name}" contains "${category}": +10 points`);
       }
       
       // Check if folder name is contained in category
       if (normalizedCategory.includes(folderName)) {
         score += 8;
+        console.log(`[FOLDER-MATCH] "${category}" contains "${f.name}": +8 points`);
       }
       
       // Word-by-word matching
@@ -3172,8 +3181,10 @@ function OrganizePhase() {
         folderWords.forEach(fWord => {
           if (cWord === fWord) {
             score += 5;
+            console.log(`[FOLDER-MATCH] Word match "${cWord}" = "${fWord}": +5 points`);
           } else if (cWord.includes(fWord) || fWord.includes(cWord)) {
             score += 3;
+            console.log(`[FOLDER-MATCH] Partial word match "${cWord}" ~ "${fWord}": +3 points`);
           }
         });
       });
@@ -3183,10 +3194,12 @@ function OrganizePhase() {
         const descLower = f.description.toLowerCase();
         if (descLower.includes(normalizedCategory)) {
           score += 4;
+          console.log(`[FOLDER-MATCH] Description contains category: +4 points`);
         }
         categoryWords.forEach(word => {
           if (descLower.includes(word)) {
             score += 2;
+            console.log(`[FOLDER-MATCH] Description contains word "${word}": +2 points`);
           }
         });
       }
@@ -3196,11 +3209,17 @@ function OrganizePhase() {
         f.keywords.forEach(keyword => {
           if (keyword.toLowerCase() === normalizedCategory) {
             score += 4;
+            console.log(`[FOLDER-MATCH] Keyword exact match "${keyword}": +4 points`);
           } else if (keyword.toLowerCase().includes(normalizedCategory) || 
                      normalizedCategory.includes(keyword.toLowerCase())) {
             score += 2;
+            console.log(`[FOLDER-MATCH] Keyword partial match "${keyword}": +2 points`);
           }
         });
+      }
+      
+      if (score > 0) {
+        console.log(`[FOLDER-MATCH] "${f.name}" total score: ${score}`);
       }
       
       if (score > bestScore) {
@@ -3211,9 +3230,11 @@ function OrganizePhase() {
     
     // Return best match if score is meaningful
     if (bestScore >= 3) {
-      console.log(`[FOLDER-MATCH] Best match found: "${bestMatch.name}" with score ${bestScore}`);
+      console.log(`[FOLDER-MATCH] ✅ Best match found: "${bestMatch.name}" with score ${bestScore}`);
       return bestMatch;
     }
+    
+    console.log(`[FOLDER-MATCH] No fuzzy match found (best score: ${bestScore})`);
     
     // 4. Default folder fallback
     const defaultFolder = smartFolders.find(f => 
@@ -3224,7 +3245,7 @@ function OrganizePhase() {
     );
     
     if (defaultFolder) {
-      console.log(`[FOLDER-MATCH] Using default folder: "${defaultFolder.name}" for category "${category}"`);
+      console.log(`[FOLDER-MATCH] ✅ Using default folder: "${defaultFolder.name}" for category "${category}"`);
       return defaultFolder;
     }
     
@@ -3254,18 +3275,26 @@ function OrganizePhase() {
     };
     
     const possibleMappings = categoryMappings[normalizedCategory] || [];
+    console.log(`[FOLDER-MATCH] Trying intelligent mappings for "${category}": [${possibleMappings.join(', ')}]`);
+    
     for (const mapping of possibleMappings) {
       const mappedFolder = smartFolders.find(f => 
         f.name.toLowerCase() === mapping.toLowerCase() ||
         f.name.toLowerCase().includes(mapping.toLowerCase())
       );
       if (mappedFolder) {
-        console.log(`[FOLDER-MATCH] Mapped category "${category}" to "${mappedFolder.name}" via intelligent mapping`);
+        console.log(`[FOLDER-MATCH] ✅ Mapped category "${category}" to "${mappedFolder.name}" via intelligent mapping`);
         return mappedFolder;
       }
     }
     
-    console.log(`[FOLDER-MATCH] No match found for category: "${category}"`);
+    // 6. Final fallback: use first available folder
+    if (smartFolders.length > 0) {
+      console.log(`[FOLDER-MATCH] ⚠️ Using first available folder "${smartFolders[0].name}" as final fallback`);
+      return smartFolders[0];
+    }
+    
+    console.error(`[FOLDER-MATCH] ❌ No match found for category: "${category}" (no smart folders available)`);
     return null;
   };
 

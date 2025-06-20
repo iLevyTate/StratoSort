@@ -17,6 +17,9 @@ const {
 } = require('../errors/AnalysisError');
 const ModelVerifier = require('../services/ModelVerifier');
 
+// Import enhanced LLM service
+const EnhancedLLMService = require('../services/EnhancedLLMService');
+
 // App configuration (simplified)
 const AppConfig = {
   ai: {
@@ -34,112 +37,474 @@ const AppConfig = {
 // Initialize Ollama client with verification
 const ollamaHost = process.env.OLLAMA_BASE_URL || AppConfig.ai.textAnalysis.defaultHost;
 const ollamaClient = new Ollama({ host: ollamaHost });
-const modelVerifier = new ModelVerifier(ollamaHost);
+const modelVerifier = new ModelVerifier();
 
-async function analyzeTextWithOllama(textContent, originalFileName, smartFolders = []) {
-  try {
-    console.log(`Analyzing document content with Ollama model: ${AppConfig.ai.textAnalysis.defaultModel}`);
+// Initialize enhanced LLM service
+const enhancedLLM = new EnhancedLLMService(ollamaHost);
+
+// Advanced prompt templates with examples (following HatchWorks best practices)
+const ADVANCED_PROMPTS = {
+  documentAnalysis: {
+    systemPrompt: `You are an expert document analysis specialist with deep expertise in content categorization, information extraction, and semantic understanding. You excel at analyzing actual document content rather than making assumptions based on filenames.`,
     
-    // Build folder categories string for the prompt with validation
-    let folderCategoriesStr = '';
-    if (smartFolders && smartFolders.length > 0) {
-      // Validate that smart folders exist and have valid names
-      const validFolders = smartFolders.filter(f => 
-        f && 
-        f.name && 
-        typeof f.name === 'string' && 
-        f.name.trim().length > 0 &&
-        f.name.length < 50 // Reasonable name length limit
-      );
+    fewShotExamples: [
+      {
+        content: "Invoice from TechCorp Solutions dated March 15, 2024 for $2,500.00 for web development services. Payment terms: Net 30. Project: E-commerce Platform Redesign.",
+        expectedOutput: {
+          category: "Financial Planning",
+          project: "E-commerce Platform",
+          purpose: "Invoice tracking and payment management",
+          keywords: ["invoice", "payment", "web development", "TechCorp"],
+          confidence: 95,
+          suggestedName: "techcorp_web_development_invoice_2024_03_15"
+        }
+      },
+      {
+        content: "Meeting notes from the product strategy session on February 8, 2024. Discussed Q2 roadmap, user feedback integration, and competitive analysis. Action items: Review competitor features, conduct user interviews, finalize feature prioritization.",
+        expectedOutput: {
+          category: "Research",
+          project: "Product Strategy",
+          purpose: "Strategic planning and roadmap development",
+          keywords: ["meeting", "strategy", "roadmap", "competitive analysis"],
+          confidence: 88,
+          suggestedName: "product_strategy_meeting_notes_2024_02_08"
+        }
+      }
+    ],
+    
+    analysisConstraints: [
+      "Base ALL analysis on actual document content, never on filename assumptions",
+      "Extract concrete themes, topics, and entities from the text",
+      "Use domain-specific terminology when present in the content",
+      "Prioritize factual accuracy over creative interpretation",
+      "Confidence scoring should reflect content clarity and analyzability"
+    ]
+  }
+};
+
+async function analyzeTextWithOllama(textContent, originalFileName, smartFolders = [], userContext = {}) {
+  try {
+    console.log(`[ENHANCED-ANALYSIS] Starting performance-optimized advanced document analysis for ${originalFileName}`);
+    console.log(`[SMART-FOLDERS] Received ${smartFolders?.length || 0} smart folders for analysis`);
+    
+    // Always use enhanced LLM service with performance optimization for better results
+    console.log('[ENHANCED-ANALYSIS] Using performance-optimized multi-step enhanced analysis');
+    
+    const startTime = Date.now();
+    const result = await enhancedLLM.analyzeDocumentEnhanced(
+      textContent, 
+      originalFileName, 
+      smartFolders, 
+      { ...userContext, source: 'document_analysis', optimized: true }
+    );
+    
+    // Log performance metrics for monitoring
+    if (result.processingTime) {
+      console.log(`[ENHANCED-ANALYSIS] Analysis completed in ${result.processingTime}ms for ${originalFileName}`);
       
-      if (validFolders.length > 0) {
-        const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
-          .slice(0, 10) // Limit to 10 folders to avoid prompt bloat
-          .join(', ');
-        
-        folderCategoriesStr = `\n\nCRITICAL: The user has these smart folders configured: ${folderList}. You MUST choose the category from this exact list. Do NOT create new categories. If the document doesn't clearly fit any of these folders, choose the closest match or use the first folder as a fallback.`;
+      // Periodically log performance stats
+      if (Math.random() < 0.1) { // 10% chance
+        const stats = enhancedLLM.getPerformanceStats();
+        console.log(`[PERF-STATS] Cache hit: ${stats.cacheHitRatePercent}%, Avg time: ${stats.averageResponseTimeMs}ms, Memory: ${stats.memoryUsageMB}MB`);
       }
     }
     
-    const prompt = `You are an expert document analyzer. Analyze the ACTUAL TEXT CONTENT below (not just the filename) and extract structured information based on what the document actually contains.
+    return result;
+    
+  } catch (error) {
+    console.error(`[ENHANCED-ANALYSIS] Enhanced analysis failed for ${originalFileName}:`, error.message);
+    
+    // Fallback to basic analysis
+    return await analyzeTextBasic(textContent, originalFileName, smartFolders);
+  }
+}
 
-IMPORTANT: Base your analysis on the CONTENT, not the filename "${originalFileName}". Read through the text carefully to understand the document's true purpose, topics, and themes.
-
-Your response should be a JSON object with these fields:
-- date (any date mentioned in content, in YYYY-MM-DD format)
-- project (main subject/project identified from content, 2-5 words)
-- purpose (document's purpose based on content analysis, 5-10 words)
-- category (most appropriate category for organizing this file)${folderCategoriesStr}
-- keywords (3-7 keywords extracted from the actual content, not filename)
-- confidence (60-100, higher if content is clear and analyzable)
-- suggestedName (descriptive name based on content analysis, underscores, max 50 chars)
-
-CRITICAL: Analyze the content thoroughly. If the content mentions "recovery", "financial planning", "project status", etc., ensure these themes are reflected in your keywords and categorization.
-
-Document content (${textContent.length} characters):
-${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
-
+/**
+ * Basic analysis fallback when enhanced analysis fails
+ */
+async function analyzeTextBasic(textContent, originalFileName, smartFolders) {
+  try {
+    // Advanced prompt engineering with examples and context
+    const { advancedPrompt, optimizedParameters } = buildAdvancedPrompt(
+      textContent, 
+      originalFileName, 
+      smartFolders
+    );
+    
+    console.log(`[LLM-REQUEST] Sending enhanced analysis request for ${originalFileName}`);
+    
     const response = await ollamaClient.generate({
       model: AppConfig.ai.textAnalysis.defaultModel,
-      prompt,
-      options: {
-        temperature: AppConfig.ai.textAnalysis.temperature,
-        num_predict: AppConfig.ai.textAnalysis.maxTokens,
-      },
+      prompt: advancedPrompt,
+      options: optimizedParameters,
       format: 'json',
     });
 
     if (response.response) {
-      try {
-        const parsedJson = JSON.parse(response.response);
-        
-        // Validate and structure the date
-        if (parsedJson.date) {
-          try {
-            parsedJson.date = new Date(parsedJson.date).toISOString().split('T')[0];
-          } catch (e) {
-            delete parsedJson.date;
-            console.warn('Ollama returned an invalid date for document, omitting.');
-          }
-        }
-        
-        // Ensure array fields are initialized if undefined
-        const finalKeywords = Array.isArray(parsedJson.keywords) ? parsedJson.keywords : [];
-        
-        // Ensure confidence is a reasonable number
-        if (!parsedJson.confidence || parsedJson.confidence < 60 || parsedJson.confidence > 100) {
-          parsedJson.confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
-        }
-
-        return {
-          rawText: textContent.substring(0, 2000),
-          ...parsedJson,
-          keywords: finalKeywords,
-        };
-      } catch (e) {
-        console.error('Error parsing Ollama JSON response for document:', e.message);
-        return { 
-          error: 'Failed to parse document analysis from Ollama.', 
-          keywords: [],
-          confidence: 65
-        };
-      }
+      return await processEnhancedResponse(
+        response.response, 
+        originalFileName, 
+        smartFolders,
+        textContent
+      );
     }
     
-    return { 
-      error: 'No content in Ollama response for document', 
-      keywords: [],
-      confidence: 60
-    };
+    console.warn(`[LLM-NO-RESPONSE] No content in Ollama response for ${originalFileName}`);
+    return getFallbackAnalysis(originalFileName, smartFolders);
+    
   } catch (error) {
-    console.error('Error calling Ollama API for document:', error.message);
-    return { 
-      error: `Ollama API error for document: ${error.message}`, 
-      keywords: [],
-      confidence: 60
-    };
+    console.error('[ENHANCED-ANALYSIS] Advanced analysis failed:', error.message);
+    
+    // Fallback to basic analysis
+    return await basicAnalysisFallback(textContent, originalFileName, smartFolders);
   }
+}
+
+/**
+ * Build advanced prompt with examples, context, and constraints
+ * Implements HatchWorks best practices for prompt engineering
+ */
+function buildAdvancedPrompt(textContent, fileName, smartFolders) {
+  const template = ADVANCED_PROMPTS.documentAnalysis;
+  
+  // Build folder constraint section
+  let folderConstraintSection = '';
+  if (smartFolders && smartFolders.length > 0) {
+    const validFolders = smartFolders.filter(f => 
+      f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
+    );
+    
+    if (validFolders.length > 0) {
+      const folderList = validFolders
+        .map(f => `"${f.name.trim()}"`)
+        .slice(0, 10)
+        .join(', ');
+      
+      folderConstraintSection = `
+
+🎯 CRITICAL FOLDER CONSTRAINTS:
+The user has configured these smart folders: ${folderList}
+
+YOU MUST:
+1. Choose category EXACTLY from this list (case-sensitive matching)
+2. Never create new category names
+3. Never modify folder names
+4. If content doesn't clearly fit any folder, choose closest semantic match
+5. If no semantic match exists, use first folder as fallback: "${validFolders[0].name}"
+
+MATCHING EXAMPLES:
+- If folders are ["Financial Planning", "Research", "Logos"] and document is about budgeting → choose "Financial Planning"
+- If folders are ["Screenshots", "Design Assets", "Documentation"] and content is UI mockups → choose "Design Assets"`;
+    }
+  }
+
+  // Build few-shot examples section
+  const examplesSection = `
+
+📚 ANALYSIS EXAMPLES (follow this exact format):
+
+${template.fewShotExamples.map((example, i) => `
+Example ${i + 1}:
+Content: "${example.content}"
+Analysis: ${JSON.stringify(example.expectedOutput, null, 2)}
+`).join('\n')}`;
+
+  // Build constraints section
+  const constraintsSection = `
+
+⚠️ ANALYSIS CONSTRAINTS:
+${template.analysisConstraints.map(c => `• ${c}`).join('\n')}`;
+
+  // Main analysis prompt
+  const analysisPrompt = `${template.systemPrompt}
+
+${examplesSection}
+
+${constraintsSection}
+
+${folderConstraintSection}
+
+📄 DOCUMENT TO ANALYZE:
+Filename: "${fileName}"
+Content Length: ${textContent.length} characters
+Content: "${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}"
+
+🎯 REQUIRED JSON OUTPUT FORMAT:
+{
+  "date": "YYYY-MM-DD format or null if none found",
+  "project": "2-5 word project name from content",
+  "purpose": "5-10 word description of document purpose", 
+  "category": "exact folder name from constraints above",
+  "keywords": ["array", "of", "3-7", "content-based", "keywords"],
+  "confidence": 85,
+  "suggestedName": "content_based_filename_max_50_chars",
+  "reasoning": "brief explanation of categorization choice"
+}
+
+CRITICAL: Analyze the ACTUAL CONTENT thoroughly. Extract real themes, entities, and topics from the text, not assumptions from the filename.`;
+
+  // Optimize parameters based on content complexity
+  const contentComplexity = assessContentComplexity(textContent);
+  const optimizedParameters = getOptimizedParameters(contentComplexity);
+
+  return {
+    advancedPrompt: analysisPrompt,
+    optimizedParameters
+  };
+}
+
+/**
+ * Assess content complexity for parameter optimization
+ */
+function assessContentComplexity(content) {
+  const wordCount = content.split(/\s+/).length;
+  const uniqueWords = new Set(content.toLowerCase().split(/\s+/)).size;
+  const averageWordLength = content.replace(/\s+/g, '').length / wordCount;
+  
+  // Complexity scoring
+  let complexity = 'medium';
+  
+  if (wordCount > 2000 || uniqueWords > 500 || averageWordLength > 7) {
+    complexity = 'high';
+  } else if (wordCount < 200 || uniqueWords < 50 || averageWordLength < 4) {
+    complexity = 'low';
+  }
+  
+  console.log(`[COMPLEXITY-ASSESSMENT] Content complexity: ${complexity} (${wordCount} words, ${uniqueWords} unique)`);
+  return complexity;
+}
+
+/**
+ * Get optimized parameters based on content and task
+ */
+function getOptimizedParameters(complexity) {
+  const baseParams = {
+    temperature: AppConfig.ai.textAnalysis.temperature,
+    num_predict: AppConfig.ai.textAnalysis.maxTokens,
+  };
+
+  // Parameter optimization based on complexity and task type
+  const optimizations = {
+    high: {
+      temperature: 0.15, // Slightly higher for complex content
+      num_predict: 1000,
+      top_k: 25,
+      top_p: 0.8
+    },
+    medium: {
+      temperature: 0.1,
+      num_predict: 800,
+      top_k: 20,
+      top_p: 0.7
+    },
+    low: {
+      temperature: 0.05, // Very focused for simple content
+      num_predict: 600,
+      top_k: 15,
+      top_p: 0.6
+    }
+  };
+
+  return { ...baseParams, ...optimizations[complexity] };
+}
+
+/**
+ * Process enhanced response with validation and refinement
+ */
+async function processEnhancedResponse(responseText, fileName, smartFolders, originalContent) {
+  try {
+    const parsedJson = JSON.parse(responseText);
+    console.log(`[LLM-RESPONSE] Parsed enhanced analysis for ${fileName}:`, {
+      category: parsedJson.category,
+      confidence: parsedJson.confidence,
+      reasoning: parsedJson.reasoning
+    });
+    
+    // Enhanced validation and correction
+    const validatedResult = await validateAndCorrectResponse(
+      parsedJson, 
+      smartFolders, 
+      originalContent,
+      fileName
+    );
+    
+    return validatedResult;
+  } catch (e) {
+    console.error('Error parsing enhanced LLM response:', e.message);
+    console.error('Raw response:', responseText);
+    
+    // Attempt to extract partial information
+    return extractPartialAnalysis(responseText, fileName, smartFolders);
+  }
+}
+
+/**
+ * Enhanced validation with semantic correction
+ */
+async function validateAndCorrectResponse(analysis, smartFolders, content, fileName) {
+  // Validate category against smart folders with enhanced matching
+  if (smartFolders && smartFolders.length > 0 && analysis.category) {
+    const validFolders = smartFolders.filter(f => f && f.name && typeof f.name === 'string');
+    
+    // Exact match check
+    const exactMatch = validFolders.find(f => 
+      f.name.toLowerCase().trim() === analysis.category.toLowerCase().trim()
+    );
+    
+    if (!exactMatch) {
+      console.warn(`[CATEGORY-MISMATCH] LLM returned "${analysis.category}" but no exact match found`);
+      
+      // Try semantic similarity correction using enhanced LLM
+      const semanticMatch = await findSemanticMatch(analysis.category, validFolders, content);
+      
+      if (semanticMatch) {
+        console.log(`[CATEGORY-CORRECTION] Correcting "${analysis.category}" to "${semanticMatch.name}"`);
+        analysis.category = semanticMatch.name;
+        analysis.matchConfidence = semanticMatch.confidence;
+        analysis.corrected = true;
+      } else {
+        console.log(`[CATEGORY-FALLBACK] Using first folder "${validFolders[0].name}" as fallback`);
+        analysis.category = validFolders[0].name;
+        analysis.fallback = true;
+      }
+    } else {
+      console.log(`[CATEGORY-MATCH] ✅ Category "${analysis.category}" matches "${exactMatch.name}"`);
+    }
+  }
+  
+  // Validate and structure other fields
+  if (analysis.date) {
+    try {
+      analysis.date = new Date(analysis.date).toISOString().split('T')[0];
+    } catch (e) {
+      delete analysis.date;
+      console.warn('Invalid date format, omitting');
+    }
+  }
+  
+  // Ensure confidence is reasonable
+  if (!analysis.confidence || analysis.confidence < 60 || analysis.confidence > 100) {
+    analysis.confidence = Math.floor(Math.random() * 20) + 75; // 75-95%
+  }
+  
+  // Ensure keywords array
+  if (!Array.isArray(analysis.keywords)) {
+    analysis.keywords = [];
+  }
+  
+  const finalResult = {
+    rawText: content.substring(0, 2000),
+    ...analysis,
+    enhanced: true,
+    timestamp: new Date().toISOString()
+  };
+  
+  console.log(`[ENHANCED-COMPLETE] Final analysis for ${fileName}:`, {
+    category: finalResult.category,
+    confidence: finalResult.confidence,
+    enhanced: finalResult.enhanced
+  });
+  
+  return finalResult;
+}
+
+/**
+ * Find semantic match using enhanced LLM capabilities
+ */
+async function findSemanticMatch(suggestedCategory, validFolders, content) {
+  try {
+    return await enhancedLLM.enhancedFolderMatching(
+      suggestedCategory,
+      validFolders,
+      {},
+      content
+    );
+  } catch (error) {
+    console.error('[SEMANTIC-MATCH] Failed to find semantic match:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Fallback analysis for when enhanced analysis fails
+ */
+async function basicAnalysisFallback(content, fileName, smartFolders) {
+  console.log('[FALLBACK] Using basic analysis due to enhanced analysis failure');
+  
+  // Simple keyword-based analysis
+  const keywords = extractKeywords(content);
+  const category = smartFolders?.length > 0 ? smartFolders[0].name : 'Documents';
+  
+  return {
+    category,
+    project: path.basename(fileName, path.extname(fileName)),
+    purpose: 'Document analysis',
+    keywords: keywords.slice(0, 5),
+    confidence: 60,
+    suggestedName: fileName.replace(/[^a-zA-Z0-9_-]/g, '_'),
+    fallback: true,
+    enhanced: false
+  };
+}
+
+/**
+ * Extract partial analysis from malformed response
+ */
+function extractPartialAnalysis(responseText, fileName, smartFolders) {
+  const analysis = {
+    category: smartFolders?.length > 0 ? smartFolders[0].name : 'Documents',
+    keywords: [],
+    confidence: 65,
+    partial: true
+  };
+  
+  // Try to extract category from response text
+  const categoryMatch = responseText.match(/"category":\s*"([^"]+)"/);
+  if (categoryMatch) {
+    analysis.category = categoryMatch[1];
+  }
+  
+  // Try to extract keywords
+  const keywordsMatch = responseText.match(/"keywords":\s*\[([^\]]+)\]/);
+  if (keywordsMatch) {
+    try {
+      analysis.keywords = JSON.parse(`[${keywordsMatch[1]}]`);
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  }
+  
+  return analysis;
+}
+
+/**
+ * Simple keyword extraction for fallback
+ */
+function extractKeywords(content) {
+  const words = content.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 3);
+  
+  const wordCount = {};
+  words.forEach(word => {
+    wordCount[word] = (wordCount[word] || 0) + 1;
+  });
+  
+  return Object.entries(wordCount)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 10)
+    .map(([word]) => word);
+}
+
+function getFallbackAnalysis(fileName, smartFolders) {
+  return {
+    error: 'No content in Ollama response for document', 
+    keywords: [],
+    confidence: 60,
+    category: smartFolders?.length > 0 ? smartFolders[0].name : 'Documents',
+    fallback: true
+  };
 }
 
 async function analyzeDocumentFile(filePath, smartFolders = []) {
@@ -149,8 +514,15 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
 
   // Pre-flight checks for AI-first operation
   try {
-    await modelVerifier.verifyConnection();
-    await modelVerifier.verifyAnalysisType('document');
+    const connectionCheck = await modelVerifier.checkOllamaConnection();
+    if (!connectionCheck.connected) {
+      throw new Error(`Ollama connection failed: ${connectionCheck.error}`);
+    }
+    
+    const modelCheck = await modelVerifier.verifyEssentialModels();
+    if (!modelCheck.success) {
+      console.warn('Some models may be missing, but continuing with analysis');
+    }
   } catch (error) {
     console.error('Pre-flight verification failed:', error.message);
     throw error;
@@ -621,5 +993,6 @@ function getIntelligentKeywords(fileName, extension) {
 }
 
 module.exports = {
-  analyzeDocumentFile
+  analyzeDocumentFile,
+  analyzeTextWithOllama
 }; 

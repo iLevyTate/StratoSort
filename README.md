@@ -59,21 +59,19 @@ Using **Ollama** for local AI processing, StratoSort intelligently categorizes a
 
 ```
 stratosort/
-├── electron-react-app/     # Main Electron application
-│   ├── src/
-│   │   ├── main/          # Main process (backend)
-│   │   │   ├── services/  # Core services
-│   │   │   ├── utils/     # Utility functions
-│   │   │   └── workers/   # Background workers
-│   │   ├── renderer/      # Renderer process (frontend)
-│   │   │   ├── components/# React components
-│   │   │   └── styles/    # CSS and styling
-│   │   └── preload/       # Preload scripts
-│   ├── assets/            # Icons and resources
-│   └── config/            # Configuration files
-├── tests/                 # Test suites
-├── scripts/               # Build and setup scripts
-└── docs/                  # Documentation
+├── src/                  # Application source
+│   ├── main/             # Main process (backend)
+│   │   ├── analysis/     # Document analysis logic
+│   │   ├── services/     # Core services
+│   │   └── errors/       # Custom errors
+│   ├── renderer/         # Renderer process (frontend)
+│   │   ├── components/   # React components
+│   │   └── styles/       # CSS and styling
+│   ├── preload/          # Preload scripts
+│   └── shared/           # Shared utilities
+├── assets/               # Icons and resources
+├── test/                 # Test suites
+└── webpack.config.js     # Build configuration
 ```
 
 ## 🚀 Getting Started

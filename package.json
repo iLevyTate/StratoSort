@@ -109,6 +109,7 @@
   },
   "dependencies": {
     "dotenv": "^16.5.0",
+    "dotenv-flow": "^4.1.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^6.1.4",

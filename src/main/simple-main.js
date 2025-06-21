@@ -4,6 +4,10 @@ const fs = require('fs').promises;
 const { existsSync } = require('fs');
 const os = require('os');
 const { performance } = require('perf_hooks');
+
+// Load environment variables from .env, .env.local, etc.
+require('dotenv-flow').config();
+
 const isDev = process.env.NODE_ENV === 'development';
 
 // Import error handling system

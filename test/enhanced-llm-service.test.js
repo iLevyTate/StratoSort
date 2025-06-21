@@ -46,12 +46,12 @@ describe('EnhancedLLMService', () => {
   describe('Enhanced Document Analysis', () => {
     const mockDocumentResponse = {
       response: JSON.stringify({
-        category: "Financial Planning",
-        project: "Budget Analysis",
-        purpose: "Quarterly financial review and planning",
-        keywords: ["budget", "financial", "quarterly", "analysis"],
+        category: 'Financial Planning',
+        project: 'Budget Analysis',
+        purpose: 'Quarterly financial review and planning',
+        keywords: ['budget', 'financial', 'quarterly', 'analysis'],
         confidence: 92,
-        suggestedName: "q1_budget_analysis_2024"
+        suggestedName: 'q1_budget_analysis_2024'
       })
     };
 
@@ -60,20 +60,20 @@ describe('EnhancedLLMService', () => {
     });
 
     test('should perform enhanced document analysis with multi-step processing', async () => {
-      const textContent = "Quarterly budget report for Q1 2024. Revenue increased by 15% compared to last quarter.";
-      const fileName = "budget_report.pdf";
+      const textContent = 'Quarterly budget report for Q1 2024. Revenue increased by 15% compared to last quarter.';
+      const fileName = 'budget_report.pdf';
       const smartFolders = [
-        { name: "Financial Planning", description: "Budget and financial documents" },
-        { name: "Reports", description: "Business reports and analytics" }
+        { name: 'Financial Planning', description: 'Budget and financial documents' },
+        { name: 'Reports', description: 'Business reports and analytics' }
       ];
-      const userContext = { userId: "test_user" };
+      const userContext = { userId: 'test_user' };
 
       const result = await enhancedLLM.analyzeDocumentEnhanced(
         textContent, fileName, smartFolders, userContext
       );
 
       expect(result).toBeDefined();
-      expect(result.category).toBe("Financial Planning");
+      expect(result.category).toBe('Financial Planning');
       expect(result.confidence).toBe(92);
       expect(result.enhanced).toBe(true); // Note: Mock needs to return enhanced: true
       expect(mockOllamaClient.generate).toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe('EnhancedLLMService', () => {
       mockOllamaClient.generate.mockRejectedValue(new Error('API Error'));
 
       const result = await enhancedLLM.analyzeDocumentEnhanced(
-        "test content", "test.pdf", [], {}
+        'test content', 'test.pdf', [], {}
       );
 
       expect(result).toBeDefined();
@@ -94,10 +94,10 @@ describe('EnhancedLLMService', () => {
     test('should perform content structure analysis', async () => {
       const structureResponse = {
         response: JSON.stringify({
-          documentType: "financial_report",
-          keyEntities: ["Q1 2024", "revenue", "budget"],
-          mainTopics: ["financial performance", "budget analysis"],
-          contentQuality: "high",
+          documentType: 'financial_report',
+          keyEntities: ['Q1 2024', 'revenue', 'budget'],
+          mainTopics: ['financial performance', 'budget analysis'],
+          contentQuality: 'high',
           structureScore: 8
         })
       };
@@ -105,11 +105,11 @@ describe('EnhancedLLMService', () => {
       mockOllamaClient.generate.mockResolvedValue(structureResponse);
 
       const result = await enhancedLLM.analyzeContentStructure(
-        "Detailed quarterly financial report...", "report.pdf"
+        'Detailed quarterly financial report...', 'report.pdf'
       );
 
-      expect(result.documentType).toBe("financial_report");
-      expect(result.keyEntities).toContain("revenue");
+      expect(result.documentType).toBe('financial_report');
+      expect(result.keyEntities).toContain('revenue');
       expect(result.structureScore).toBe(8);
     });
   });
@@ -117,9 +117,9 @@ describe('EnhancedLLMService', () => {
   describe('Semantic Folder Matching', () => {
     const mockSemanticResponse = {
       response: JSON.stringify([
-        { folder: "Financial Planning", similarity: 0.92, reasoning: "Content focuses on budget and financial analysis" },
-        { folder: "Reports", similarity: 0.75, reasoning: "Document is structured as a business report" },
-        { folder: "Projects", similarity: 0.23, reasoning: "No specific project context identified" }
+        { folder: 'Financial Planning', similarity: 0.92, reasoning: 'Content focuses on budget and financial analysis' },
+        { folder: 'Reports', similarity: 0.75, reasoning: 'Document is structured as a business report' },
+        { folder: 'Projects', similarity: 0.23, reasoning: 'No specific project context identified' }
       ])
     };
 
@@ -128,46 +128,46 @@ describe('EnhancedLLMService', () => {
     });
 
     test('should perform semantic similarity matching', async () => {
-      const suggestedCategory = "Budget Analysis";
+      const suggestedCategory = 'Budget Analysis';
       const smartFolders = [
-        { name: "Financial Planning", description: "Budget and financial documents" },
-        { name: "Reports", description: "Business reports" },
-        { name: "Projects", description: "Project documentation" }
+        { name: 'Financial Planning', description: 'Budget and financial documents' },
+        { name: 'Reports', description: 'Business reports' },
+        { name: 'Projects', description: 'Project documentation' }
       ];
-      const content = "Quarterly budget analysis with revenue projections";
+      const content = 'Quarterly budget analysis with revenue projections';
 
       const result = await enhancedLLM.semanticSimilarityMatching(
         suggestedCategory, smartFolders, content
       );
 
       expect(result).toHaveLength(3);
-      expect(result[0].folder).toBe("Financial Planning");
+      expect(result[0].folder).toBe('Financial Planning');
       expect(result[0].similarity).toBe(0.92);
-      expect(result[0].reasoning).toContain("budget and financial");
+      expect(result[0].reasoning).toContain('budget and financial');
     });
 
     test('should handle semantic matching failure', async () => {
       mockOllamaClient.generate.mockRejectedValue(new Error('Semantic matching failed'));
 
       const result = await enhancedLLM.semanticSimilarityMatching(
-        "category", [{ name: "Test" }], "content"
+        'category', [{ name: 'Test' }], 'content'
       );
 
       expect(result).toHaveLength(1);
-      expect(result[0].folder).toBe("Test");
+      expect(result[0].folder).toBe('Test');
       expect(result[0].similarity).toBe(0.5);
       expect(result[0].reasoning).toBe('fallback');
     });
 
     test('should perform enhanced folder matching with context', async () => {
       const result = await enhancedLLM.enhancedFolderMatching(
-        "Budget Report",
-        [{ name: "Financial Planning" }, { name: "Reports" }],
-        { userId: "test_user" },
-        "Budget analysis document"
+        'Budget Report',
+        [{ name: 'Financial Planning' }, { name: 'Reports' }],
+        { userId: 'test_user' },
+        'Budget analysis document'
       );
 
-      expect(result.category).toBe("Financial Planning");
+      expect(result.category).toBe('Financial Planning');
       expect(result.matchConfidence).toBe(0.92);
       expect(result.matchMethod).toBe('semantic');
     });
@@ -175,53 +175,53 @@ describe('EnhancedLLMService', () => {
 
   describe('User Learning and Patterns', () => {
     test('should learn from analysis results', async () => {
-      const fileName = "budget_2024.pdf";
+      const fileName = 'budget_2024.pdf';
       const analysis = {
-        category: "Financial Planning",
+        category: 'Financial Planning',
         confidence: 88,
-        project: "Budget Analysis"
+        project: 'Budget Analysis'
       };
-      const userContext = { userId: "test_user" };
+      const userContext = { userId: 'test_user' };
 
       await enhancedLLM.learnFromAnalysis(fileName, analysis, userContext);
 
-      const userHistory = enhancedLLM.userPatterns.get("test_user");
+      const userHistory = enhancedLLM.userPatterns.get('test_user');
       expect(userHistory).toHaveLength(1);
       expect(userHistory[0].fileName).toBe(fileName);
-      expect(userHistory[0].analysis.category).toBe("Financial Planning");
+      expect(userHistory[0].analysis.category).toBe('Financial Planning');
     });
 
     test('should maintain learning history size limit', async () => {
-      const userContext = { userId: "test_user" };
+      const userContext = { userId: 'test_user' };
       
       // Add 105 entries to exceed the 100 limit
       for (let i = 0; i < 105; i++) {
         await enhancedLLM.learnFromAnalysis(
           `file_${i}.pdf`,
-          { category: "Test", confidence: 80 },
+          { category: 'Test', confidence: 80 },
           userContext
         );
       }
 
-      const userHistory = enhancedLLM.userPatterns.get("test_user");
+      const userHistory = enhancedLLM.userPatterns.get('test_user');
       expect(userHistory).toHaveLength(100);
-      expect(userHistory[0].fileName).toBe("file_5.pdf"); // First 5 should be removed
+      expect(userHistory[0].fileName).toBe('file_5.pdf'); // First 5 should be removed
     });
 
     test('should provide user learning statistics', async () => {
-      const userContext = { userId: "stats_user" };
+      const userContext = { userId: 'stats_user' };
       
       // Add some learning data
-      await enhancedLLM.learnFromAnalysis("file1.pdf", { category: "Financial Planning", confidence: 85 }, userContext);
-      await enhancedLLM.learnFromAnalysis("file2.pdf", { category: "Financial Planning", confidence: 90 }, userContext);
-      await enhancedLLM.learnFromAnalysis("file3.pdf", { category: "Reports", confidence: 80 }, userContext);
+      await enhancedLLM.learnFromAnalysis('file1.pdf', { category: 'Financial Planning', confidence: 85 }, userContext);
+      await enhancedLLM.learnFromAnalysis('file2.pdf', { category: 'Financial Planning', confidence: 90 }, userContext);
+      await enhancedLLM.learnFromAnalysis('file3.pdf', { category: 'Reports', confidence: 80 }, userContext);
 
-      const stats = enhancedLLM.getUserLearningStats("stats_user");
+      const stats = enhancedLLM.getUserLearningStats('stats_user');
 
       expect(stats.totalAnalyses).toBe(3);
       expect(stats.averageConfidence).toBeCloseTo(85);
       expect(stats.commonCategories).toHaveLength(2);
-      expect(stats.commonCategories[0].category).toBe("Financial Planning");
+      expect(stats.commonCategories[0].category).toBe('Financial Planning');
       expect(stats.commonCategories[0].count).toBe(2);
     });
 
@@ -270,16 +270,16 @@ describe('EnhancedLLMService', () => {
   describe('Analysis Refinement', () => {
     test('should refine analysis for low confidence results', async () => {
       const lowConfidenceAnalysis = {
-        category: "Unknown",
+        category: 'Unknown',
         confidence: 65,
-        project: "Test"
+        project: 'Test'
       };
 
       const refinedResponse = {
         response: JSON.stringify({
-          category: "Financial Planning",
+          category: 'Financial Planning',
           confidence: 85,
-          project: "Budget Analysis"
+          project: 'Budget Analysis'
         })
       };
 
@@ -287,8 +287,8 @@ describe('EnhancedLLMService', () => {
 
       const result = await enhancedLLM.refineAnalysis(
         lowConfidenceAnalysis,
-        "Budget document content",
-        "budget.pdf",
+        'Budget document content',
+        'budget.pdf',
         []
       );
 
@@ -298,15 +298,15 @@ describe('EnhancedLLMService', () => {
 
     test('should not refine high confidence results', async () => {
       const highConfidenceAnalysis = {
-        category: "Financial Planning",
+        category: 'Financial Planning',
         confidence: 92,
-        project: "Budget Analysis"
+        project: 'Budget Analysis'
       };
 
       const result = await enhancedLLM.refineAnalysis(
         highConfidenceAnalysis,
-        "content",
-        "file.pdf",
+        'content',
+        'file.pdf',
         []
       );
 
@@ -326,14 +326,14 @@ describe('EnhancedLLMService', () => {
     });
 
     test('should combine analysis results correctly', () => {
-      const initial = { category: "Test", confidence: 70 };
-      const refined = { category: "Better", confidence: 85, keywords: ["test"] };
+      const initial = { category: 'Test', confidence: 70 };
+      const refined = { category: 'Better', confidence: 85, keywords: ['test'] };
 
       const combined = enhancedLLM.combineAnalysisResults(initial, refined);
 
-      expect(combined.category).toBe("Better");
+      expect(combined.category).toBe('Better');
       expect(combined.confidence).toBe(85);
-      expect(combined.keywords).toEqual(["test"]);
+      expect(combined.keywords).toEqual(['test']);
       expect(combined.refined).toBe(true);
     });
   });
@@ -343,9 +343,9 @@ describe('EnhancedLLMService', () => {
       mockOllamaClient.generate.mockRejectedValue(new Error('Connection failed'));
 
       const result = await enhancedLLM.analyzeDocumentEnhanced(
-        "test content",
-        "test.pdf",
-        [{ name: "Test Folder" }],
+        'test content',
+        'test.pdf',
+        [{ name: 'Test Folder' }],
         {}
       );
 
@@ -355,13 +355,13 @@ describe('EnhancedLLMService', () => {
 
     test('should handle malformed JSON responses', async () => {
       mockOllamaClient.generate.mockResolvedValue({
-        response: "Invalid JSON response"
+        response: 'Invalid JSON response'
       });
 
       const result = await enhancedLLM.performDomainSpecificAnalysis(
-        "content",
-        "file.pdf",
-        "document"
+        'content',
+        'file.pdf',
+        'document'
       );
 
       expect(result.fallback).toBe(true);

@@ -78,9 +78,9 @@ describe('Enhanced LLM Final Validation', () => {
     test('should perform enhanced analysis for complex documents', async () => {
       // Mock enhanced analysis pipeline
       const responses = [
-        { response: JSON.stringify({ documentType: "business_plan", structureScore: 9 }) },
-        { response: JSON.stringify({ category: "Business Strategy", confidence: 94 }) },
-        { response: JSON.stringify([{ folder: "Business Strategy", similarity: 0.96, reasoning: "Strategic business content" }]) }
+        { response: JSON.stringify({ documentType: 'business_plan', structureScore: 9 }) },
+        { response: JSON.stringify({ category: 'Business Strategy', confidence: 94 }) },
+        { response: JSON.stringify([{ folder: 'Business Strategy', similarity: 0.96, reasoning: 'Strategic business content' }]) }
       ];
 
       mockOllamaClient.generate
@@ -88,25 +88,25 @@ describe('Enhanced LLM Final Validation', () => {
         .mockResolvedValueOnce(responses[1])
         .mockResolvedValueOnce(responses[2]);
 
-      const complexContent = "Executive Summary: Strategic Business Plan 2024\n\nOur comprehensive business strategy focuses on market expansion and innovation leadership. Key initiatives include product development, strategic partnerships, and market penetration strategies...\n\nFinancial Projections:\nYear 1: $2.5M revenue target\nYear 2: $5.2M projected growth\nYear 3: Market leadership position";
+      const complexContent = 'Executive Summary: Strategic Business Plan 2024\n\nOur comprehensive business strategy focuses on market expansion and innovation leadership. Key initiatives include product development, strategic partnerships, and market penetration strategies...\n\nFinancial Projections:\nYear 1: $2.5M revenue target\nYear 2: $5.2M projected growth\nYear 3: Market leadership position';
       
       const smartFolders = [
-        { name: "Business Strategy", description: "Strategic planning and business documents" },
-        { name: "Planning", description: "General planning documents" }
+        { name: 'Business Strategy', description: 'Strategic planning and business documents' },
+        { name: 'Planning', description: 'General planning documents' }
       ];
 
       const result = await analyzeTextWithOllama(
         complexContent,
-        "business_strategy_2024.pdf",
+        'business_strategy_2024.pdf',
         smartFolders,
-        { userId: "business_analyst" }
+        { userId: 'business_analyst' }
       );
 
       // Verify enhanced analysis
       expect(result).toBeDefined();
       expect(result.enhanced).toBe(true);
       expect(result.multiStep).toBe(true);
-      expect(result.category).toBe("Business Strategy");
+      expect(result.category).toBe('Business Strategy');
       expect(result.matchConfidence).toBe(0.96);
       expect(result.matchMethod).toBe('semantic');
 
@@ -116,18 +116,18 @@ describe('Enhanced LLM Final Validation', () => {
     test('should handle short content with basic analysis', async () => {
       mockOllamaClient.generate.mockResolvedValue({
         response: JSON.stringify({
-          category: "Notes",
+          category: 'Notes',
           confidence: 80,
-          keywords: ["note", "quick"],
-          suggestedName: "quick_note"
+          keywords: ['note', 'quick'],
+          suggestedName: 'quick_note'
         })
       });
 
       const result = await analyzeTextWithOllama(
-        "Quick meeting note - discuss timeline",
-        "note.txt",
+        'Quick meeting note - discuss timeline',
+        'note.txt',
         [], // No smart folders triggers basic analysis
-        { userId: "user" }
+        { userId: 'user' }
       );
 
       expect(result).toBeDefined();
@@ -140,24 +140,24 @@ describe('Enhanced LLM Final Validation', () => {
 
   describe('🖼️ Image Analysis Integration Validation', () => {
     test('should perform enhanced image analysis with multi-step processing', async () => {
-      const mockImageBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+      const mockImageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
       // Mock visual analysis and folder matching
       const visualResponse = {
         response: JSON.stringify({
-          category: "UI Design",
-          content_type: "interface",
+          category: 'UI Design',
+          content_type: 'interface',
           has_text: true,
-          colors: ["blue", "white"],
-          keywords: ["ui", "design", "interface"],
-          purpose: "User interface mockup",
+          colors: ['blue', 'white'],
+          keywords: ['ui', 'design', 'interface'],
+          purpose: 'User interface mockup',
           confidence: 90
         })
       };
 
       const folderMatchResponse = {
         response: JSON.stringify([
-          { folder: "Design Assets", similarity: 0.93, reasoning: "UI design content match" }
+          { folder: 'Design Assets', similarity: 0.93, reasoning: 'UI design content match' }
         ])
       };
 
@@ -166,21 +166,21 @@ describe('Enhanced LLM Final Validation', () => {
         .mockResolvedValueOnce(folderMatchResponse);
 
       const smartFolders = [
-        { name: "Design Assets", description: "UI designs and mockups" },
-        { name: "Screenshots", description: "Application screenshots" }
+        { name: 'Design Assets', description: 'UI designs and mockups' },
+        { name: 'Screenshots', description: 'Application screenshots' }
       ];
 
       const result = await analyzeImageWithOllama(
         mockImageBase64,
-        "ui_mockup.png",
+        'ui_mockup.png',
         smartFolders,
-        { userId: "designer" }
+        { userId: 'designer' }
       );
 
       expect(result).toBeDefined();
       expect(result.enhanced).toBe(true);
       expect(result.multiStep).toBe(true);
-      expect(result.category).toBe("Design Assets");
+      expect(result.category).toBe('Design Assets');
       expect(result.matchConfidence).toBe(0.93);
 
       console.log('✅ Image enhanced analysis integration working');
@@ -189,15 +189,15 @@ describe('Enhanced LLM Final Validation', () => {
 
   describe('🧠 User Learning System Validation', () => {
     test('should demonstrate learning across multiple analyses', async () => {
-      const userContext = { userId: "learning_test" };
+      const userContext = { userId: 'learning_test' };
 
       // Simulate learning from multiple analyses
       const analyses = [
-        { fileName: "budget_q1.pdf", category: "Financial Planning", confidence: 85 },
-        { fileName: "budget_q2.pdf", category: "Financial Planning", confidence: 88 },
-        { fileName: "budget_q3.pdf", category: "Financial Planning", confidence: 91 },
-        { fileName: "design_mockup.png", category: "Design Assets", confidence: 87 },
-        { fileName: "ui_wireframe.png", category: "Design Assets", confidence: 89 }
+        { fileName: 'budget_q1.pdf', category: 'Financial Planning', confidence: 85 },
+        { fileName: 'budget_q2.pdf', category: 'Financial Planning', confidence: 88 },
+        { fileName: 'budget_q3.pdf', category: 'Financial Planning', confidence: 91 },
+        { fileName: 'design_mockup.png', category: 'Design Assets', confidence: 87 },
+        { fileName: 'ui_wireframe.png', category: 'Design Assets', confidence: 89 }
       ];
 
       // Add learning data
@@ -205,12 +205,12 @@ describe('Enhanced LLM Final Validation', () => {
         await enhancedLLM.learnFromAnalysis(analysis.fileName, analysis, userContext);
       }
 
-      const stats = enhancedLLM.getUserLearningStats("learning_test");
+      const stats = enhancedLLM.getUserLearningStats('learning_test');
 
       expect(stats.totalAnalyses).toBe(5);
       expect(stats.averageConfidence).toBeCloseTo(88);
       expect(stats.commonCategories).toHaveLength(2);
-      expect(stats.commonCategories[0].category).toBe("Financial Planning");
+      expect(stats.commonCategories[0].category).toBe('Financial Planning');
       expect(stats.commonCategories[0].count).toBe(3);
 
       console.log('✅ User learning system working correctly');
@@ -235,10 +235,10 @@ describe('Enhanced LLM Final Validation', () => {
       mockOllamaClient.generate.mockRejectedValue(new Error('API unavailable'));
 
       const result = await analyzeTextWithOllama(
-        "Test content",
-        "test.pdf",
-        [{ name: "Documents" }],
-        { userId: "test" }
+        'Test content',
+        'test.pdf',
+        [{ name: 'Documents' }],
+        { userId: 'test' }
       );
 
       expect(result).toBeDefined();
@@ -249,13 +249,13 @@ describe('Enhanced LLM Final Validation', () => {
 
     test('should handle malformed JSON responses', async () => {
       mockOllamaClient.generate.mockResolvedValue({
-        response: "{ invalid json }"
+        response: '{ invalid json }'
       });
 
       const result = await enhancedLLM.performDomainSpecificAnalysis(
-        "content",
-        "file.pdf",
-        "document"
+        'content',
+        'file.pdf',
+        'document'
       );
 
       expect(result.fallback).toBe(true);
@@ -269,8 +269,8 @@ describe('Enhanced LLM Final Validation', () => {
       const complexityLevels = ['low', 'medium', 'high'];
       const taskTypes = ['categorization', 'creative', 'extraction', 'summarization'];
 
-      complexityLevels.forEach(complexity => {
-        taskTypes.forEach(task => {
+      complexityLevels.forEach((complexity) => {
+        taskTypes.forEach((task) => {
           const params = enhancedLLM.getOptimizedParameters(task, complexity);
           expect(params).toBeDefined();
           expect(params.temperature).toBeGreaterThanOrEqual(0);
@@ -286,25 +286,25 @@ describe('Enhanced LLM Final Validation', () => {
     test('should provide semantic folder matching with reasoning', async () => {
       const mockResponse = {
         response: JSON.stringify([
-          { folder: "Technical Documentation", similarity: 0.92, reasoning: "API documentation content" },
-          { folder: "Development", similarity: 0.78, reasoning: "Development related content" }
+          { folder: 'Technical Documentation', similarity: 0.92, reasoning: 'API documentation content' },
+          { folder: 'Development', similarity: 0.78, reasoning: 'Development related content' }
         ])
       };
 
       mockOllamaClient.generate.mockResolvedValue(mockResponse);
 
       const result = await enhancedLLM.semanticSimilarityMatching(
-        "API Documentation",
+        'API Documentation',
         [
-          { name: "Technical Documentation", description: "Technical docs and specs" },
-          { name: "Development", description: "Development files" }
+          { name: 'Technical Documentation', description: 'Technical docs and specs' },
+          { name: 'Development', description: 'Development files' }
         ],
-        "API endpoint documentation with examples"
+        'API endpoint documentation with examples'
       );
 
       expect(result).toHaveLength(2);
       expect(result[0].similarity).toBe(0.92);
-      expect(result[0].reasoning).toContain("API documentation");
+      expect(result[0].reasoning).toContain('API documentation');
 
       console.log('✅ Semantic matching providing detailed reasoning');
     });
@@ -316,9 +316,9 @@ describe('Enhanced LLM Final Validation', () => {
       
       // Mock complete enhanced pipeline
       const responses = [
-        { response: JSON.stringify({ documentType: "product_spec", structureScore: 9 }) },
-        { response: JSON.stringify({ category: "Product Development", confidence: 95 }) },
-        { response: JSON.stringify([{ folder: "Product Development", similarity: 0.97, reasoning: "Perfect product development match" }]) }
+        { response: JSON.stringify({ documentType: 'product_spec', structureScore: 9 }) },
+        { response: JSON.stringify({ category: 'Product Development', confidence: 95 }) },
+        { response: JSON.stringify([{ folder: 'Product Development', similarity: 0.97, reasoning: 'Perfect product development match' }]) }
       ];
 
       mockOllamaClient.generate
@@ -327,25 +327,25 @@ describe('Enhanced LLM Final Validation', () => {
         .mockResolvedValueOnce(responses[2]);
 
       const result = await analyzeTextWithOllama(
-        "Product Specification Document - New Feature Development\n\nThis document outlines the comprehensive product specifications for our new AI-powered feature set...\n\nFeature Requirements:\n1. Natural language processing capabilities\n2. Real-time analysis and feedback\n3. User-friendly interface design\n\nTechnical Implementation:\n- Machine learning integration\n- Cloud-based processing\n- Scalable architecture",
-        "product_ai_feature_spec.pdf",
+        'Product Specification Document - New Feature Development\n\nThis document outlines the comprehensive product specifications for our new AI-powered feature set...\n\nFeature Requirements:\n1. Natural language processing capabilities\n2. Real-time analysis and feedback\n3. User-friendly interface design\n\nTechnical Implementation:\n- Machine learning integration\n- Cloud-based processing\n- Scalable architecture',
+        'product_ai_feature_spec.pdf',
         [
-          { name: "Product Development", description: "Product specifications and development docs" },
-          { name: "Technical Documentation", description: "Technical specs and documentation" }
+          { name: 'Product Development', description: 'Product specifications and development docs' },
+          { name: 'Technical Documentation', description: 'Technical specs and documentation' }
         ],
-        { userId: "product_manager" }
+        { userId: 'product_manager' }
       );
 
       // Comprehensive validation
       expect(result.enhanced).toBe(true);
       expect(result.multiStep).toBe(true);
-      expect(result.category).toBe("Product Development");
+      expect(result.category).toBe('Product Development');
       expect(result.matchConfidence).toBe(0.97);
       expect(result.matchMethod).toBe('semantic');
-      expect(result.reasoning).toContain("Perfect product development match");
+      expect(result.reasoning).toContain('Perfect product development match');
 
       // Verify user learning occurred
-      const userStats = enhancedLLM.getUserLearningStats("product_manager");
+      const userStats = enhancedLLM.getUserLearningStats('product_manager');
       expect(userStats.totalAnalyses).toBe(1);
 
       console.log('✅ Complete enhanced LLM workflow validated successfully');

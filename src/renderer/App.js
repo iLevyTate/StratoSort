@@ -3,18 +3,15 @@ import ReactDOM from 'react-dom/client';
 import './tailwind.css';
 
 // Import the UndoRedo system
+import LoadingSkeleton, { 
+  SmartFolderSkeleton 
+} from './components/LoadingSkeleton';
+import { ConfirmModal } from './components/Modal';
+import { ToastContainer, useToast } from './components/Toast';
 import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
 
 // Import enhanced UI components
-import { ToastContainer, useToast } from './components/Toast';
-import Modal, { ConfirmModal } from './components/Modal';
 // LoadingSkeleton components
-import LoadingSkeleton, { 
-  SmartFolderSkeleton, 
-  FileAnalysisSkeleton, 
-  DirectoryScanSkeleton, 
-  LoadingOverlay 
-} from './components/LoadingSkeleton';
 
 // ===== IMPORT SHARED CONSTANTS =====
 const { 
@@ -94,14 +91,14 @@ function useConfirmDialog() {
         fileName,
         onConfirm: () => {
           resolve(true);
-          setConfirmState(prev => ({ ...prev, isOpen: false }));
+          setConfirmState((prev) => ({ ...prev, isOpen: false }));
         }
       });
     });
   }, []);
 
   const hideConfirm = useCallback(() => {
-    setConfirmState(prev => ({ ...prev, isOpen: false }));
+    setConfirmState((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
   const ConfirmDialog = useCallback(() => (
@@ -150,7 +147,7 @@ function useDragAndDrop(onFilesDropped) {
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0 && onFilesDropped) {
-      const fileObjects = files.map(file => ({
+      const fileObjects = files.map((file) => ({
         path: file.path || file.name,
         name: file.name,
         type: 'file',
@@ -366,7 +363,7 @@ function SettingsPanel() {
     try {
       const savedSettings = await window.electronAPI.settings.get();
       if (savedSettings) {
-        setSettings(prev => ({ ...prev, ...savedSettings }));
+        setSettings((prev) => ({ ...prev, ...savedSettings }));
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -480,7 +477,7 @@ function SettingsPanel() {
                 <input
                   type="text"
                   value={settings.ollamaHost}
-                  onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, ollamaHost: e.target.value }))}
                   className="form-input-enhanced w-full"
                   placeholder="http://localhost:11434"
                 />
@@ -492,10 +489,10 @@ function SettingsPanel() {
                 </label>
                 <select
                   value={settings.ollamaModel}
-                  onChange={(e) => setSettings(prev => ({ ...prev, ollamaModel: e.target.value }))}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, ollamaModel: e.target.value }))}
                   className="form-input-enhanced w-full"
                 >
-                  {ollamaModels.map(model => (
+                  {ollamaModels.map((model) => (
                     <option key={model} value={model}>{model}</option>
                   ))}
                 </select>
@@ -516,7 +513,7 @@ function SettingsPanel() {
                   min="1"
                   max="8"
                   value={settings.maxConcurrentAnalysis}
-                  onChange={(e) => setSettings(prev => ({ ...prev, maxConcurrentAnalysis: parseInt(e.target.value) }))}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, maxConcurrentAnalysis: parseInt(e.target.value) }))}
                   className="w-full"
                 />
               </div>
@@ -526,7 +523,7 @@ function SettingsPanel() {
                   type="checkbox"
                   id="autoOrganize"
                   checked={settings.autoOrganize}
-                  onChange={(e) => setSettings(prev => ({ ...prev, autoOrganize: e.target.checked }))}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, autoOrganize: e.target.checked }))}
                   className="mr-fib-8"
                 />
                 <label htmlFor="autoOrganize" className="text-sm text-system-gray-700">
@@ -547,7 +544,7 @@ function SettingsPanel() {
                 <input
                   type="text"
                   value={settings.defaultSmartFolderLocation}
-                  onChange={(e) => setSettings(prev => ({ ...prev, defaultSmartFolderLocation: e.target.value }))}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, defaultSmartFolderLocation: e.target.value }))}
                   className="form-input-enhanced w-full"
                   placeholder="Documents"
                 />
@@ -660,12 +657,12 @@ function WelcomePhase() {
             <span className="text-muted">Select files or scan folders</span>
           </div>
           <div className="text-center p-fib-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
-            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{animationDelay: '0.1s'}}>🧠</div>
+            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{ animationDelay: '0.1s' }}>🧠</div>
             <strong className="text-system-gray-700">Analyze</strong><br/>
             <span className="text-muted">AI analyzes content & suggests organization</span>
           </div>
           <div className="text-center p-fib-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
-            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{animationDelay: '0.2s'}}>📂</div>
+            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{ animationDelay: '0.2s' }}>📂</div>
             <strong className="text-system-gray-700">Organize</strong><br/>
             <span className="text-muted">Review suggestions & auto-organize files</span>
           </div>
@@ -919,7 +916,7 @@ function SetupPhase() {
       }
       
       // Check if folder already exists in configuration
-      const existingFolder = smartFolders.find(f => 
+      const existingFolder = smartFolders.find((f) => 
         f.name.toLowerCase() === newFolderName.trim().toLowerCase() ||
         (f.path && f.path.toLowerCase() === targetPath.toLowerCase())
       );
@@ -983,7 +980,7 @@ function SetupPhase() {
   };
 
   const handleEditFolder = (folder) => {
-    setEditingFolder({...folder});
+    setEditingFolder({ ...folder });
     setIsEditingFolder(true);
   };
 
@@ -1019,7 +1016,7 @@ function SetupPhase() {
   };
 
   const handleDeleteFolder = async (folderId) => {
-    const folder = smartFolders.find(f => f.id === folderId);
+    const folder = smartFolders.find((f) => f.id === folderId);
     if (!folder) return;
 
     const confirmDelete = await showConfirm({
@@ -1041,7 +1038,7 @@ function SetupPhase() {
         if (result.deletedFolder) {
           showSuccess(`✅ Removed smart folder: ${result.deletedFolder.name}`);
         } else {
-          showSuccess(`✅ Removed smart folder`);
+          showSuccess('✅ Removed smart folder');
         }
         await loadSmartFolders();
       } else {
@@ -1104,7 +1101,7 @@ function SetupPhase() {
         showWarning(`⚠️ Failed to create ${errorCount} directories`);
       }
       if (createdCount === 0 && errorCount === 0) {
-        showInfo(`📁 All smart folder directories already exist`);
+        showInfo('📁 All smart folder directories already exist');
       }
     } catch (error) {
       console.error('Failed to create folders:', error);
@@ -1197,7 +1194,7 @@ function SetupPhase() {
         ) : (
           <div className="space-y-fib-8">
             {smartFolders.map((folder, index) => (
-              <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right" style={{animationDelay: `${index * 0.1}s`}}>
+              <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right" style={{ animationDelay: `${index * 0.1}s` }}>
                 {editingFolder?.id === folder.id ? (
                   // Edit mode
                   <div className="space-y-fib-8" role="form" aria-label="Edit smart folder">
@@ -1205,7 +1202,7 @@ function SetupPhase() {
                       <input
                         type="text"
                         value={editingFolder.name}
-                        onChange={(e) => setEditingFolder({...editingFolder, name: e.target.value})}
+                        onChange={(e) => setEditingFolder({ ...editingFolder, name: e.target.value })}
                         className="form-input-enhanced flex-1"
                         placeholder="Folder name"
                         aria-label="Folder name"
@@ -1217,7 +1214,7 @@ function SetupPhase() {
                       <input
                         type="text"
                         value={editingFolder.path}
-                        onChange={(e) => setEditingFolder({...editingFolder, path: e.target.value})}
+                        onChange={(e) => setEditingFolder({ ...editingFolder, path: e.target.value })}
                         className="form-input-enhanced flex-1"
                         placeholder="Folder path"
                         aria-label="Folder path"
@@ -1230,7 +1227,7 @@ function SetupPhase() {
                     <div>
                       <textarea
                         value={editingFolder.description || ''}
-                        onChange={(e) => setEditingFolder({...editingFolder, description: e.target.value})}
+                        onChange={(e) => setEditingFolder({ ...editingFolder, description: e.target.value })}
                         className="form-input-enhanced w-full"
                         placeholder="Describe what types of files should go in this folder (helps AI make better decisions)"
                         rows="2"
@@ -1289,8 +1286,8 @@ function SetupPhase() {
                           <span className="text-xs text-amber-600">📂</span>
                           <span className="text-xs font-medium text-amber-700">Needs Creation</span>
                         </div>
-                                              )}
-                        <div className="flex gap-fib-5">
+                      )}
+                      <div className="flex gap-fib-5">
                         {!folder.physicallyExists && (
                           <button
                             onClick={async () => {
@@ -1316,7 +1313,7 @@ function SetupPhase() {
                               ? 'text-green-600 hover:bg-green-100' 
                               : 'text-gray-400 cursor-not-allowed'
                           }`}
-                          title={folder.physicallyExists ? "Open folder in file explorer" : "Folder doesn't exist yet"}
+                          title={folder.physicallyExists ? 'Open folder in file explorer' : "Folder doesn't exist yet"}
                           aria-label={`Open folder ${folder.name}`}
                           disabled={!folder.physicallyExists}
                         >
@@ -1334,7 +1331,7 @@ function SetupPhase() {
                           onClick={() => handleDeleteFolder(folder.id)}
                           disabled={isDeletingFolder === folder.id}
                           className="p-fib-5 text-system-red-600 hover:bg-system-red-100 rounded transition-colors disabled:opacity-50"
-                          title={folder.physicallyExists ? "Remove from config and delete directory" : "Remove from config only"}
+                          title={folder.physicallyExists ? 'Remove from config and delete directory' : 'Remove from config only'}
                           aria-label={`Delete folder ${folder.name}`}
                         >
                           {isDeletingFolder === folder.id ? (
@@ -1538,7 +1535,7 @@ function DiscoverPhase() {
   // NEW: Update file state helper with error recovery
   const updateFileState = (filePath, state, metadata = {}) => {
     try {
-      setFileStates(prev => {
+      setFileStates((prev) => {
         // Validate previous state
         if (!prev || typeof prev !== 'object') {
           console.warn('Invalid fileStates detected, resetting...');
@@ -1603,7 +1600,7 @@ function DiscoverPhase() {
   // NEW: Naming convention preview
   const generatePreviewName = (originalName) => {
     const baseName = originalName.replace(/\.[^/.]+$/, ''); // Remove extension
-    const extension = originalName.includes('.') ? '.' + originalName.split('.').pop() : '';
+    const extension = originalName.includes('.') ? `.${  originalName.split('.').pop()}` : '';
     const today = new Date();
     
     let previewName = '';
@@ -1659,7 +1656,7 @@ function DiscoverPhase() {
         return text.replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => 
           index === 0 ? word.toLowerCase() : word.toUpperCase()).replace(/\s+/g, '');
       case 'PascalCase':
-        return text.replace(/(?:^\w|[A-Z]|\b\w)/g, word => word.toUpperCase()).replace(/\s+/g, '');
+        return text.replace(/(?:^\w|[A-Z]|\b\w)/g, (word) => word.toUpperCase()).replace(/\s+/g, '');
       case 'lowercase':
         return text.toLowerCase();
       case 'UPPERCASE':
@@ -1675,7 +1672,7 @@ function DiscoverPhase() {
       addNotification(`Processing ${files.length} dropped files...`, 'info');
       
       // Enhance dropped files with metadata
-      const enhancedFiles = files.map(file => ({
+      const enhancedFiles = files.map((file) => ({
         ...file,
         source: 'drag_drop',
         droppedAt: new Date().toISOString()
@@ -1684,7 +1681,7 @@ function DiscoverPhase() {
       setSelectedFiles(enhancedFiles);
       
       // Initialize file states
-      enhancedFiles.forEach(file => {
+      enhancedFiles.forEach((file) => {
         updateFileState(file.path, 'pending');
       });
       
@@ -1705,7 +1702,7 @@ function DiscoverPhase() {
     const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'];
     
     if (imageExts.includes(extension)) return 'image';
-          // if (audioExts.includes(extension)) return 'audio'; // REMOVED - audio analysis disabled
+    // if (audioExts.includes(extension)) return 'audio'; // REMOVED - audio analysis disabled
     if (videoExts.includes(extension)) return 'video';
     if (docExts.includes(extension)) return 'document';
     if (codeExts.includes(extension)) return 'code';
@@ -1748,19 +1745,19 @@ function DiscoverPhase() {
         batch.map(async (filePath) => {
           try {
             // Add small delay between requests to avoid rate limiting
-            if (i > 0) await new Promise(resolve => setTimeout(resolve, 50));
+            if (i > 0) await new Promise((resolve) => setTimeout(resolve, 50));
             
             console.log('[BATCH-STATS-DEBUG] Getting stats for:', filePath);
             const stats = await window.electronAPI.files.getStats(filePath);
             console.log('[BATCH-STATS-DEBUG] Stats received for:', filePath, stats);
             
             const fileName = filePath.split(/[/\\]/).pop();
-            const extension = fileName.includes('.') ? '.' + fileName.split('.').pop().toLowerCase() : '';
+            const extension = fileName.includes('.') ? `.${  fileName.split('.').pop().toLowerCase()}` : '';
             
             const result = {
               name: fileName,
               path: filePath,
-              extension: extension,
+              extension,
               size: stats?.size || 0,
               type: 'file',
               created: stats?.created,
@@ -1777,7 +1774,7 @@ function DiscoverPhase() {
             return {
               name: fileName,
               path: filePath,
-              extension: fileName.includes('.') ? '.' + fileName.split('.').pop().toLowerCase() : '',
+              extension: fileName.includes('.') ? `.${  fileName.split('.').pop().toLowerCase()}` : '',
               size: 0,
               type: 'file',
               success: false,
@@ -1797,7 +1794,7 @@ function DiscoverPhase() {
           results.push({
             name: fileName,
             path: filePath,
-            extension: fileName.includes('.') ? '.' + fileName.split('.').pop().toLowerCase() : '',
+            extension: fileName.includes('.') ? `.${  fileName.split('.').pop().toLowerCase()}` : '',
             size: 0,
             type: 'file',
             success: false,
@@ -1808,7 +1805,7 @@ function DiscoverPhase() {
       
       // Add delay between batches
       if (i + batchSize < filePaths.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
     
@@ -1860,7 +1857,7 @@ function DiscoverPhase() {
         
         console.log('[FILE-SELECTION-DEBUG] Initializing file states...');
         // Initialize file states
-        files.forEach(filePath => {
+        files.forEach((filePath) => {
           console.log('[FILE-SELECTION-DEBUG] Setting state for:', filePath);
           updateFileState(filePath, 'pending');
         });
@@ -1871,7 +1868,7 @@ function DiscoverPhase() {
         console.log('[FILE-SELECTION-DEBUG] File stats received:', fileObjects.length, 'objects');
         
         // Add source metadata
-        const enhancedFiles = fileObjects.map(file => ({
+        const enhancedFiles = fileObjects.map((file) => ({
           ...file,
           source: 'file_selection'
         }));
@@ -1880,7 +1877,7 @@ function DiscoverPhase() {
         setSelectedFiles(enhancedFiles);
         
         // Report any files that failed to get stats
-        const failedFiles = fileObjects.filter(f => !f.success);
+        const failedFiles = fileObjects.filter((f) => !f.success);
         if (failedFiles.length > 0) {
           console.log('[FILE-SELECTION-DEBUG] Warning:', failedFiles.length, 'files had issues');
           addNotification(`Warning: ${failedFiles.length} files had issues loading metadata`, 'warning');
@@ -1927,8 +1924,8 @@ function DiscoverPhase() {
         if (scanResult && scanResult.files && scanResult.files.length > 0) {
           // Filter for supported files
           const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
-          const supportedFiles = scanResult.files.filter(file => {
-            const ext = file.name.includes('.') ? '.' + file.name.split('.').pop().toLowerCase() : '';
+          const supportedFiles = scanResult.files.filter((file) => {
+            const ext = file.name.includes('.') ? `.${  file.name.split('.').pop().toLowerCase()}` : '';
             return supportedExts.includes(ext);
           });
           
@@ -1940,15 +1937,15 @@ function DiscoverPhase() {
           addNotification(`Found ${supportedFiles.length} supported files in folder`, 'success');
           
           // Initialize file states
-          supportedFiles.forEach(file => {
+          supportedFiles.forEach((file) => {
             updateFileState(file.path, 'pending');
           });
           
           // Get file stats
-          const fileObjects = await getBatchFileStats(supportedFiles.map(f => f.path));
+          const fileObjects = await getBatchFileStats(supportedFiles.map((f) => f.path));
           
           // Add source metadata
-          const enhancedFiles = fileObjects.map(file => ({
+          const enhancedFiles = fileObjects.map((file) => ({
             ...file,
             source: 'folder_scan'
           }));
@@ -1994,15 +1991,15 @@ function DiscoverPhase() {
             confirmText: 'Delete',
             cancelText: 'Cancel',
             variant: 'danger',
-            fileName: fileName
+            fileName
           });
           
           if (confirmDelete) {
             const result = await window.electronAPI.files.delete(filePath);
             if (result.success) {
               // Remove from analysis results
-              setAnalysisResults(prev => prev.filter(f => f.path !== filePath));
-              setSelectedFiles(prev => prev.filter(f => f.path !== filePath));
+              setAnalysisResults((prev) => prev.filter((f) => f.path !== filePath));
+              setSelectedFiles((prev) => prev.filter((f) => f.path !== filePath));
               addNotification(`Deleted: ${fileName}`, 'success');
             } else {
               addNotification(`Failed to delete: ${fileName}`, 'error');
@@ -2043,7 +2040,7 @@ function DiscoverPhase() {
         updateFileState(file.path, 'analyzing', { fileName });
         
         // Add a small delay to show progress updates
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         
         addNotification(`Analyzing file ${i + 1}/${files.length}: ${fileName}`, 'info');
         
@@ -2146,7 +2143,7 @@ function DiscoverPhase() {
         setAnalysisProgress({ current: i + 1, total: files.length });
         
         // Allow UI to update
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
       
       setAnalysisResults(results);
@@ -2155,11 +2152,11 @@ function DiscoverPhase() {
       setAnalysisResults(results);
       
       // Use functional state update to ensure we get the latest fileStates
-      setFileStates(currentFileStates => {
+      setFileStates((currentFileStates) => {
         const updatedStates = { ...currentFileStates };
         
         // Ensure all files have their final states updated
-        results.forEach(result => {
+        results.forEach((result) => {
           if (result.analysis && !result.error) {
             updatedStates[result.path] = {
               state: 'ready',
@@ -2191,7 +2188,7 @@ function DiscoverPhase() {
         return updatedStates;
       });
       
-      const successCount = results.filter(r => r.analysis).length;
+      const successCount = results.filter((r) => r.analysis).length;
       const failureCount = results.length - successCount;
       
       if (successCount > 0) {
@@ -2203,7 +2200,7 @@ function DiscoverPhase() {
           actions.advancePhase(PHASES.ORGANIZE, { 
             analysisResults: results,
             selectedFiles: files,
-            fileStates: fileStates,
+            fileStates,
             namingConvention: {
               convention: namingConvention,
               dateFormat,
@@ -2465,11 +2462,11 @@ function DiscoverPhase() {
                       <div className="flex items-center gap-fib-8 mb-fib-5">
                         <div className="text-2xl">
                           {getFileType(file.extension?.replace('.', '')) === 'document' ? '📄' :
-                           getFileType(file.extension?.replace('.', '')) === 'image' ? '🖼️' :
-                           // getFileType(file.extension?.replace('.', '')) === 'audio' ? '🎵' : // REMOVED - audio analysis disabled
-                           getFileType(file.extension?.replace('.', '')) === 'video' ? '🎬' :
-                           getFileType(file.extension?.replace('.', '')) === 'code' ? '💻' :
-                           getFileType(file.extension?.replace('.', '')) === 'archive' ? '📦' : '📄'}
+                            getFileType(file.extension?.replace('.', '')) === 'image' ? '🖼️' :
+                            // getFileType(file.extension?.replace('.', '')) === 'audio' ? '🎵' : // REMOVED - audio analysis disabled
+                              getFileType(file.extension?.replace('.', '')) === 'video' ? '🎬' :
+                                getFileType(file.extension?.replace('.', '')) === 'code' ? '💻' :
+                                  getFileType(file.extension?.replace('.', '')) === 'archive' ? '📦' : '📄'}
                         </div>
                         <div>
                           <div className="font-medium text-system-gray-900">{file.name}</div>
@@ -2584,7 +2581,7 @@ function DiscoverPhase() {
             console.log('[DISCOVER-PHASE] smartFolders:', phaseData.smartFolders?.length || 0);
             
             // Use functional state update to ensure we capture the most current state
-            setFileStates(currentFileStates => {
+            setFileStates((currentFileStates) => {
               const finalData = {
                 analysisResults,
                 fileStates: currentFileStates,
@@ -2623,7 +2620,7 @@ function DiscoverPhase() {
           disabled={analysisResults.length === 0} // Only disable if no files analyzed yet
           className={`btn-primary ${analysisResults.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} ${isAnalyzing ? 'animate-pulse' : ''}`}
           aria-label={`Proceed to organize ${analysisResults.length} analyzed files${isAnalyzing ? ' (analysis in progress)' : ''}`}
-          aria-describedby={analysisResults.length === 0 ? "no-files-message" : (isAnalyzing ? "analysis-in-progress" : undefined)}
+          aria-describedby={analysisResults.length === 0 ? 'no-files-message' : (isAnalyzing ? 'analysis-in-progress' : undefined)}
         >
           {isAnalyzing ? `Organize Files → (${analysisProgress.current}/${analysisProgress.total} analyzing)` : 'Organize Files →'}
         </button>
@@ -2895,7 +2892,7 @@ function OrganizePhase() {
         console.log('[ORGANIZE-PHASE] Reconstructing file states from analysis results');
         const reconstructedStates = {};
         
-        analysisResults.forEach(file => {
+        analysisResults.forEach((file) => {
           if (file.analysis && !file.error) {
             reconstructedStates[file.path] = {
               state: 'ready',
@@ -2925,7 +2922,7 @@ function OrganizePhase() {
       
       // Load previously organized files to avoid re-processing
       const previouslyOrganized = phaseData.organizedFiles || [];
-      const processedIds = new Set(previouslyOrganized.map(file => file.originalPath || file.path));
+      const processedIds = new Set(previouslyOrganized.map((file) => file.originalPath || file.path));
       setProcessedFileIds(processedIds);
       
       if (previouslyOrganized.length > 0) {
@@ -2967,11 +2964,11 @@ function OrganizePhase() {
   };
 
   // NEW: Filter files to show unprocessed and processed separately
-  const unprocessedFiles = analysisResults.filter(file => 
+  const unprocessedFiles = analysisResults.filter((file) => 
     !processedFileIds.has(file.path) && file.analysis
   );
   
-  const processedFiles = organizedFiles.filter(file => 
+  const processedFiles = organizedFiles.filter((file) => 
     processedFileIds.has(file.originalPath || file.path)
   );
 
@@ -3082,14 +3079,14 @@ function OrganizePhase() {
     if (!bulkCategory) return;
     
     const newEdits = {};
-    selectedFiles.forEach(index => {
+    selectedFiles.forEach((index) => {
       newEdits[index] = {
         ...editingFiles[index],
         category: bulkCategory
       };
     });
     
-    setEditingFiles(prev => ({ ...prev, ...newEdits }));
+    setEditingFiles((prev) => ({ ...prev, ...newEdits }));
     setBulkEditMode(false);
     setBulkCategory('');
     setSelectedFiles(new Set());
@@ -3112,13 +3109,13 @@ function OrganizePhase() {
     }
     
     console.log(`[FOLDER-MATCH] Finding smart folder for category: "${category}"`);
-    console.log(`[FOLDER-MATCH] Available smart folders:`, smartFolders.map(f => ({ name: f.name, path: f.path })));
+    console.log('[FOLDER-MATCH] Available smart folders:', smartFolders.map((f) => ({ name: f.name, path: f.path })));
     
     // Normalize category for matching
     const normalizedCategory = category.toLowerCase().trim();
     
     // 1. Exact match first (case-insensitive)
-    let folder = smartFolders.find(f => 
+    let folder = smartFolders.find((f) => 
       f.name.toLowerCase().trim() === normalizedCategory
     );
     if (folder) {
@@ -3130,16 +3127,16 @@ function OrganizePhase() {
     const categoryVariations = [
       normalizedCategory,
       normalizedCategory.replace(/s$/, ''), // Remove trailing 's'
-      normalizedCategory + 's', // Add trailing 's'
+      `${normalizedCategory  }s`, // Add trailing 's'
       normalizedCategory.replace(/\s+/g, ''), // Remove spaces
       normalizedCategory.replace(/\s+/g, '-'), // Replace spaces with dashes
-      normalizedCategory.replace(/\s+/g, '_'), // Replace spaces with underscores
+      normalizedCategory.replace(/\s+/g, '_') // Replace spaces with underscores
     ];
     
     console.log(`[FOLDER-MATCH] Trying variations: [${categoryVariations.join(', ')}]`);
     
     for (const variant of categoryVariations) {
-      folder = smartFolders.find(f => 
+      folder = smartFolders.find((f) => 
         f.name.toLowerCase().trim() === variant ||
         f.name.toLowerCase().replace(/\s+/g, '') === variant ||
         f.name.toLowerCase().replace(/\s+/g, '-') === variant ||
@@ -3155,9 +3152,9 @@ function OrganizePhase() {
     let bestMatch = null;
     let bestScore = 0;
     
-    console.log(`[FOLDER-MATCH] Attempting fuzzy matching...`);
+    console.log('[FOLDER-MATCH] Attempting fuzzy matching...');
     
-    smartFolders.forEach(f => {
+    smartFolders.forEach((f) => {
       let score = 0;
       const folderName = f.name.toLowerCase();
       
@@ -3177,8 +3174,8 @@ function OrganizePhase() {
       const categoryWords = normalizedCategory.split(/[\s_-]+/);
       const folderWords = folderName.split(/[\s_-]+/);
       
-      categoryWords.forEach(cWord => {
-        folderWords.forEach(fWord => {
+      categoryWords.forEach((cWord) => {
+        folderWords.forEach((fWord) => {
           if (cWord === fWord) {
             score += 5;
             console.log(`[FOLDER-MATCH] Word match "${cWord}" = "${fWord}": +5 points`);
@@ -3194,9 +3191,9 @@ function OrganizePhase() {
         const descLower = f.description.toLowerCase();
         if (descLower.includes(normalizedCategory)) {
           score += 4;
-          console.log(`[FOLDER-MATCH] Description contains category: +4 points`);
+          console.log('[FOLDER-MATCH] Description contains category: +4 points');
         }
-        categoryWords.forEach(word => {
+        categoryWords.forEach((word) => {
           if (descLower.includes(word)) {
             score += 2;
             console.log(`[FOLDER-MATCH] Description contains word "${word}": +2 points`);
@@ -3206,7 +3203,7 @@ function OrganizePhase() {
       
       // Check keywords match
       if (f.keywords && Array.isArray(f.keywords)) {
-        f.keywords.forEach(keyword => {
+        f.keywords.forEach((keyword) => {
           if (keyword.toLowerCase() === normalizedCategory) {
             score += 4;
             console.log(`[FOLDER-MATCH] Keyword exact match "${keyword}": +4 points`);
@@ -3237,7 +3234,7 @@ function OrganizePhase() {
     console.log(`[FOLDER-MATCH] No fuzzy match found (best score: ${bestScore})`);
     
     // 4. Default folder fallback
-    const defaultFolder = smartFolders.find(f => 
+    const defaultFolder = smartFolders.find((f) => 
       f.name.toLowerCase() === 'general' || 
       f.name.toLowerCase() === 'other' ||
       f.name.toLowerCase() === 'miscellaneous' ||
@@ -3278,7 +3275,7 @@ function OrganizePhase() {
     console.log(`[FOLDER-MATCH] Trying intelligent mappings for "${category}": [${possibleMappings.join(', ')}]`);
     
     for (const mapping of possibleMappings) {
-      const mappedFolder = smartFolders.find(f => 
+      const mappedFolder = smartFolders.find((f) => 
         f.name.toLowerCase() === mapping.toLowerCase() ||
         f.name.toLowerCase().includes(mapping.toLowerCase())
       );
@@ -3300,7 +3297,7 @@ function OrganizePhase() {
 
   // Handle editing file properties
   const handleEditFile = (fileIndex, field, value) => {
-    setEditingFiles(prev => ({
+    setEditingFiles((prev) => ({
       ...prev,
       [fileIndex]: {
         ...prev[fileIndex],
@@ -3326,18 +3323,18 @@ function OrganizePhase() {
 
   // NEW: Mark files as processed after organization
   const markFilesAsProcessed = (filePaths) => {
-    setProcessedFileIds(prev => {
+    setProcessedFileIds((prev) => {
       const newSet = new Set(prev);
-      filePaths.forEach(path => newSet.add(path));
+      filePaths.forEach((path) => newSet.add(path));
       return newSet;
     });
   };
 
   // NEW: Remove files from processed list (for undo operations)
   const unmarkFilesAsProcessed = (filePaths) => {
-    setProcessedFileIds(prev => {
+    setProcessedFileIds((prev) => {
       const newSet = new Set(prev);
-      filePaths.forEach(path => newSet.delete(path));
+      filePaths.forEach((path) => newSet.delete(path));
       return newSet;
     });
   };
@@ -3385,7 +3382,7 @@ function OrganizePhase() {
           console.log(`[FOLDER-FALLBACK] No match for category "${file.analysis.category}", trying fallbacks...`);
           
           // Try to find a general/default folder
-          smartFolder = smartFolders.find(f => 
+          smartFolder = smartFolders.find((f) => 
             f.name.toLowerCase().includes('general') ||
             f.name.toLowerCase().includes('other') ||
             f.name.toLowerCase().includes('misc') ||
@@ -3435,7 +3432,7 @@ function OrganizePhase() {
         
         // Ensure the suggested name has an extension
         let fileName = file.analysis.suggestedName || file.name;
-        const originalExt = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+        const originalExt = file.name.includes('.') ? `.${  file.name.split('.').pop()}` : '';
         if (!fileName.includes('.') && originalExt) {
           fileName += originalExt;
         }
@@ -3456,7 +3453,7 @@ function OrganizePhase() {
         operations.push({
           type: 'move',
           source: file.path,
-          destination: destination,
+          destination,
           metadata: {
             ...file.analysis,
             smartFolder: smartFolder.name,
@@ -3491,7 +3488,7 @@ function OrganizePhase() {
           console.log('[ORGANIZE-FILES] About to call performOperation with:', {
             type: 'batch_organize',
             operationsCount: operations.length,
-            operations: operations.map(op => ({
+            operations: operations.map((op) => ({
               type: op.type,
               source: op.source,
               destination: op.destination,
@@ -3502,7 +3499,7 @@ function OrganizePhase() {
           try {
             const result = await window.electronAPI.files.performOperation({
               type: 'batch_organize',
-              operations: operations
+              operations
             });
             
             console.log('[ORGANIZE-FILES] File operation result:', result);
@@ -3537,14 +3534,14 @@ function OrganizePhase() {
         },
         undo: async () => {
           // Implement undo logic - move files back to original locations
-          const undoOperations = operations.map(op => ({
+          const undoOperations = operations.map((op) => ({
             type: 'move',
             source: op.destination,
             destination: op.source
           }));
           
           // Unmark files as processed when undoing
-          const filePaths = operations.map(op => op.source);
+          const filePaths = operations.map((op) => op.source);
           unmarkFilesAsProcessed(filePaths);
           
           return await window.electronAPI.files.performOperation({
@@ -3554,12 +3551,12 @@ function OrganizePhase() {
         },
         metadata: {
           fileCount: operations.length,
-          operations: operations
+          operations
         }
       });
 
       // NEW: Mark organized files as processed
-      const organizedFilePaths = operations.map(op => op.source);
+      const organizedFilePaths = operations.map((op) => op.source);
       markFilesAsProcessed(organizedFilePaths);
 
       // NEW: Create organized file records with proper metadata
@@ -3574,7 +3571,7 @@ function OrganizePhase() {
         success: true
       }));
 
-      setOrganizedFiles(prev => [...prev, ...newOrganizedFiles]);
+      setOrganizedFiles((prev) => [...prev, ...newOrganizedFiles]);
       
       // Persist organized files data
       actions.setPhaseData('organizedFiles', [...organizedFiles, ...newOrganizedFiles]);
@@ -3583,7 +3580,7 @@ function OrganizePhase() {
       addNotification(`Successfully organized ${operations.length} files!`, 'success');
       
       // Don't auto-advance if there are still unprocessed files
-      const remainingUnprocessed = analysisResults.filter(file => 
+      const remainingUnprocessed = analysisResults.filter((file) => 
         !processedFileIds.has(file.path) && !organizedFilePaths.includes(file.path) && file.analysis
       );
       
@@ -3642,7 +3639,7 @@ function OrganizePhase() {
         <div className="card-enhanced mb-fib-21">
           <h3 className="text-lg font-semibold mb-fib-8">📁 Target Smart Folders</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-8">
-            {smartFolders.map(folder => (
+            {smartFolders.map((folder) => (
               <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg border border-stratosort-blue/20">
                 <div className="font-medium text-system-gray-900 mb-fib-2">{folder.name}</div>
                 <div className="text-sm text-system-gray-600 mb-fib-3">
@@ -3673,7 +3670,7 @@ function OrganizePhase() {
               <div className="text-sm text-green-700">Already Organized</div>
             </div>
             <div className="text-center p-fib-13 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="text-2xl font-bold text-gray-600">{analysisResults.filter(f => !f.analysis).length}</div>
+              <div className="text-2xl font-bold text-gray-600">{analysisResults.filter((f) => !f.analysis).length}</div>
               <div className="text-sm text-gray-700">Failed Analysis</div>
             </div>
           </div>
@@ -3721,7 +3718,7 @@ function OrganizePhase() {
                   className="form-input-enhanced text-sm"
                 >
                   <option value="">Select category...</option>
-                  {smartFolders.map(folder => (
+                  {smartFolders.map((folder) => (
                     <option key={folder.id} value={folder.name}>{folder.name}</option>
                   ))}
                 </select>
@@ -3822,7 +3819,7 @@ function OrganizePhase() {
                                 onChange={(e) => handleEditFile(index, 'category', e.target.value)}
                                 className="form-input-enhanced text-sm"
                               >
-                                {smartFolders.map(folder => (
+                                {smartFolders.map((folder) => (
                                   <option key={folder.id} value={folder.name}>{folder.name}</option>
                                 ))}
                               </select>
@@ -3906,7 +3903,7 @@ function OrganizePhase() {
         <div className="card-enhanced mb-fib-21 text-center">
           <h3 className="text-lg font-semibold mb-fib-13">Ready to Organize</h3>
           <p className="text-system-gray-600 mb-fib-13">
-            StratoSort will move and rename <strong>{unprocessedFiles.filter(f => f.analysis).length} files</strong> according to AI suggestions.
+            StratoSort will move and rename <strong>{unprocessedFiles.filter((f) => f.analysis).length} files</strong> according to AI suggestions.
           </p>
           <p className="text-xs text-system-gray-500 mb-fib-13">
             💡 Don't worry - you can undo this operation if needed
@@ -3948,7 +3945,7 @@ function OrganizePhase() {
             <button 
               onClick={handleOrganizeFiles}
               className="btn-success text-lg px-fib-21 py-fib-13"
-              disabled={unprocessedFiles.filter(f => f.analysis).length === 0}
+              disabled={unprocessedFiles.filter((f) => f.analysis).length === 0}
             >
               ✨ Organize Files Now
             </button>
@@ -4083,11 +4080,11 @@ function NavigationBar() {
                     className={`
                       flex items-center space-x-fib-5 px-fib-13 py-fib-8 rounded-lg text-sm font-medium transition-all
                       ${isActive 
-                        ? 'bg-stratosort-blue text-white shadow-sm' 
-                        : canNavigate
-                          ? 'text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-50'
-                          : 'text-system-gray-400 cursor-not-allowed'
-                      }
+                    ? 'bg-stratosort-blue text-white shadow-sm' 
+                    : canNavigate
+                      ? 'text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-50'
+                      : 'text-system-gray-400 cursor-not-allowed'
+                  }
                     `}
                   >
                     <span>{metadata.icon}</span>
@@ -4339,11 +4336,11 @@ const root = ReactDOM.createRoot(document.getElementById('react-root'));
 root.render(
   // Temporarily disable StrictMode in development to reduce duplicate API calls
   process.env.NODE_ENV === 'production' ? (
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
   ) : (
     <ErrorBoundary>
       <App />

@@ -5,8 +5,8 @@
  */
 
 const fs = require('fs').promises;
-const path = require('path');
 const os = require('os');
+const path = require('path');
 
 async function testBasicFileMove() {
   console.log('🧪 TESTING BASIC FILE MOVEMENT');
@@ -21,7 +21,7 @@ async function testBasicFileMove() {
     
     // Create a test file
     const sourceFile = path.join(testDir, 'test-document.txt');
-    const testContent = 'This is a test document.\nCreated at: ' + new Date().toISOString();
+    const testContent = `This is a test document.\nCreated at: ${new Date().toISOString()}`;
     await fs.writeFile(sourceFile, testContent);
     console.log('✅ Created test file:', sourceFile);
     
@@ -67,7 +67,9 @@ async function testBasicFileMove() {
     console.error('❌ Test failed:', error);
     try {
       await fs.rm(testDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // Ignore cleanup errors
+    }
     return false;
   }
 }

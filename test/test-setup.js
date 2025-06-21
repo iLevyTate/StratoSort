@@ -101,10 +101,9 @@ global.testUtils = {
     ...overrides
   }),
   
-  waitForAsync: (ms = 100) => new Promise(resolve => setTimeout(resolve, ms)),
+  waitForAsync: (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms)),
   
   generateLargeContent: (sizeKB = 100) => {
-    const chunkSize = 1024;
     const chunks = sizeKB;
     return Array.from({ length: chunks }, (_, i) => 
       `Mock content chunk ${i + 1} `.repeat(50)

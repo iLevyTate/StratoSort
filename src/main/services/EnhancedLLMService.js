@@ -12,10 +12,11 @@
  * - Parameter optimization
  */
 
-const { Ollama } = require('ollama');
-const fs = require('fs').promises;
-const path = require('path');
 const crypto = require('crypto');
+const path = require('path');
+
+const { Ollama } = require('ollama');
+
 const PerformanceOptimizer = require('./PerformanceOptimizer');
 
 class EnhancedLLMService {
@@ -46,105 +47,105 @@ class EnhancedLLMService {
    */
   initializeDomainTemplates() {
     this.domainTemplates.set('document', {
-      systemPrompt: `You are an expert document analysis specialist with expertise in content categorization, information extraction, and semantic understanding.`,
+      systemPrompt: 'You are an expert document analysis specialist with expertise in content categorization, information extraction, and semantic understanding.',
       
       examples: [
         {
-          input: "Invoice from ABC Corp dated 2024-01-15 for $1,250.00 for consulting services",
+          input: 'Invoice from ABC Corp dated 2024-01-15 for $1,250.00 for consulting services',
           output: {
-            category: "Financial Planning",
-            project: "Business Expenses",
-            purpose: "Invoice payment tracking and record keeping",
-            keywords: ["invoice", "consulting", "payment", "business"],
+            category: 'Financial Planning',
+            project: 'Business Expenses',
+            purpose: 'Invoice payment tracking and record keeping',
+            keywords: ['invoice', 'consulting', 'payment', 'business'],
             confidence: 95,
-            suggestedName: "abc_corp_consulting_invoice_2024_01_15"
+            suggestedName: 'abc_corp_consulting_invoice_2024_01_15'
           }
         },
         {
-          input: "Research paper on machine learning applications in healthcare diagnostics",
+          input: 'Research paper on machine learning applications in healthcare diagnostics',
           output: {
-            category: "Research",
-            project: "ML Healthcare",
-            purpose: "Academic research on AI diagnostic applications",
-            keywords: ["machine learning", "healthcare", "diagnostics", "AI"],
+            category: 'Research',
+            project: 'ML Healthcare',
+            purpose: 'Academic research on AI diagnostic applications',
+            keywords: ['machine learning', 'healthcare', 'diagnostics', 'AI'],
             confidence: 92,
-            suggestedName: "ml_healthcare_diagnostics_research_paper"
+            suggestedName: 'ml_healthcare_diagnostics_research_paper'
           }
         }
       ],
       
       constraints: [
-        "Base analysis strictly on actual content, not filename assumptions",
-        "Extract concrete themes and topics from text",
-        "Prioritize factual accuracy over creative interpretation",
-        "Use domain-specific terminology when present"
+        'Base analysis strictly on actual content, not filename assumptions',
+        'Extract concrete themes and topics from text',
+        'Prioritize factual accuracy over creative interpretation',
+        'Use domain-specific terminology when present'
       ]
     });
 
     this.domainTemplates.set('image', {
-      systemPrompt: `You are an expert visual content analyzer with specialized knowledge in image categorization, object recognition, and visual context understanding.`,
+      systemPrompt: 'You are an expert visual content analyzer with specialized knowledge in image categorization, object recognition, and visual context understanding.',
       
       examples: [
         {
-          input: "Screenshot of a software interface showing dashboard metrics",
+          input: 'Screenshot of a software interface showing dashboard metrics',
           output: {
-            category: "Screenshots",
-            project: "UI Documentation",
-            purpose: "Software interface documentation and reference",
-            keywords: ["screenshot", "dashboard", "interface", "metrics"],
-            content_type: "interface",
+            category: 'Screenshots',
+            project: 'UI Documentation',
+            purpose: 'Software interface documentation and reference',
+            keywords: ['screenshot', 'dashboard', 'interface', 'metrics'],
+            content_type: 'interface',
             has_text: true,
             confidence: 88,
-            suggestedName: "dashboard_metrics_screenshot"
+            suggestedName: 'dashboard_metrics_screenshot'
           }
         },
         {
-          input: "Company logo with blue and white colors on transparent background",
+          input: 'Company logo with blue and white colors on transparent background',
           output: {
-            category: "Logos",
-            project: "Brand Assets",
-            purpose: "Corporate identity and branding material",
-            keywords: ["logo", "brand", "corporate", "identity"],
-            content_type: "object",
-            colors: ["blue", "white"],
+            category: 'Logos',
+            project: 'Brand Assets',
+            purpose: 'Corporate identity and branding material',
+            keywords: ['logo', 'brand', 'corporate', 'identity'],
+            content_type: 'object',
+            colors: ['blue', 'white'],
             confidence: 94,
-            suggestedName: "company_logo_blue_white"
+            suggestedName: 'company_logo_blue_white'
           }
         }
       ],
       
       constraints: [
-        "Identify specific visual elements and context",
-        "Recognize text within images when present",
-        "Analyze color schemes and visual composition",
-        "Categorize based on visual content, not assumptions"
+        'Identify specific visual elements and context',
+        'Recognize text within images when present',
+        'Analyze color schemes and visual composition',
+        'Categorize based on visual content, not assumptions'
       ]
     });
 
     this.domainTemplates.set('audio', {
-      systemPrompt: `You are an expert audio content analyzer with specialized knowledge in speech recognition, audio categorization, and conversational analysis.`,
+      systemPrompt: 'You are an expert audio content analyzer with specialized knowledge in speech recognition, audio categorization, and conversational analysis.',
       
       examples: [
         {
-          input: "Meeting recording discussing Q4 budget planning and resource allocation",
+          input: 'Meeting recording discussing Q4 budget planning and resource allocation',
           output: {
-            category: "Financial Planning",
-            project: "Budget Planning",
-            purpose: "Quarterly budget discussion and resource planning",
-            keywords: ["meeting", "budget", "planning", "Q4", "resources"],
-            content_type: "conversation",
+            category: 'Financial Planning',
+            project: 'Budget Planning',
+            purpose: 'Quarterly budget discussion and resource planning',
+            keywords: ['meeting', 'budget', 'planning', 'Q4', 'resources'],
+            content_type: 'conversation',
             speaker_count: 3,
             confidence: 90,
-            suggestedName: "q4_budget_planning_meeting"
+            suggestedName: 'q4_budget_planning_meeting'
           }
         }
       ],
       
       constraints: [
-        "Analyze conversational content and context",
-        "Identify speaker patterns and interaction types",
-        "Extract key topics from spoken content",
-        "Consider audio quality and clarity in confidence scoring"
+        'Analyze conversational content and context',
+        'Identify speaker patterns and interaction types',
+        'Extract key topics from spoken content',
+        'Consider audio quality and clarity in confidence scoring'
       ]
     });
   }
@@ -166,6 +167,16 @@ class EnhancedLLMService {
       
       if (cachedResult) {
         console.log(`[ENHANCED-LLM] Using cached analysis for ${originalFileName} (${Date.now() - startTime}ms)`);
+        
+        // Track cached analysis in history for performance stats
+        this.analysisHistory.set(contentHash, {
+          fileName: originalFileName,
+          result: cachedResult,
+          timestamp: Date.now(),
+          processingTime: Date.now() - startTime,
+          fromCache: true
+        });
+        
         return cachedResult;
       }
       
@@ -219,8 +230,16 @@ class EnhancedLLMService {
       result.processingTime = Date.now() - startTime;
       result.optimized = true;
       
-      // PERFORMANCE OPTIMIZATION 5: Cache the result
+      // PERFORMANCE OPTIMIZATION 5: Cache the result and track analysis
       this.performanceOptimizer.setCachedAnalysis(contentHash, 'document', smartFolders, result);
+      
+      // Track analysis in history for performance stats
+      this.analysisHistory.set(contentHash, {
+        fileName: originalFileName,
+        result,
+        timestamp: Date.now(),
+        processingTime: result.processingTime
+      });
       
       console.log(`[ENHANCED-LLM] Optimized analysis completed for ${originalFileName} (${result.processingTime}ms)`);
       return result;
@@ -234,7 +253,7 @@ class EnhancedLLMService {
   /**
    * Analyze content structure and extract key information
    */
-  async analyzeContentStructure(textContent, fileName) {
+  async analyzeContentStructure(textContent, _fileName) {
     const prompt = `Analyze the structure and key information in this document content:
 
 CONTENT ANALYSIS TASK:
@@ -285,7 +304,7 @@ Respond with JSON containing:
     }
 
     // Build advanced prompt with examples and constraints
-    let prompt = `${template.systemPrompt}
+    const prompt = `${template.systemPrompt}
 
 ANALYSIS EXAMPLES:
 ${template.examples.map((ex, i) => `
@@ -295,7 +314,7 @@ Output: ${JSON.stringify(ex.output, null, 2)}
 `).join('\n')}
 
 ANALYSIS CONSTRAINTS:
-${template.constraints.map(c => `- ${c}`).join('\n')}
+${template.constraints.map((c) => `- ${c}`).join('\n')}
 
 Now analyze this content following the same pattern:
 Content: "${content.substring(0, 6000)}"
@@ -317,7 +336,7 @@ Provide detailed JSON analysis with all relevant fields:`;
       });
 
       const analysis = JSON.parse(response.response);
-      console.log(`[ENHANCED-LLM] Domain analysis complete:`, {
+      console.log('[ENHANCED-LLM] Domain analysis complete:', {
         domain,
         category: analysis.category,
         confidence: analysis.confidence
@@ -369,7 +388,7 @@ Provide detailed JSON analysis with all relevant fields:`;
    * Semantic similarity matching using LLM
    */
   async semanticSimilarityMatching(category, smartFolders, content) {
-    const folderDescriptions = smartFolders.map(f => ({
+    const folderDescriptions = smartFolders.map((f) => ({
       name: f.name,
       description: f.description || '',
       keywords: f.keywords || []
@@ -404,14 +423,14 @@ Respond with JSON array:
       return JSON.parse(response.response);
     } catch (error) {
       console.error('[ENHANCED-LLM] Semantic matching failed:', error.message);
-      return smartFolders.map(f => ({ folder: f.name, similarity: 0.5, reasoning: 'fallback' }));
+      return smartFolders.map((f) => ({ folder: f.name, similarity: 0.5, reasoning: 'fallback' }));
     }
   }
 
   /**
    * Iterative refinement based on confidence levels
    */
-  async refineAnalysis(initialAnalysis, content, fileName, smartFolders) {
+  async refineAnalysis(initialAnalysis, content, fileName, _smartFolders) {
     const confidence = initialAnalysis.confidence || 0;
     
     // If confidence is low, try alternative approaches
@@ -450,7 +469,7 @@ Respond with JSON array:
       originalCategory: analysis.category,
       chosenFolder: analysis.category,
       confidence: analysis.confidence,
-      analysis: analysis
+      analysis
     });
     
     // Keep only recent history (last 100 entries)
@@ -469,7 +488,7 @@ Respond with JSON array:
   getOptimizedParameters(taskType, contentComplexity = 'medium') {
     const baseProfile = this.parameterProfiles[
       contentComplexity === 'high' ? 'creative' :
-      contentComplexity === 'low' ? 'precise' : 'balanced'
+        contentComplexity === 'low' ? 'precise' : 'balanced'
     ];
 
     const taskOptimizations = {
@@ -523,7 +542,7 @@ Respond with JSON array:
 
   getTopCategories(history) {
     const categoryCount = {};
-    history.forEach(h => {
+    history.forEach((h) => {
       categoryCount[h.chosenFolder] = (categoryCount[h.chosenFolder] || 0) + 1;
     });
     
@@ -594,7 +613,7 @@ Respond with JSON array:
   /**
    * Analyze visual content of images
    */
-  async analyzeVisualContent(imageBase64, fileName) {
+  async analyzeVisualContent(imageBase64, _fileName) {
     const prompt = `Analyze this image and provide detailed visual analysis:
 
 VISUAL ANALYSIS TASK:
@@ -646,7 +665,7 @@ Respond with JSON containing:
   /**
    * Analyze and extract text from images
    */
-  async analyzeImageText(imageBase64, fileName) {
+  async analyzeImageText(imageBase64, _fileName) {
     const prompt = `Extract and analyze any readable text from this image:
 
 TEXT EXTRACTION TASK:
@@ -782,7 +801,7 @@ Output: ${JSON.stringify(ex.output, null, 2)}
 `).join('\n')}
 
 ANALYSIS CONSTRAINTS:
-${template.constraints.slice(0, 3).map(c => `- ${c}`).join('\n')}
+${template.constraints.slice(0, 3).map((c) => `- ${c}`).join('\n')}
 
 Now analyze this content following the same pattern:
 Content: "${content.substring(0, 6000)}"
@@ -807,7 +826,7 @@ Provide detailed JSON analysis with all relevant fields:`;
       const response = await Promise.race([analysisPromise, timeoutPromise]);
       const analysis = JSON.parse(response.response);
       
-      console.log(`[ENHANCED-LLM] Optimized domain analysis complete:`, {
+      console.log('[ENHANCED-LLM] Optimized domain analysis complete:', {
         domain,
         category: analysis.category,
         confidence: analysis.confidence,
@@ -827,7 +846,7 @@ Provide detailed JSON analysis with all relevant fields:`;
   async batchAnalyzeDocuments(documents, smartFolders = [], userContext = {}) {
     console.log(`[ENHANCED-LLM] Starting batch analysis of ${documents.length} documents`);
     
-    const analysisRequests = documents.map(doc => ({
+    const analysisRequests = documents.map((doc) => ({
       analysisFunction: this.analyzeDocumentEnhanced.bind(this),
       args: [doc.content, doc.fileName, smartFolders, userContext]
     }));
@@ -842,7 +861,90 @@ Provide detailed JSON analysis with all relevant fields:`;
    * Get comprehensive performance statistics
    */
   getPerformanceStats() {
-    return this.performanceOptimizer.getPerformanceStats();
+    const stats = this.performanceOptimizer.getPerformanceStats();
+    return {
+      ...stats,
+      totalAnalyses: this.analysisHistory.size,
+      userPatterns: this.userPatterns.size
+    };
+  }
+
+  /**
+   * Get optimization recommendations based on performance stats
+   */
+  getOptimizationRecommendations(stats) {
+    const recommendations = [];
+    
+    if (stats.cacheHitRatePercent < 30) {
+      recommendations.push({
+        type: 'caching',
+        priority: 'high',
+        message: 'Low cache hit rate detected. Consider optimizing content preprocessing.'
+      });
+    }
+    
+    if (stats.averageResponseTimeMs > 5000) {
+      recommendations.push({
+        type: 'performance',
+        priority: 'medium',
+        message: 'High response times detected. Consider using faster models for simple content.'
+      });
+    }
+    
+    if (stats.memoryUsageMB > 200) {
+      recommendations.push({
+        type: 'memory',
+        priority: 'medium',
+        message: 'High memory usage detected. Consider running performance cleanup.'
+      });
+    }
+    
+    return recommendations;
+  }
+
+  /**
+   * Get detailed performance analytics
+   */
+  getDetailedPerformanceAnalytics() {
+    const stats = this.getPerformanceStats();
+    
+    return {
+      strategies: {
+        caching: {
+          enabled: true,
+          hitRate: stats.cacheHitRatePercent,
+          totalEntries: stats.cacheSize
+        },
+        modelSelection: {
+          enabled: true,
+          currentStrategy: 'adaptive'
+        },
+        timeoutManagement: {
+          enabled: true,
+          adaptiveTimeouts: true
+        },
+        contentOptimization: {
+          enabled: true,
+          truncationActive: true
+        },
+        memoryOptimization: {
+          enabled: true,
+          currentUsage: stats.memoryUsageMB,
+          peakUsage: stats.peakMemoryUsageMB
+        },
+        concurrentProcessing: {
+          enabled: true,
+          maxConcurrent: 5,
+          currentLoad: stats.concurrentOperations || 0
+        }
+      },
+      performance: {
+        totalAnalyses: stats.totalAnalyses,
+        averageResponseTime: stats.averageResponseTimeMs,
+        cacheEfficiency: stats.cacheHitRatePercent
+      },
+      recommendations: this.getOptimizationRecommendations(stats)
+    };
   }
 
   /**

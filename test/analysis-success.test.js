@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
-const path = require('path');
 const os = require('os');
+const path = require('path');
 
 const { analyzeDocumentFile } = require('../src/main/analysis/ollamaDocumentAnalysis');
 const { analyzeImageFile } = require('../src/main/analysis/ollamaImageAnalysis');

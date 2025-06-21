@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+
 const { Ollama } = require('ollama');
 
 // Import enhanced LLM service
@@ -13,7 +14,7 @@ const AppConfig = {
       defaultHost: 'http://127.0.0.1:11434',
       timeout: 180000, // 3 minutes for multimodal analysis (Gemma 3:4b needs more time)
       temperature: 0.2,
-      maxTokens: 1000,
+      maxTokens: 1000
     }
   }
 };
@@ -28,45 +29,45 @@ const enhancedLLM = new EnhancedLLMService(ollamaHost);
 // Advanced image analysis templates with examples
 const ADVANCED_IMAGE_PROMPTS = {
   visualAnalysis: {
-    systemPrompt: `You are an expert visual content analyzer with specialized knowledge in image categorization, object recognition, color analysis, and visual context understanding. You excel at identifying specific visual elements and their purposes.`,
+    systemPrompt: 'You are an expert visual content analyzer with specialized knowledge in image categorization, object recognition, color analysis, and visual context understanding. You excel at identifying specific visual elements and their purposes.',
     
     fewShotExamples: [
       {
-        description: "Screenshot of a web application dashboard showing metrics and charts",
+        description: 'Screenshot of a web application dashboard showing metrics and charts',
         expectedOutput: {
-          category: "Screenshots",
-          project: "UI Documentation",
-          purpose: "Interface documentation and user experience reference",
-          keywords: ["screenshot", "dashboard", "ui", "metrics", "charts"],
-          content_type: "interface",
+          category: 'Screenshots',
+          project: 'UI Documentation',
+          purpose: 'Interface documentation and user experience reference',
+          keywords: ['screenshot', 'dashboard', 'ui', 'metrics', 'charts'],
+          content_type: 'interface',
           has_text: true,
-          colors: ["blue", "white", "gray"],
+          colors: ['blue', 'white', 'gray'],
           confidence: 90,
-          suggestedName: "web_dashboard_metrics_screenshot"
+          suggestedName: 'web_dashboard_metrics_screenshot'
         }
       },
       {
-        description: "Company logo with modern design in blue and orange colors",
+        description: 'Company logo with modern design in blue and orange colors',
         expectedOutput: {
-          category: "Logos", 
-          project: "Brand Assets",
-          purpose: "Corporate identity and branding materials",
-          keywords: ["logo", "brand", "corporate", "design", "identity"],
-          content_type: "object",
+          category: 'Logos', 
+          project: 'Brand Assets',
+          purpose: 'Corporate identity and branding materials',
+          keywords: ['logo', 'brand', 'corporate', 'design', 'identity'],
+          content_type: 'object',
           has_text: false,
-          colors: ["blue", "orange"],
+          colors: ['blue', 'orange'],
           confidence: 95,
-          suggestedName: "company_logo_blue_orange"
+          suggestedName: 'company_logo_blue_orange'
         }
       }
     ],
     
     analysisConstraints: [
-      "Analyze actual visual content and elements, not filename assumptions",
-      "Identify specific objects, text, and visual contexts present",
-      "Recognize color schemes and visual composition accurately",
-      "Determine the purpose and context from visual elements",
-      "Use precise content_type categorization"
+      'Analyze actual visual content and elements, not filename assumptions',
+      'Identify specific objects, text, and visual contexts present',
+      'Recognize color schemes and visual composition accurately',
+      'Determine the purpose and context from visual elements',
+      'Use precise content_type categorization'
     ]
   }
 };
@@ -76,15 +77,41 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
     console.log(`[ENHANCED-IMAGE] Starting advanced image analysis for ${originalFileName}`);
     console.log(`[SMART-FOLDERS] Received ${smartFolders?.length || 0} smart folders for image analysis`);
     
-    // Use enhanced multi-step analysis for complex images
-    if (smartFolders.length > 0) {
+    // Determine if this should use enhanced analysis
+    // Enable enhanced analysis for smart folders OR when explicitly requested by tests
+    const shouldUseEnhanced = (smartFolders && smartFolders.length > 0) || 
+                             (userContext && userContext.forceEnhanced);
+    
+    // Use enhanced multi-step analysis for images with smart folders or when forced
+    if (shouldUseEnhanced) {
       console.log('[ENHANCED-IMAGE] Using multi-step enhanced image analysis');
-      return await enhancedLLM.analyzeImageEnhanced(
-        imageBase64,
-        originalFileName,
-        smartFolders,
-        userContext
-      );
+      try {
+        const result = await enhancedLLM.analyzeImageEnhanced(
+          imageBase64,
+          originalFileName,
+          smartFolders,
+          userContext
+        );
+        
+        if (result) {
+          // Learn from the enhanced analysis for future improvements
+          try {
+            await enhancedLLM.learnFromAnalysis(result, originalFileName, smartFolders, userContext);
+          } catch (learningError) {
+            console.warn('[LEARNING] Failed to learn from analysis:', learningError.message);
+          }
+          
+          return {
+            ...result,
+            enhanced: true,
+            multiStep: true,
+            timestamp: new Date().toISOString()
+          };
+        }
+      } catch (enhancedError) {
+        console.log('[ENHANCED-IMAGE] Enhanced analysis failed, falling back to standard analysis');
+        // Continue to standard analysis below
+      }
     }
     
     // Advanced prompt engineering with examples and context
@@ -100,31 +127,104 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
       prompt: advancedPrompt,
       images: [imageBase64],
       options: optimizedParameters,
-      format: 'json',
+      format: 'json'
     });
 
-    if (response.response) {
-      return await processEnhancedImageResponse(
+    if (response && response.response) {
+      const result = await processEnhancedImageResponse(
         response.response,
         originalFileName,
         smartFolders,
         imageBase64
       );
+      
+      // Perform separate text extraction if text is detected
+      let extractedText = '';
+      let textConfidence = 0;
+      
+      if (result.has_text) {
+        console.log('[TEXT-EXTRACTION] Text detected, performing separate OCR analysis');
+        try {
+          const textResponse = await ollamaClient.generate({
+            model: AppConfig.ai.imageAnalysis.defaultModel,
+            prompt: `Extract and analyze any readable text from this image:
+
+TEXT EXTRACTION TASK:
+1. Extract all readable text content
+2. Determine text clarity and readability
+3. Identify text type (UI text, document text, handwriting, etc.)
+
+If no text is found, return empty string for text and 0 for confidence.
+
+Respond with JSON:
+{
+  "text": "extracted text content",
+  "confidence": 0-100,
+  "textType": "ui|document|handwriting|printed|other"
+}`,
+            images: [imageBase64],
+            options: {
+              temperature: 0.1,
+              top_k: 10,
+              num_predict: 500
+            },
+            format: 'json'
+          });
+          
+          if (textResponse && textResponse.response) {
+            const textData = JSON.parse(textResponse.response);
+            extractedText = textData.text || '';
+            textConfidence = textData.confidence || 0;
+          }
+        } catch (textError) {
+          console.error('[TEXT-EXTRACTION] Failed:', textError.message);
+        }
+      }
+      
+      return {
+        ...result,
+        enhanced: shouldUseEnhanced || false,
+        timestamp: new Date().toISOString(),
+        analysisType: 'image',
+        extractedText,
+        textConfidence,
+        fallback: result.fallback || false,
+        corrected: result.corrected || false,
+        partial: result.partial || false
+      };
     }
     
     console.warn(`[LLM-NO-RESPONSE] No content in image analysis response for ${originalFileName}`);
-    return getImageFallbackAnalysis(originalFileName, smartFolders);
+    const fallback = getImageFallbackAnalysis(originalFileName, smartFolders);
+    return {
+      ...fallback,
+      enhanced: false,
+      timestamp: new Date().toISOString(),
+      analysisType: 'image',
+      extractedText: '',
+      textConfidence: 0
+    };
     
   } catch (error) {
     console.error('[ENHANCED-IMAGE] Advanced image analysis failed:', error.message);
-    return await imageAnalysisFallback(originalFileName, smartFolders);
+    const fallback = await imageAnalysisFallback(originalFileName, smartFolders);
+    return {
+      ...fallback,
+      enhanced: false,
+      timestamp: new Date().toISOString(),
+      analysisType: 'image',
+      extractedText: fallback.extractedText || '',
+      textConfidence: fallback.textConfidence || 0
+    };
   }
 }
 
 /**
  * Perform enhanced multi-step image analysis
  */
-async function performEnhancedImageAnalysis(imageBase64, fileName, smartFolders, userContext) {
+/* eslint-disable no-unused-vars */
+async function _performEnhancedImageAnalysis(imageBase64, fileName, smartFolders, userContext) {
+/* eslint-enable no-unused-vars */
   try {
     // Step 1: Visual content analysis
     const visualAnalysis = await analyzeVisualContent(imageBase64, fileName);
@@ -170,13 +270,13 @@ function buildAdvancedImagePrompt(fileName, smartFolders) {
   // Build folder constraint section
   let folderConstraintSection = '';
   if (smartFolders && smartFolders.length > 0) {
-    const validFolders = smartFolders.filter(f => 
+    const validFolders = smartFolders.filter((f) => 
       f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
     );
     
     if (validFolders.length > 0) {
       const folderList = validFolders
-        .map(f => `"${f.name.trim()}"`)
+        .map((f) => `"${f.name.trim()}"`)
         .slice(0, 10)
         .join(', ');
       
@@ -213,7 +313,7 @@ Analysis: ${JSON.stringify(example.expectedOutput, null, 2)}
   const constraintsSection = `
 
 ⚠️ VISUAL ANALYSIS CONSTRAINTS:
-${template.analysisConstraints.map(c => `• ${c}`).join('\n')}`;
+${template.analysisConstraints.map((c) => `• ${c}`).join('\n')}`;
 
   // Main analysis prompt
   const analysisPrompt = `${template.systemPrompt}
@@ -352,7 +452,7 @@ Respond with JSON:
 /**
  * Process enhanced image response with validation
  */
-async function processEnhancedImageResponse(responseText, fileName, smartFolders, imageBase64) {
+async function processEnhancedImageResponse(responseText, fileName, smartFolders, _imageBase64) {
   try {
     const parsedJson = JSON.parse(responseText);
     console.log(`[LLM-RESPONSE] Parsed enhanced image analysis for ${fileName}:`, {
@@ -368,12 +468,23 @@ async function processEnhancedImageResponse(responseText, fileName, smartFolders
       fileName
     );
     
-    return validatedResult;
+    return {
+      ...validatedResult,
+      fallback: false,
+      corrected: validatedResult.corrected || false,
+      partial: false
+    };
   } catch (e) {
     console.error('Error parsing enhanced image LLM response:', e.message);
     console.error('Raw response:', responseText);
     
-    return extractPartialImageAnalysis(responseText, fileName, smartFolders);
+    const partialResult = extractPartialImageAnalysis(responseText, fileName, smartFolders);
+    return {
+      ...partialResult,
+      fallback: false,
+      corrected: false,
+      partial: true
+    };
   }
 }
 
@@ -383,8 +494,8 @@ async function processEnhancedImageResponse(responseText, fileName, smartFolders
 async function validateAndCorrectImageResponse(analysis, smartFolders, fileName) {
   // Validate category against smart folders
   if (smartFolders && smartFolders.length > 0 && analysis.category) {
-    const validFolders = smartFolders.filter(f => f && f.name && typeof f.name === 'string');
-    const exactMatch = validFolders.find(f => 
+    const validFolders = smartFolders.filter((f) => f && f.name && typeof f.name === 'string');
+    const exactMatch = validFolders.find((f) => 
       f.name.toLowerCase().trim() === analysis.category.toLowerCase().trim()
     );
     
@@ -444,16 +555,37 @@ async function validateAndCorrectImageResponse(analysis, smartFolders, fileName)
  * Find semantic match for image categories
  */
 async function findImageSemanticMatch(suggestedCategory, validFolders) {
-  // Simple keyword-based matching for images
+  // Enhanced semantic matching for images
   const categoryLower = suggestedCategory.toLowerCase();
   
-  const match = validFolders.find(folder => {
+  // Create semantic mappings for common image terms
+  const semanticMappings = {
+    'screen': ['screenshot', 'capture', 'screen'],
+    'logo': ['brand', 'mark', 'identity', 'logo'],
+    'photo': ['picture', 'image', 'photo'],
+    'ui': ['interface', 'screen', 'screenshot'],
+    'design': ['graphic', 'visual', 'design']
+  };
+  
+  const match = validFolders.find((folder) => {
     const folderLower = folder.name.toLowerCase();
-    return folderLower.includes(categoryLower) || 
-           categoryLower.includes(folderLower) ||
-           (categoryLower.includes('screen') && folderLower.includes('screen')) ||
-           (categoryLower.includes('logo') && folderLower.includes('logo')) ||
-           (categoryLower.includes('photo') && folderLower.includes('photo'));
+    
+    // Direct substring matching
+    if (folderLower.includes(categoryLower) || categoryLower.includes(folderLower)) {
+      return true;
+    }
+    
+    // Semantic mapping check
+    for (const [folderKey, categoryTerms] of Object.entries(semanticMappings)) {
+      const folderHasKey = folderLower.includes(folderKey);
+      const categoryHasTerm = categoryTerms.some((term) => categoryLower.includes(term));
+      
+      if (folderHasKey && categoryHasTerm) {
+        return true;
+      }
+    }
+    
+    return false;
   });
   
   return match?.name || null;
@@ -478,7 +610,11 @@ async function imageAnalysisFallback(fileName, smartFolders) {
     colors: [],
     suggestedName: fileName.replace(/[^a-zA-Z0-9_-]/g, '_'),
     fallback: true,
-    enhanced: false
+    enhanced: false,
+    analysisType: 'image',
+    timestamp: new Date().toISOString(),
+    extractedText: '',
+    textConfidence: 0
   };
 }
 
@@ -493,7 +629,14 @@ function extractPartialImageAnalysis(responseText, fileName, smartFolders) {
     content_type: 'object',
     has_text: false,
     colors: [],
-    partial: true
+    partial: true,
+    fallback: false,
+    corrected: false,
+    enhanced: false,
+    analysisType: 'image',
+    timestamp: new Date().toISOString(),
+    extractedText: '',
+    textConfidence: 0
   };
   
   // Try to extract fields from response text
@@ -532,7 +675,14 @@ function getImageFallbackAnalysis(fileName, smartFolders) {
     content_type: 'object',
     has_text: false,
     colors: [],
-    fallback: true
+    fallback: true,
+    enhanced: false,
+    analysisType: 'image',
+    timestamp: new Date().toISOString(),
+    extractedText: '',
+    textConfidence: 0,
+    corrected: false,
+    partial: false
   };
 }
 
@@ -622,7 +772,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       date: new Date().toISOString().split('T')[0],
       category: intelligentCategory,
       confidence: 60,
-      error: analysis?.error || 'Ollama image analysis failed.',
+      error: analysis?.error || 'Ollama image analysis failed.'
     };
 
   } catch (error) {
@@ -643,7 +793,7 @@ async function extractTextFromImage(filePath) {
     const imageBuffer = await fs.readFile(filePath);
     const imageBase64 = imageBuffer.toString('base64');
 
-    const prompt = `Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".`;
+    const prompt = 'Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".';
 
     const response = await ollamaClient.generate({
       model: AppConfig.ai.imageAnalysis.defaultModel,
@@ -651,11 +801,11 @@ async function extractTextFromImage(filePath) {
       images: [imageBase64],
       options: {
         temperature: 0.1, // Lower temperature for text extraction
-        num_predict: 2000,
-      },
+        num_predict: 2000
+      }
     });
 
-    if (response.response && response.response.trim() !== "NO_TEXT_FOUND") {
+    if (response.response && response.response.trim() !== 'NO_TEXT_FOUND') {
       return response.response.trim();
     }
     
@@ -729,7 +879,7 @@ function getIntelligentImageKeywords(fileName, extension) {
     'image': ['image', 'visual', 'graphic']
   };
   
-  let keywords = baseKeywords[category] || ['image', 'visual'];
+  const keywords = baseKeywords[category] || ['image', 'visual'];
   
   // Add filename-based keywords
   if (lowerFileName.includes('work')) keywords.push('work');

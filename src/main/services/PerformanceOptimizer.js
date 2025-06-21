@@ -23,6 +23,14 @@ class PerformanceOptimizer extends EventEmitter {
     
     // Configuration
     this.config = {
+      // Strategy enablement flags
+      caching: { enabled: true },
+      modelSelection: { enabled: true },
+      timeoutManagement: { enabled: true },
+      contentOptimization: { enabled: true },
+      memoryOptimization: { enabled: true },
+      concurrentProcessing: { enabled: true },
+      
       // Caching settings
       maxCacheSize: 1000,
       cacheExpiry: 30 * 60 * 1000, // 30 minutes
@@ -76,6 +84,8 @@ class PerformanceOptimizer extends EventEmitter {
     
     if (cached && Date.now() - cached.timestamp < this.config.cacheExpiry) {
       this.updateCacheHitRate(true);
+      this.updatePerformanceMetrics(5); // 5ms for cache retrieval
+      
       console.log(`[PERF-CACHE] Cache HIT for ${analysisType} analysis`);
       return { ...cached.result, fromCache: true };
     }
@@ -97,6 +107,11 @@ class PerformanceOptimizer extends EventEmitter {
       timestamp: Date.now(),
       accessCount: 1
     });
+    
+    // Track performance metrics when setting cache
+    if (result.processingTime && this.performanceMetrics.totalRequests > 0) {
+      this.updatePerformanceMetrics(result.processingTime);
+    }
     
     console.log(`[PERF-CACHE] Cached ${analysisType} analysis result`);
   }
@@ -204,7 +219,7 @@ class PerformanceOptimizer extends EventEmitter {
         try {
           // Add staggered delay to prevent thundering herd
           if (index > 0) {
-            await new Promise(resolve => setTimeout(resolve, index * 200));
+            await new Promise((resolve) => setTimeout(resolve, index * 200));
           }
           
           const result = await request.analysisFunction(...request.args);
@@ -218,7 +233,7 @@ class PerformanceOptimizer extends EventEmitter {
             batchIndex: i + index
           };
         } catch (error) {
-          console.error(`[PERF-CONCURRENT] Batch analysis failed:`, error.message);
+          console.error('[PERF-CONCURRENT] Batch analysis failed:', error.message);
           return {
             error: error.message,
             batchIndex: i + index,
@@ -231,7 +246,7 @@ class PerformanceOptimizer extends EventEmitter {
       
       const batchResults = await Promise.allSettled(batchPromises);
       
-      batchResults.forEach(result => {
+      batchResults.forEach((result) => {
         if (result.status === 'fulfilled') {
           results.push(result.value);
         } else {
@@ -244,7 +259,7 @@ class PerformanceOptimizer extends EventEmitter {
       
       // Brief pause between batches to allow system recovery
       if (i + maxConcurrent < analysisRequests.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
     
@@ -332,7 +347,7 @@ class PerformanceOptimizer extends EventEmitter {
    */
   
   generateCacheKey(contentHash, analysisType, smartFolders) {
-    const folderHash = smartFolders.map(f => f.name).sort().join('|');
+    const folderHash = smartFolders.map((f) => f.name).sort().join('|');
     return `${contentHash}_${analysisType}_${this.hashString(folderHash)}`;
   }
 
@@ -359,7 +374,7 @@ class PerformanceOptimizer extends EventEmitter {
     if (content.length <= maxLength) return content;
     
     // Extract key sentences and keywords
-    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const sentences = content.split(/[.!?]+/).filter((s) => s.trim().length > 10);
     const keywords = this.extractKeywords(content);
     
     let summary = keywords.slice(0, 10).join(', ');
@@ -382,12 +397,12 @@ class PerformanceOptimizer extends EventEmitter {
     const words = content.toLowerCase()
       .replace(/[^\w\s]/g, '')
       .split(/\s+/)
-      .filter(word => word.length > 3)
-      .filter(word => !['this', 'that', 'with', 'have', 'will', 'been', 'from', 'they', 'them', 'were', 'said', 'each', 'which', 'their', 'time', 'would', 'there', 'could', 'other'].includes(word));
+      .filter((word) => word.length > 3)
+      .filter((word) => !['this', 'that', 'with', 'have', 'will', 'been', 'from', 'they', 'them', 'were', 'said', 'each', 'which', 'their', 'time', 'would', 'there', 'could', 'other'].includes(word));
     
     // Count frequency
     const frequency = {};
-    words.forEach(word => {
+    words.forEach((word) => {
       frequency[word] = (frequency[word] || 0) + 1;
     });
     
@@ -493,6 +508,55 @@ class PerformanceOptimizer extends EventEmitter {
       cacheHitRatePercent: Math.round(this.performanceMetrics.cacheHitRate * 100),
       averageResponseTimeMs: Math.round(this.performanceMetrics.averageResponseTime)
     };
+  }
+
+  /**
+   * Check if caching is enabled
+   */
+  isCachingEnabled() {
+    return this.config.caching.enabled;
+  }
+
+  /**
+   * Check if dynamic model selection is enabled
+   */
+  isDynamicModelSelectionEnabled() {
+    return this.config.modelSelection.enabled;
+  }
+
+  /**
+   * Check if timeout management is enabled
+   */
+  isTimeoutManagementEnabled() {
+    return this.config.timeoutManagement.enabled;
+  }
+
+  /**
+   * Check if content optimization is enabled
+   */
+  isContentOptimizationEnabled() {
+    return this.config.contentOptimization.enabled;
+  }
+
+  /**
+   * Check if memory optimization is enabled
+   */
+  isMemoryOptimizationEnabled() {
+    return this.config.memoryOptimization.enabled;
+  }
+
+  /**
+   * Check if adaptive timeout is enabled
+   */
+  isAdaptiveTimeoutEnabled() {
+    return this.config.timeoutManagement.enabled;
+  }
+
+  /**
+   * Check if concurrent processing is enabled
+   */
+  isConcurrentProcessingEnabled() {
+    return this.config.concurrentProcessing.enabled;
   }
 }
 

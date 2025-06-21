@@ -11,7 +11,7 @@ describe('StratoSort React App', () => {
         'utf8'
       );
       
-      expectedPhases.forEach(phase => {
+      expectedPhases.forEach((phase) => {
         expect(appContent.toLowerCase()).toContain(phase);
       });
     });
@@ -23,7 +23,7 @@ describe('StratoSort React App', () => {
       );
       
       expect(appContent).toContain('PHASE_TRANSITIONS');
-      ['WELCOME','SETUP','DISCOVER','ORGANIZE','COMPLETE'].forEach(p => {
+      ['WELCOME','SETUP','DISCOVER','ORGANIZE','COMPLETE'].forEach((p) => {
         const regex = new RegExp(`PHASES\\.${p}`);
         expect(regex.test(appContent)).toBe(true);
       });
@@ -45,7 +45,7 @@ describe('StratoSort React App', () => {
         'CompletePhase'
       ];
       
-      requiredComponents.forEach(component => {
+      requiredComponents.forEach((component) => {
         const regex = new RegExp(`(function|const|class)\\s+${component}\\b`);
         expect(regex.test(appContent)).toBe(true);
       });
@@ -65,7 +65,7 @@ describe('StratoSort React App', () => {
         'UndoRedoToolbar'
       ];
       
-      systemComponents.forEach(component => {
+      systemComponents.forEach((component) => {
         expect(appContent).toContain(component);
       });
     });

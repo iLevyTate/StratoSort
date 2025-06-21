@@ -1,0 +1,74 @@
+{
+  "productName": "StratoSort",
+  "appId": "com.stratosort.app",
+  "asar": true,
+  "asarUnpack": "**\\*.{node,dll}",
+  "files": [
+    "dist/**/*",
+    "src/main/**/*",
+    "src/preload/**/*", 
+    "src/shared/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "src/main/simple-main.js",
+    "version": "1.0.0"
+  },
+  "directories": {
+    "buildResources": "assets",
+    "output": "release/build"
+  },
+  "win": {
+    "icon": "assets/icons/icons/win/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64", "ia32"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "publisherName": "StratoSort Team"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "StratoSort"
+  },
+  "mac": {
+    "icon": "assets/icons/icons/png/512x512.png",
+    "category": "public.app-category.productivity",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["arm64", "x64"]
+      }
+    ]
+  },
+  "linux": {
+    "icon": "assets/icons/icons/png/512x512.png",
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      },
+      {
+        "target": "deb",
+        "arch": ["x64"]
+      }
+    ],
+    "category": "Office"
+  },
+  "extraResources": [
+    {
+      "from": "assets/",
+      "to": "assets/",
+      "filter": ["**/*"]
+    }
+  ]
+} 

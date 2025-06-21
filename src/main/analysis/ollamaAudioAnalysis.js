@@ -1,14 +1,17 @@
 const fs = require('fs').promises;
 const path = require('path');
+
 const { Ollama } = require('ollama');
 
 // Try to import node-wav for audio processing
-let wav = null;
+/* eslint-disable no-unused-vars */
+let _wav = null;
 try {
-  wav = require('node-wav');
+  _wav = require('node-wav');
 } catch (e) {
   console.log('node-wav not available, audio analysis will use external tools');
 }
+/* eslint-enable no-unused-vars */
 
 // App configuration for audio analysis
 const AppConfig = {
@@ -19,7 +22,7 @@ const AppConfig = {
       defaultHost: 'http://127.0.0.1:11434',
       timeout: 180000, // 3 minutes for audio processing
       temperature: 0.1,
-      maxTokens: 1000,
+      maxTokens: 1000
     }
   }
 };
@@ -43,8 +46,8 @@ async function transcribeAudioWithWhisper(filePath) {
       // Note: Audio support in Ollama may vary, this is the intended API
       audio: audioBase64,
       options: {
-        temperature: 0.1, // Low temperature for accurate transcription
-      },
+        temperature: 0.1 // Low temperature for accurate transcription
+      }
     });
 
     if (response.response && response.response.trim()) {
@@ -64,18 +67,20 @@ async function attemptSystemWhisper(filePath) {
   try {
     const { spawn } = require('child_process');
     
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       const whisper = spawn('whisper', [filePath, '--output_format', 'txt', '--output_dir', '/tmp']);
       
       let output = '';
-      let error = '';
-      
+      /* eslint-disable no-unused-vars */
+      let _error = '';
+      /* eslint-enable no-unused-vars */
+        
       whisper.stdout.on('data', (data) => {
         output += data.toString();
       });
-      
+        
       whisper.stderr.on('data', (data) => {
-        error += data.toString();
+        _error += data.toString();
       });
       
       whisper.on('close', (code) => {
@@ -106,13 +111,13 @@ async function analyzeTranscriptionWithOllama(transcription, originalFileName, s
     // Build folder categories string for the prompt
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
-      const validFolders = smartFolders.filter(f => 
+      const validFolders = smartFolders.filter((f) => 
         f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
       );
       
       if (validFolders.length > 0) {
         const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
+          .map((f) => `"${f.name.trim()}"`)
           .slice(0, 10)
           .join(', ');
         
@@ -145,9 +150,9 @@ ${transcription.substring(0, 8000)}`;
       prompt,
       options: {
         temperature: AppConfig.ai.audioAnalysis.temperature,
-        num_predict: AppConfig.ai.audioAnalysis.maxTokens,
+        num_predict: AppConfig.ai.audioAnalysis.maxTokens
       },
-      format: 'json',
+      format: 'json'
     });
 
     if (response.response) {
@@ -175,7 +180,7 @@ ${transcription.substring(0, 8000)}`;
         return {
           transcription: transcription.substring(0, 1000), // Include first 1000 chars of transcription
           ...parsedJson,
-          keywords: finalKeywords,
+          keywords: finalKeywords
         };
       } catch (e) {
         console.error('Error parsing Ollama JSON response for audio:', e.message);
@@ -253,7 +258,7 @@ async function analyzeAudioFile(filePath, smartFolders = []) {
         category: intelligentCategory,
         confidence: 70,
         has_transcription: true,
-        error: analysis?.error || 'Ollama audio analysis failed.',
+        error: analysis?.error || 'Ollama audio analysis failed.'
       };
     }
     
@@ -359,7 +364,7 @@ function getIntelligentAudioKeywords(fileName, extension) {
     'video': ['video', 'visual', 'media']
   };
   
-  let keywords = baseKeywords[category] || ['audio', 'media'];
+  const keywords = baseKeywords[category] || ['audio', 'media'];
   
   // Add filename-based keywords
   if (lowerFileName.includes('work')) keywords.push('work');

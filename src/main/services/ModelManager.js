@@ -5,6 +5,7 @@
 
 const { Ollama } = require('ollama');
 const { app } = require('electron');
+
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -96,7 +97,7 @@ class ModelManager {
 
     // Check capabilities based on model name patterns
     for (const [capability, patterns] of Object.entries(this.modelCategories)) {
-      capabilities[capability] = patterns.some(pattern => 
+      capabilities[capability] = patterns.some((pattern) => 
         modelName.includes(pattern.toLowerCase())
       );
     }
@@ -126,7 +127,7 @@ class ModelManager {
   async ensureWorkingModel() {
     // If we have a selected model, verify it still exists
     if (this.selectedModel) {
-      const modelExists = this.availableModels.some(m => m.name === this.selectedModel);
+      const modelExists = this.availableModels.some((m) => m.name === this.selectedModel);
       if (modelExists && await this.testModel(this.selectedModel)) {
         console.log(`[MODEL-MANAGER] Using existing model: ${this.selectedModel}`);
         return this.selectedModel;
@@ -153,7 +154,7 @@ class ModelManager {
 
     // Try preferred models first
     for (const preferred of this.fallbackPreferences) {
-      const model = this.availableModels.find(m => 
+      const model = this.availableModels.find((m) => 
         m.name.toLowerCase().includes(preferred.toLowerCase())
       );
       
@@ -258,7 +259,7 @@ class ModelManager {
    * Set the selected model
    */
   async setSelectedModel(modelName) {
-    if (!this.availableModels.some(m => m.name === modelName)) {
+    if (!this.availableModels.some((m) => m.name === modelName)) {
       throw new Error(`Model ${modelName} is not available`);
     }
 
@@ -274,7 +275,7 @@ class ModelManager {
     const targetModel = modelName || this.selectedModel;
     if (!targetModel) return null;
 
-    const model = this.availableModels.find(m => m.name === targetModel);
+    const model = this.availableModels.find((m) => m.name === targetModel);
     const capabilities = this.modelCapabilities.get(targetModel);
 
     return {
@@ -292,8 +293,8 @@ class ModelManager {
   async generateWithFallback(prompt, options = {}) {
     const modelsToTry = [
       this.selectedModel,
-      ...this.fallbackPreferences.filter(p => 
-        this.availableModels.some(m => m.name.includes(p))
+      ...this.fallbackPreferences.filter((p) => 
+        this.availableModels.some((m) => m.name.includes(p))
       )
     ].filter(Boolean);
 
@@ -390,7 +391,7 @@ class ModelManager {
    * Get all available models with their capabilities
    */
   getAllModelsWithCapabilities() {
-    return this.availableModels.map(model => ({
+    return this.availableModels.map((model) => ({
       name: model.name,
       size: model.size,
       modified: model.modified_at,

@@ -354,4 +354,59 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedState
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("React Error Boundary caught an error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+          <div className="p-8 max-w-md text-center bg-white rounded-lg shadow-lg">
+            <h1 className="mb-4 text-2xl font-bold text-red-600">⚠️ Application Error</h1>
+            <p className="mb-4 text-gray-600">
+              Something went wrong. Please refresh the page to try again.
+            </p>
+            <button
+              className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
+              onClick={() => window.location.reload()}
+            >
+              Reload Application
+            </button>
+            <details className="mt-4 text-left">
+              <summary className="text-sm text-gray-500 cursor-pointer">Error Details</summary>
+              <pre className="mt-2 overflow-auto text-xs text-red-600">
+                {this.state.error?.toString()}
+              </pre>
+            </details>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// ===== RENDER APP =====
+const root = ReactDOM.createRoot(document.getElementById("react-root"));
+root.render(
+  // Temporarily disable StrictMode in development to reduce duplicate API calls
+  process.env.NODE_ENV === "production" ? (
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  ) : (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  )
+);
+
+console.log("🚀 Stratosort React app loaded successfully");

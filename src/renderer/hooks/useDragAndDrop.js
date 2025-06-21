@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback } from 'react';
 
 function useDragAndDrop(onFilesDropped) {
   const [isDragging, setIsDragging] = useState(false);
@@ -12,6 +12,7 @@ function useDragAndDrop(onFilesDropped) {
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Ignore if pointer is still inside the element
     if (e.currentTarget.contains(e.relatedTarget)) return;
     setIsDragging(false);
   }, []);
@@ -21,26 +22,35 @@ function useDragAndDrop(onFilesDropped) {
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0 && onFilesDropped) {
-      const fileObjects = files.map((file) => ({
-        path: file.path || file.name,
-        name: file.name,
-        type: 'file',
-        size: file.size
-      }));
-      onFilesDropped(fileObjects);
-    }
-  }, [onFilesDropped]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length && onFilesDropped) {
+        const fileObjects = files.map((file) => ({
+          path: file.path || file.name,
+          name: file.name,
+          type: file.type || 'file',
+          size: file.size,
+        }));
+        onFilesDropped(fileObjects);
+      }
+    },
+    [onFilesDropped],
+  );
 
   return {
     isDragging,
     dragProps: {
       onDragEnter: handleDragEnter,
       onDragLeave: handleDragLeave,
-\nexport default useDragAndDrop;
+      onDragOver: handleDragOver,
+      onDrop: handleDrop,
+    },
+  };
+}
+
+export default useDragAndDrop;

@@ -52,9 +52,9 @@ class PerformanceOptimizer extends EventEmitter {
       },
       
       // Model selection
-      fastModels: ['gemma3:2b', 'phi3:mini'],
+      fastModels: ['llama3.2:latest', 'gemma3:4b'],
       standardModels: ['gemma3:4b'],
-      complexModels: ['gemma3:8b', 'llama3.2:8b']
+      complexModels: ['llava:latest', 'gemma3:4b']
     };
     
     // Initialize optimization strategies

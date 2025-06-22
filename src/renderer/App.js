@@ -2871,7 +2871,23 @@ function OrganizePhase() {
   const [processedFileIds, setProcessedFileIds] = useState(new Set()); // Track which files have been processed
 
   const analysisResults = phaseData.analysisResults || [];
-  const smartFolders = phaseData.smartFolders || [];
+  const [smartFolders, setSmartFolders] = useState(phaseData.smartFolders || []);
+
+  // Load smart folders for organize phase
+  useEffect(() => {
+    const loadSmartFolders = async () => {
+      try {
+        console.log('[ORGANIZE-PHASE] Loading smart folders...');
+        const folders = await window.electronAPI.smartFolders.get();
+        console.log('[ORGANIZE-PHASE] Loaded smart folders:', folders?.length || 0, folders?.map(f => f.name));
+        setSmartFolders(folders || []);
+      } catch (error) {
+        console.error('[ORGANIZE-PHASE] Failed to load smart folders:', error);
+      }
+    };
+    
+    loadSmartFolders();
+  }, []);
 
   // NEW: Load persisted file states and processed files
   useEffect(() => {

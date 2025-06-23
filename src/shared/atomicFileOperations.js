@@ -502,20 +502,20 @@ module.exports = {
   
   // Convenience functions
   async organizeFilesAtomically(operations) {
-    const transactionId = await atomicFileOperations.beginTransaction();
+    const transaction = atomicFileOperations.beginTransaction();
     
     try {
       // Convert operations to atomic operations
       for (const op of operations) {
-        atomicFileOperations.addOperation(transactionId, {
+        atomicFileOperations.addOperation(transaction.id, {
           type: 'move',
           source: op.originalPath,
-          destination: op.targetPath,
+          target: op.targetPath,
           metadata: op.analysisData
         });
       }
 
-      const result = await atomicFileOperations.commitTransaction(transactionId);
+      const result = await atomicFileOperations.commitTransaction(transaction.id);
       return result;
     } catch (error) {
       throw error;
@@ -523,16 +523,16 @@ module.exports = {
   },
 
   async backupAndReplace(filePath, newContent) {
-    const transactionId = await atomicFileOperations.beginTransaction();
+    const transaction = atomicFileOperations.beginTransaction();
     
     try {
-      atomicFileOperations.addOperation(transactionId, {
+      atomicFileOperations.addOperation(transaction.id, {
         type: 'create',
-        destination: filePath,
-        data: newContent
+        source: filePath,
+        content: newContent
       });
 
-      return await atomicFileOperations.commitTransaction(transactionId);
+      return await atomicFileOperations.commitTransaction(transaction.id);
     } catch (error) {
       throw error;
     }

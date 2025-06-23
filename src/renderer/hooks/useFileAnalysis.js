@@ -94,6 +94,9 @@ export function useFileAnalysis() {
         setCurrentAnalysisFile(file.name || file.path);
         setAnalysisProgress({ current: i + 1, total: files.length });
         
+        // Store analysis start time
+        const analysisStartTime = Date.now();
+        
         // Update file state to analyzing
         updateFileState(file.path, 'analyzing');
         
@@ -115,10 +118,13 @@ export function useFileAnalysis() {
               timestamp: new Date().toISOString()
             });
             
+            // Calculate accurate processing time
+            const processingTime = Date.now() - analysisStartTime;
+            
             // Update file state to ready
             updateFileState(file.path, 'ready', { 
               analysis: result.analysis,
-              processingTime: Date.now() - Date.parse(fileStates[file.path]?.timestamp || new Date())
+              processingTime: processingTime
             });
           } else {
             console.warn(`No analysis result for file: ${file.path}`);

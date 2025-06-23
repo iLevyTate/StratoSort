@@ -56,20 +56,24 @@ async function loadCustomFolders() {
     return JSON.parse(data);
   } catch (error) {
     console.log('[STARTUP] No saved custom folders found, using defaults');
-    // Return default smart folders
+    
+    // Get the Documents path for default folders
+    const documentsPath = app.getPath('documents');
+    
+    // Return default smart folders with proper paths
     return [
       {
         id: 'financial',
         name: 'Financial Documents',
         description: 'Invoices, receipts, tax documents, financial statements, bank records',
-        path: null,
+        path: path.join(documentsPath, 'Financial Documents'),
         isDefault: true
       },
       {
         id: 'projects',
         name: 'Project Files',
         description: 'Project documentation, proposals, specifications, project plans',
-        path: null,
+        path: path.join(documentsPath, 'Project Files'),
         isDefault: true
       }
     ];
@@ -1210,25 +1214,65 @@ function calculateBasicSimilarity(str1, str2) {
 ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
   try {
     const ollama = getOllama();
-    const response = await ollama.list();
+    
+    // Add timeout protection
+    const response = await Promise.race([
+      ollama.list(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Ollama request timeout (30s)')), 30000)
+      )
+    ]);
+    
+    const models = response.models || [];
+    const modelNames = models.map(m => m.name);
+    
+    // Update health status
+    systemAnalytics.ollamaHealth = {
+      status: 'healthy',
+      host: 'http://localhost:11434',
+      modelCount: models.length,
+      lastCheck: Date.now(),
+      models: modelNames
+    };
+    
+    console.log(`[OLLAMA] Found ${models.length} models:`, modelNames);
+    
     return {
-      models: response.models.map(m => m.name),
+      models: modelNames,
       selectedModel: getOllamaModel(),
       ollamaHealth: systemAnalytics.ollamaHealth 
     };
   } catch (error) {
     console.error('[IPC] Error fetching Ollama models:', error);
-    if (error.cause && error.cause.code === 'ECONNREFUSED') {
-      systemAnalytics.ollamaHealth = { 
-        status: 'unhealthy', 
-        error: 'Connection refused. Ensure Ollama is running.', 
-        lastCheck: Date.now() 
-      };
+    
+    // Determine error type for better user feedback
+    let errorType = 'unknown';
+    let userMessage = error.message;
+    
+    if (error.message.includes('ECONNREFUSED') || error.cause?.code === 'ECONNREFUSED') {
+      errorType = 'connection_refused';
+      userMessage = 'Ollama service is not running. Please start with: ollama serve';
+    } else if (error.message.includes('timeout')) {
+      errorType = 'timeout';
+      userMessage = 'Ollama service is not responding. Check if it\'s running properly.';
+    } else if (error.message.includes('ENOTFOUND')) {
+      errorType = 'host_not_found';
+      userMessage = 'Cannot connect to Ollama host. Check your network connection.';
     }
+    
+    systemAnalytics.ollamaHealth = { 
+      status: 'unhealthy', 
+      error: userMessage,
+      errorType,
+      host: 'http://localhost:11434',
+      lastCheck: Date.now() 
+    };
+    
     return { 
       models: [], 
       selectedModel: getOllamaModel(), 
-      error: error.message, 
+      error: userMessage,
+      errorType,
       ollamaHealth: systemAnalytics.ollamaHealth 
     };
   }
@@ -1236,43 +1280,140 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
 
 // Ollama connection test
 ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async (event, hostUrl) => {
+  const testUrl = hostUrl || 'http://localhost:11434';
+  console.log(`[OLLAMA] Testing connection to ${testUrl}...`);
+  
   try {
-    const testUrl = hostUrl || 'http://localhost:11434';
     const testOllama = new Ollama({ host: testUrl });
     
-    // Test connection by listing models
-    const response = await testOllama.list();
+    // Test connection with timeout
+    const response = await Promise.race([
+      testOllama.list(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection test timeout (15s)')), 15000)
+      )
+    ]);
+    
+    const models = response.models || [];
+    const modelNames = models.map(m => m.name);
+    
+    // Check for required models
+    const requiredModels = ['gemma3:4b', 'whisper'];
+    const missingModels = requiredModels.filter(required => 
+      !modelNames.some(installed => 
+        installed === required || installed.startsWith(required + ':')
+      )
+    );
     
     systemAnalytics.ollamaHealth = {
       status: 'healthy',
       host: testUrl,
-      modelCount: response.models.length,
+      modelCount: models.length,
+      models: modelNames,
+      missingModels,
       lastCheck: Date.now()
     };
+    
+    console.log(`[OLLAMA] Connection test successful - ${models.length} models found`);
+    if (missingModels.length > 0) {
+      console.log(`[OLLAMA] Missing required models:`, missingModels);
+    }
     
     return {
       success: true,
       host: testUrl,
-      modelCount: response.models.length,
-      models: response.models.map(m => m.name),
+      modelCount: models.length,
+      models: modelNames,
+      missingModels,
       ollamaHealth: systemAnalytics.ollamaHealth
     };
   } catch (error) {
     console.error('[IPC] Ollama connection test failed:', error);
     
+    // Provide specific error guidance
+    let errorType = 'unknown';
+    let userMessage = error.message;
+    let suggestions = [];
+    
+    if (error.message.includes('ECONNREFUSED')) {
+      errorType = 'connection_refused';
+      userMessage = 'Ollama service is not running';
+      suggestions = [
+        'Start Ollama service: ollama serve',
+        'Check if another service is using port 11434',
+        'Restart Ollama if it was previously running'
+      ];
+    } else if (error.message.includes('timeout')) {
+      errorType = 'timeout';
+      userMessage = 'Ollama service is not responding';
+      suggestions = [
+        'Check if Ollama is running: ollama serve',
+        'Verify system resources (CPU/Memory)',
+        'Try restarting Ollama service'
+      ];
+    } else if (error.message.includes('ENOTFOUND')) {
+      errorType = 'host_not_found';
+      userMessage = `Cannot resolve host: ${testUrl}`;
+      suggestions = [
+        'Check the Ollama host URL',
+        'Verify network connectivity',
+        'Use default: http://localhost:11434'
+      ];
+    }
+    
     systemAnalytics.ollamaHealth = {
       status: 'unhealthy',
-      host: hostUrl || 'http://localhost:11434',
-      error: error.message,
+      host: testUrl,
+      error: userMessage,
+      errorType,
+      suggestions,
       lastCheck: Date.now()
     };
     
     return {
       success: false,
-      host: hostUrl || 'http://localhost:11434',
-      error: error.message,
+      host: testUrl,
+      error: userMessage,
+      errorType,
+      suggestions,
       ollamaHealth: systemAnalytics.ollamaHealth
     };
+  }
+});
+
+// Ollama set selected model
+ipcMain.handle(IPC_CHANNELS.OLLAMA.SET_MODEL, async (_event, modelName) => {
+  try {
+    if (!modelName || typeof modelName !== 'string') {
+      throw new Error('Invalid model name provided');
+    }
+    
+    console.log(`[OLLAMA] Setting model to: ${modelName}`);
+    await setOllamaModel(modelName);
+    
+    // Verify the model is actually available
+    const ollama = getOllama();
+    const response = await ollama.list();
+    const availableModels = response.models.map(m => m.name);
+    
+    const modelExists = availableModels.some(available => 
+      available === modelName || available.startsWith(modelName + ':')
+    );
+    
+    if (!modelExists) {
+      console.warn(`[OLLAMA] Model ${modelName} not found in available models`);
+      return { 
+        success: false, 
+        error: `Model '${modelName}' is not installed. Run: ollama pull ${modelName}`,
+        availableModels
+      };
+    }
+    
+    console.log(`[OLLAMA] Successfully set model to: ${modelName}`);
+    return { success: true, selectedModel: modelName };
+  } catch (error) {
+    console.error('[IPC] Failed to set Ollama model:', error);
+    return { success: false, error: error.message };
   }
 });
 
@@ -1689,8 +1830,8 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
   }
 });
 
-// Audio analysis handlers
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
+// AUDIO ANALYSIS DISABLED - handler removed
+/* ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
   console.log('[IPC] Audio analysis requested for:', filePath);
   
   try {
@@ -1735,24 +1876,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
     });
     throw error;
   }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) => {
-  console.log('[IPC] Audio transcription requested for:', filePath);
-  
-  try {
-    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-    const result = await analyzeAudioFile(filePath, [], { transcriptOnly: true });
-    
-    return { 
-      success: true, 
-      transcript: result.transcript || result.text || result.summary || ''
-    };
-  } catch (error) {
-    console.error('[IPC] Audio transcription failed:', error);
-    return { success: false, error: error.message };
-  }
-});
+}); */
 
 // Settings handlers
 ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
@@ -1831,7 +1955,7 @@ if (!gotTheLock) {
       console.log('[MAIN] Service integration initialized successfully');
       
       // Verify AI models on startup
-      const { ModelVerifier } = require('./services/ModelVerifier');
+      const ModelVerifier = require('./services/ModelVerifier');
       const modelVerifier = new ModelVerifier();
       const modelStatus = await modelVerifier.verifyEssentialModels();
       
@@ -2245,44 +2369,44 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
   }
 });
 
-// Audio analysis handler REMOVED - audio analysis disabled
-// ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-//   try {
-//     console.log(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-//     
-//     // Get current smart folders to pass to analysis
-//     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-//     const folderCategories = smartFolders.map(f => ({
-//       name: f.name,
-//       description: f.description || '',
-//       id: f.id
-//     }));
-//     
-//     console.log(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-//     
-//     const result = await analyzeAudioFile(filePath, folderCategories);
-//     
-//     console.log(`[IPC-AUDIO-ANALYSIS] Result:`, {
-//       success: !result.error,
-//       category: result.category,
-//       keywords: result.keywords?.length || 0,
-//       confidence: result.confidence,
-//       has_transcription: result.has_transcription
-//     });
-//     
-//     return result;
-//   } catch (error) {
-//     console.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
-//     return {
-//       error: error.message,
-//       suggestedName: path.basename(filePath, path.extname(filePath)),
-//       category: 'audio',
-//       keywords: [],
-//       confidence: 0,
-//       has_transcription: false
-//     };
-//   }
-// });
+// AUDIO ANALYSIS DISABLED - handler removed
+/* ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
+  try {
+    console.log(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
+    
+    // Get current smart folders to pass to analysis
+    const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
+    const folderCategories = smartFolders.map(f => ({
+      name: f.name,
+      description: f.description || '',
+      id: f.id
+    }));
+    
+    console.log(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
+    
+    const result = await analyzeAudioFile(filePath, folderCategories);
+    
+    console.log(`[IPC-AUDIO-ANALYSIS] Result:`, {
+      success: !result.error,
+      category: result.category,
+      keywords: result.keywords?.length || 0,
+      confidence: result.confidence,
+      has_transcription: result.has_transcription
+    });
+    
+    return result;
+  } catch (error) {
+    console.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
+    return {
+      error: error.message,
+      suggestedName: path.basename(filePath, path.extname(filePath)),
+      category: 'audio',
+      keywords: [],
+      confidence: 0,
+      has_transcription: false
+    };
+  }
+}); */
 
 
 // NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error

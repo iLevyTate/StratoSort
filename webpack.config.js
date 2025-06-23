@@ -35,6 +35,9 @@ module.exports = (env, argv) => {
     },
     resolve: {
       extensions: ['.js', '.jsx'],
+      alias: {
+        '@': path.resolve(__dirname, 'src/renderer')
+      },
       fallback: {
         "path": require.resolve("path-browserify"),
         "os": require.resolve("os-browserify/browser"),

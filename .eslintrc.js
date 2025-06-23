@@ -99,7 +99,12 @@ module.exports = {
       anonymous: 'always',
       named: 'never',
       asyncArrow: 'always'
-    }]
+    }],
+    
+    // Phase 0 Safety Net Rules
+    'max-lines-per-function': ['error', { max: 300, skipBlankLines: true, skipComments: true }],
+    'no-magic-numbers': ['warn', { ignore: [0, 1, -1], ignoreArrayIndexes: true }],
+    'no-unused-expressions': 'error'
   },
   overrides: [
     {

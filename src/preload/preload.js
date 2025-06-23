@@ -259,6 +259,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     open: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FILE, filePath),
     reveal: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.REVEAL_FILE, filePath),
     copy: (sourcePath, destinationPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.COPY_FILE, sourcePath, destinationPath),
+    deleteFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FOLDER, folderPath),
     openFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FOLDER, folderPath),
     // Add file analysis method that routes to appropriate analyzer
     analyze: (filePath) => {
@@ -328,7 +329,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Ollama (only implemented endpoints)
   ollama: {
     getModels: () => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.GET_MODELS),
-    testConnection: (hostUrl) => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl)
+    testConnection: (hostUrl) => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl),
+    setModel: (modelName) => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.SET_MODEL, modelName)
   },
 
   // Event Listeners (with automatic cleanup)

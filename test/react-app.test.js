@@ -7,7 +7,7 @@ describe('StratoSort React App', () => {
       const expectedPhases = ['welcome', 'setup', 'discover', 'organize', 'complete'];
       
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       
@@ -18,7 +18,7 @@ describe('StratoSort React App', () => {
 
     test('defines phase transitions correctly', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       
@@ -33,7 +33,7 @@ describe('StratoSort React App', () => {
   describe('Component Structure', () => {
     test('defines all required phase components', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       
@@ -53,7 +53,7 @@ describe('StratoSort React App', () => {
 
     test('defines system components', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       
@@ -65,7 +65,7 @@ describe('StratoSort React App', () => {
   describe('File Processing', () => {
     test('drag and drop functionality is implemented', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'),
+        path.join(__dirname, '../src/renderer/App.jsx'),
         'utf8'
       );
 
@@ -74,7 +74,7 @@ describe('StratoSort React App', () => {
 
     test('file analysis utility function exists', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'),
+        path.join(__dirname, '../src/renderer/App.jsx'),
         'utf8'
       );
 
@@ -85,7 +85,7 @@ describe('StratoSort React App', () => {
   describe('Undo/Redo System', () => {
     test('undo/redo system is imported and used', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       
@@ -93,7 +93,7 @@ describe('StratoSort React App', () => {
     });
 
     test('undo/redo component file exists', () => {
-      const undoRedoPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
+      const undoRedoPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx');
       expect(fs.existsSync(undoRedoPath)).toBe(true);
     });
   });
@@ -101,7 +101,7 @@ describe('StratoSort React App', () => {
   describe('Integration Testing', () => {
     test('React DOM rendering is properly configured', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/App.jsx'), 
         'utf8'
       );
       

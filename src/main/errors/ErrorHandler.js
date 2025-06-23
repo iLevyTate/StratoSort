@@ -4,8 +4,10 @@
  */
 
 const { app, dialog, BrowserWindow } = require('electron');
+
 const fs = require('fs').promises;
 const path = require('path');
+
 const { ERROR_TYPES } = require('../../shared/constants');
 
 class ErrorHandler {
@@ -210,7 +212,7 @@ class ErrorHandler {
     };
 
     try {
-      const logLine = JSON.stringify(logEntry) + '\n';
+      const logLine = `${JSON.stringify(logEntry)  }\n`;
       await fs.appendFile(this.currentLogFile, logLine);
     } catch (error) {
       console.error('Failed to write to log file:', error);
@@ -226,14 +228,14 @@ class ErrorHandler {
       const lines = logContent.trim().split('\n');
       const errors = lines
         .slice(-count)
-        .map(line => {
+        .map((line) => {
           try {
             return JSON.parse(line);
           } catch {
             return null;
           }
         })
-        .filter(entry => entry && ['ERROR', 'CRITICAL'].includes(entry.level));
+        .filter((entry) => entry && ['ERROR', 'CRITICAL'].includes(entry.level));
       
       return errors;
     } catch (error) {

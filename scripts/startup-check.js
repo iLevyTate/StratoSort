@@ -35,11 +35,11 @@ async function checkOllamaHealth() {
     
     // Check for required models
     const requiredModels = ['gemma3:4b', 'whisper'];
-    const installedModels = data.models.map(m => m.name);
+    const installedModels = data.models.map((m) => m.name);
     
-    const missingModels = requiredModels.filter(required => 
-      !installedModels.some(installed => 
-        installed === required || installed.startsWith(required + ':')
+    const missingModels = requiredModels.filter((required) => 
+      !installedModels.some((installed) => 
+        installed === required || installed.startsWith(`${required  }:`)
       )
     );
     
@@ -70,8 +70,8 @@ async function quickStartupCheck() {
   console.log('');
   
   // Summary
-  const failedChecks = checks.filter(c => !c.healthy);
-  const warningChecks = checks.filter(c => c.healthy && c.warnings?.length > 0);
+  const failedChecks = checks.filter((c) => !c.healthy);
+  const warningChecks = checks.filter((c) => c.healthy && c.warnings?.length > 0);
   
   if (failedChecks.length === 0) {
     console.log(`${colors.green}🎉 All systems ready! Starting StratoSort...${colors.reset}`);
@@ -90,9 +90,9 @@ async function quickStartupCheck() {
 
 // Main execution
 if (require.main === module) {
-  quickStartupCheck().then(ready => {
+  quickStartupCheck().then((ready) => {
     process.exit(ready ? 0 : 1);
-  }).catch(error => {
+  }).catch((error) => {
     console.error(`${colors.red}Startup check failed: ${error.message}${colors.reset}`);
     process.exit(1);
   });

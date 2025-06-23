@@ -46,7 +46,7 @@ const IPC_CHANNELS = {
     DELETE_FOLDER: 'delete-folder',
     DELETE_FILE: 'delete-file',
     OPEN_FILE: 'open-file',
-    REVEAL_FILE: 'reveal-file',
+    REVEAL_IN_FOLDER: 'reveal-file',
     COPY_FILE: 'copy-file',
     OPEN_FOLDER: 'open-folder',
     PERFORM_OPERATION: 'perform-file-operation'
@@ -109,7 +109,8 @@ const IPC_CHANNELS = {
   // System Monitoring
   SYSTEM: {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
-    GET_METRICS: 'get-system-metrics'
+    GET_METRICS: 'get-system-metrics',
+    SCAN_COMMON_DIRECTORIES: 'scan-common-directories'
   },
   
   // Menu Actions

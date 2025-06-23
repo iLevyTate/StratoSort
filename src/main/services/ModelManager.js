@@ -9,6 +9,8 @@ const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 
+const { logger } = require('../../shared/logger');
+
 class ModelManager {
   constructor(host = 'http://127.0.0.1:11434') {
     this.ollamaClient = new Ollama({ host });
@@ -300,7 +302,10 @@ class ModelManager {
 
     for (const modelName of modelsToTry) {
       try {
-        console.log(`[MODEL-MANAGER] Attempting generation with: ${modelName}`);
+        logger.debug('Attempting generation with model', {
+          component: 'model-manager',
+          modelName
+        });
         
         const response = await this.ollamaClient.generate({
           model: modelName,

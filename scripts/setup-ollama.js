@@ -6,8 +6,8 @@
  */
 
 const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+// const fs = require('fs');  // Removed - unused
+// const path = require('path');  // Removed - unused
 
 // ANSI color codes
 const colors = {
@@ -86,11 +86,11 @@ class OllamaSetup {
         break;
       case 'info':
         console.log(`${colors.blue}ℹ️  ${prefix} ${message}${colors.reset}`);
-    break;
+        break;
       case 'progress':
         console.log(`${colors.cyan}🔄 ${prefix} ${message}${colors.reset}`);
-    break;
-  default:
+        break;
+      default:
         console.log(`${prefix} ${message}`);
     }
   }
@@ -175,7 +175,7 @@ class OllamaSetup {
       }
       
       const data = await response.json();
-      return data.models.map(m => m.name);
+      return data.models.map((m) => m.name);
     } catch (error) {
       this.log(`Error fetching installed models: ${error.message}`, 'error');
       return [];
@@ -254,8 +254,8 @@ class OllamaSetup {
     const presentModels = [];
     
     for (const model of allModels) {
-      const isInstalled = installedModels.some(installed => 
-        installed === model.name || installed.startsWith(model.name + ':')
+      const isInstalled = installedModels.some((installed) => 
+        installed === model.name || installed.startsWith(`${model.name  }:`)
       );
       
       if (isInstalled) {
@@ -303,8 +303,8 @@ class OllamaSetup {
     }
     
     // Install required models first
-    const requiredMissing = missingModels.filter(m => m.required);
-    const optionalMissing = missingModels.filter(m => !m.required);
+    const requiredMissing = missingModels.filter((m) => m.required);
+    const optionalMissing = missingModels.filter((m) => !m.required);
     
     for (const model of requiredMissing) {
       await this.installModel(model);
@@ -358,7 +358,7 @@ class OllamaSetup {
       console.log('');
     }
     
-    const requiredFailed = this.failedModels.filter(m => m.required);
+    const requiredFailed = this.failedModels.filter((m) => m.required);
     if (requiredFailed.length === 0) {
       console.log(`${colors.green}🎉 Ollama setup completed successfully!${colors.reset}`);
       console.log(`${colors.green}StratoSort AI functionality is ready to use.${colors.reset}\n`);
@@ -413,9 +413,9 @@ if (require.main === module) {
   const setup = new OllamaSetup();
   const interactive = !process.argv.includes('--no-interactive');
   
-  setup.run(interactive).then(success => {
+  setup.run(interactive).then((success) => {
     process.exit(success ? 0 : 1);
-  }).catch(error => {
+  }).catch((error) => {
     console.error(`${colors.red}Setup failed: ${error.message}${colors.reset}`);
     process.exit(1);
   });

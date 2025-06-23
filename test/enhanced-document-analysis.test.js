@@ -428,7 +428,7 @@ describe('Enhanced Document Analysis', () => {
   describe('Enhanced Metadata', () => {
     test('should include enhanced metadata in results', async () => {
       // Use long content to trigger enhanced analysis  
-      const longContent = 'Research document with extensive analysis ' + 'and detailed content '.repeat(50);
+      const longContent = `Research document with extensive analysis ${  'and detailed content '.repeat(50)}`;
       
       const result = await analyzeTextWithOllama(longContent, 'research.pdf', []);
 

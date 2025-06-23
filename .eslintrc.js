@@ -1,5 +1,13 @@
 module.exports = {
   root: true,
+  ignorePatterns: [
+    'dist/',
+    'node_modules/',
+    'release/',
+    '*.min.js',
+    'build/',
+    'coverage/'
+  ],
   env: {
     browser: true,
     node: true,

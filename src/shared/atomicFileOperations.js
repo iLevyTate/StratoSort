@@ -323,13 +323,13 @@ class AtomicFileOperations {
       for (const operation of tx.operations) {
         try {
           await this.executeOperation(operation, transactionId);
-            results.push({
+          results.push({
             operation,
-              success: true,
+            success: true,
             timestamp: new Date()
-            });
+          });
           successCount++;
-          } catch (error) {
+        } catch (error) {
           results.push({
             operation,
             success: false,

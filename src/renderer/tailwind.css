@@ -155,11 +155,11 @@
 
   /* Empty States */
   .empty-state {
-    @apply text-center py-12;
+    @apply text-center py-8;
   }
 
   .empty-state-icon {
-    @apply text-6xl mb-4 opacity-20;
+    @apply text-4xl mb-3 opacity-30;
   }
 
   .empty-state-text {

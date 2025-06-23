@@ -1,0 +1,91 @@
+:root {
+  /* Light theme - Professional blue-gray palette */
+  --color-primary: 219 78% 58%;     /* Modern blue #3B82F6 */
+  --color-success: 142 76% 36%;     /* Professional green #059669 */
+  --color-warning: 32 95% 44%;      /* Warm amber #D97706 */
+  --color-danger: 0 72% 51%;        /* Clear red #DC2626 */
+  --color-info: 219 78% 58%;        /* Same as primary for consistency */
+  
+  /* Neutral surfaces - Blue-gray tinted */
+  --color-surface: 210 20% 98%;     /* Very light blue-gray #FAFBFC */
+  --color-surface-secondary: 210 17% 95%;  /* Light blue-gray #F1F3F5 */
+  --color-surface-tertiary: 210 14% 91%;   /* Medium blue-gray #E5E9EC */
+  --color-surface-elevated: 210 20% 99%;   /* Elevated surface #FCFCFD */
+  --color-surface-overlay: 210 20% 98%;    /* Modal/overlay surface */
+  --color-surface-backdrop: 215 25% 27%;   /* Backdrop/scrim */
+  
+  /* Borders - Subtle blue-gray */
+  --color-border: 214 20% 85%;      /* Light border #D1D9E0 */
+  --color-border-medium: 214 25% 75%; /* Medium border #B8C5D1 */
+  --color-border-strong: 214 30% 65%; /* Strong border #9FADC0 */
+  --color-border-focus: 219 78% 58%; /* Focus border (primary) */
+  --color-border-hover: 214 25% 70%; /* Hover border */
+  
+  /* Text colors - High contrast blue-gray */
+  --color-text-primary: 215 25% 27%;    /* Dark blue-gray #3F4B5C */
+  --color-text-secondary: 215 15% 45%;  /* Medium blue-gray #6B7684 */
+  --color-text-muted: 215 10% 65%;      /* Light blue-gray #9BA3AF */
+  --color-text-placeholder: 215 8% 75%; /* Placeholder text #B8C5D1 */
+  --color-text-disabled: 215 8% 80%;    /* Disabled text #C8D1DB */
+  --color-text-inverse: 210 20% 98%;    /* Light text for dark backgrounds */
+  
+  /* Interactive states */
+  --color-interactive-hover: 210 17% 92%; /* Hover background */
+  --color-interactive-active: 210 14% 88%; /* Active/pressed background */
+  --color-interactive-focus: 219 78% 95%; /* Focus background */
+  --color-interactive-disabled: 210 14% 94%; /* Disabled background */
+  
+  /* Status colors - Enhanced */
+  --color-status-pending: 45 93% 47%;   /* Orange #F59E0B */
+  --color-status-processing: 219 78% 58%; /* Blue (primary) */
+  --color-status-completed: 142 76% 36%; /* Green (success) */
+  --color-status-failed: 0 72% 51%;     /* Red (danger) */
+  --color-status-cancelled: 215 15% 45%; /* Gray (secondary) */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark theme - Consistent with light theme ratios */
+    --color-primary: 219 78% 65%;     /* Lighter blue for dark bg */
+    --color-success: 142 76% 45%;     /* Lighter green for dark bg */
+    --color-warning: 32 95% 55%;      /* Lighter amber for dark bg */
+    --color-danger: 0 72% 60%;        /* Lighter red for dark bg */
+    --color-info: 219 78% 65%;        /* Same as primary */
+    
+    /* Dark surfaces */
+    --color-surface: 215 28% 9%;      /* Very dark blue-gray #0F1419 */
+    --color-surface-secondary: 215 25% 12%; /* Dark blue-gray #181D25 */
+    --color-surface-tertiary: 215 22% 15%;  /* Medium dark blue-gray #212731 */
+    --color-surface-elevated: 215 28% 11%;  /* Elevated dark surface */
+    --color-surface-overlay: 215 25% 14%;   /* Modal/overlay dark surface */
+    --color-surface-backdrop: 215 25% 5%;   /* Dark backdrop */
+    
+    /* Dark borders */
+    --color-border: 215 20% 25%;      /* Dark border #374151 */
+    --color-border-medium: 215 25% 35%; /* Medium dark border #4B5563 */
+    --color-border-strong: 215 30% 45%; /* Strong dark border #6B7280 */
+    --color-border-focus: 219 78% 65%; /* Focus border (primary) */
+    --color-border-hover: 215 25% 40%; /* Hover border */
+    
+    /* Dark text colors */
+    --color-text-primary: 210 17% 95%;    /* Light text #F1F3F5 */
+    --color-text-secondary: 210 14% 83%;  /* Medium light text #D1D9E0 */
+    --color-text-muted: 210 11% 71%;      /* Muted light text #B8C5D1 */
+    --color-text-placeholder: 210 11% 60%; /* Placeholder text */
+    --color-text-disabled: 210 11% 50%;   /* Disabled text */
+    --color-text-inverse: 215 25% 27%;    /* Dark text for light backgrounds */
+    
+    /* Dark interactive states */
+    --color-interactive-hover: 215 25% 18%; /* Dark hover background */
+    --color-interactive-active: 215 22% 22%; /* Dark active background */
+    --color-interactive-focus: 219 78% 15%; /* Dark focus background */
+    --color-interactive-disabled: 215 22% 12%; /* Dark disabled background */
+    
+    /* Dark status colors */
+    --color-status-pending: 45 93% 55%;   /* Lighter orange for dark bg */
+    --color-status-processing: 219 78% 65%; /* Lighter blue for dark bg */
+    --color-status-completed: 142 76% 45%; /* Lighter green for dark bg */
+    --color-status-failed: 0 72% 60%;     /* Lighter red for dark bg */
+    --color-status-cancelled: 210 14% 83%; /* Lighter gray for dark bg */
+  }
+} 

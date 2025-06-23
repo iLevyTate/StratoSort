@@ -51,8 +51,8 @@ class AnalysisHistoryService {
       schemaVersion: this.SCHEMA_VERSION,
       maxHistoryEntries: this.MAX_HISTORY_ENTRIES,
       retentionDays: 365, // Keep analysis for 1 year
-      enableRAG: true,
-      enableFullTextSearch: true,
+      enableRAG: false, // Disabled until RAG integration complete
+      enableFullTextSearch: false, // Disabled until full-text engine ready
       compressionEnabled: false, // For future use
       backupEnabled: true,
       backupFrequencyDays: 7,
@@ -426,8 +426,24 @@ class AnalysisHistoryService {
   }
 
   async migrateHistory() {
-    // Future migration logic for schema changes
-    console.log('Schema migration not yet implemented');
+    try {
+      console.log('[MIGRATE] Starting analysis-history schema migration');
+
+      // For first migration simply bump schema version and ensure required fields exist
+      this.analysisHistory.schemaVersion = this.SCHEMA_VERSION;
+
+      // Add missing fields that may be required by newer code
+      this.analysisHistory.metadata = this.analysisHistory.metadata || {};
+      this.analysisHistory.metadata.lastCleanup = this.analysisHistory.metadata.lastCleanup || null;
+
+      // Persist immediately so older installs don't repeat migration every boot
+      await this.saveHistory();
+      console.log('[MIGRATE] Analysis-history migration complete');
+    } catch (error) {
+      console.error('[MIGRATE] Failed to migrate analysis-history:', error);
+      // Fallback: create fresh structures to prevent runtime crash
+      await this.createDefaultStructures();
+    }
   }
 
   async createDefaultStructures() {

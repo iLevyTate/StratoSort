@@ -11,11 +11,13 @@ const path = require('path');
 const crypto = require('crypto');
 
 /**
- * Transaction-based file operation manager
+ * Atomic File Operations with Transaction Support
+ * Provides ACID-compliant file operations with rollback capabilities
  */
 class AtomicFileOperations {
   constructor() {
-    this.activeTransactions = new Map();
+    this.transactions = new Map();
+    this.lockManager = new Map();
     this.backupDirectory = null;
     this.operationTimeout = 30000; // 30 seconds
   }
@@ -38,418 +40,482 @@ class AtomicFileOperations {
   }
 
   /**
-   * Generate unique transaction ID
+   * Begin a new transaction
+   * @param {string} transactionId - Unique transaction identifier
+   * @returns {Object} Transaction context
    */
-  generateTransactionId() {
-    return crypto.randomBytes(16).toString('hex');
-  }
-
-  /**
-   * Create a backup of a file before modification
-   */
-  async createBackup(filePath, transactionId) {
-    await this.initializeBackupDirectory();
+  beginTransaction(transactionId = null) {
+    const txId = transactionId || crypto.randomUUID();
     
-    const filename = path.basename(filePath);
-    const backupPath = path.join(this.backupDirectory, `${transactionId}_${filename}`);
-    
-    try {
-      await fs.copyFile(filePath, backupPath);
-      return backupPath;
-    } catch (error) {
-      throw new Error(`Backup creation failed: ${error.message}`);
+    if (this.transactions.has(txId)) {
+      throw new Error(`Transaction ${txId} already exists`);
     }
-  }
 
-  /**
-   * Begin a new atomic transaction
-   */
-  async beginTransaction(operations = []) {
-    const transactionId = this.generateTransactionId();
     const transaction = {
-      id: transactionId,
+      id: txId,
       operations: [],
-      backups: [],
-      startTime: Date.now(),
-      status: 'active'
+      backups: new Map(),
+      locks: new Set(),
+      status: 'active',
+      createdAt: new Date()
     };
 
-    this.activeTransactions.set(transactionId, transaction);
-    
-    return transactionId;
+    this.transactions.set(txId, transaction);
+    return transaction;
   }
 
   /**
    * Add an operation to the transaction
+   * @param {string} transactionId - Transaction ID
+   * @param {Object} operation - Operation details
    */
   addOperation(transactionId, operation) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) {
+    const tx = this.transactions.get(transactionId);
+    if (!tx) {
       throw new Error(`Transaction ${transactionId} not found`);
     }
 
-    if (transaction.status !== 'active') {
+    if (tx.status !== 'active') {
       throw new Error(`Transaction ${transactionId} is not active`);
     }
 
-    transaction.operations.push({
+    // Validate operation
+    this.validateOperation(operation);
+    
+    tx.operations.push({
       ...operation,
-      id: crypto.randomBytes(8).toString('hex'),
-      timestamp: Date.now()
+      id: crypto.randomUUID(),
+      addedAt: new Date()
     });
   }
 
   /**
-   * Execute a single file operation with backup
+   * Validate operation structure
+   * @param {Object} operation - Operation to validate
    */
-  async executeOperation(transactionId, operation) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) {
+  validateOperation(operation) {
+    const requiredFields = ['type', 'source'];
+    const validTypes = ['move', 'copy', 'delete', 'create'];
+
+    for (const field of requiredFields) {
+      if (!operation[field]) {
+        throw new Error(`Operation missing required field: ${field}`);
+      }
+    }
+
+    if (!validTypes.includes(operation.type)) {
+      throw new Error(`Invalid operation type: ${operation.type}`);
+    }
+
+    if (['move', 'copy'].includes(operation.type) && !operation.target) {
+      throw new Error(`Operation type ${operation.type} requires target field`);
+    }
+  }
+
+  /**
+   * Acquire file lock
+   * @param {string} filePath - Path to lock
+   * @param {string} transactionId - Transaction ID
+   */
+  async acquireLock(filePath, transactionId) {
+    const normalizedPath = path.resolve(filePath);
+    
+    if (this.lockManager.has(normalizedPath)) {
+      const existingTx = this.lockManager.get(normalizedPath);
+      if (existingTx !== transactionId) {
+        throw new Error(`File ${normalizedPath} is locked by transaction ${existingTx}`);
+      }
+    }
+
+    this.lockManager.set(normalizedPath, transactionId);
+    
+    const tx = this.transactions.get(transactionId);
+    if (tx) {
+      tx.locks.add(normalizedPath);
+    }
+  }
+
+  /**
+   * Release file lock
+   * @param {string} filePath - Path to unlock
+   * @param {string} transactionId - Transaction ID
+   */
+  releaseLock(filePath, transactionId) {
+    const normalizedPath = path.resolve(filePath);
+    
+    if (this.lockManager.get(normalizedPath) === transactionId) {
+      this.lockManager.delete(normalizedPath);
+      
+      const tx = this.transactions.get(transactionId);
+      if (tx) {
+        tx.locks.delete(normalizedPath);
+      }
+    }
+  }
+
+  /**
+   * Create backup of file before modification
+   * @param {string} filePath - Path to backup
+   * @param {string} transactionId - Transaction ID
+   */
+  async createBackup(filePath, transactionId) {
+    const tx = this.transactions.get(transactionId);
+    if (!tx) {
       throw new Error(`Transaction ${transactionId} not found`);
     }
 
-    const { type, source, destination, data } = operation;
+    try {
+      const normalizedPath = path.resolve(filePath);
+      
+      // Check if file exists
+      const exists = await fs.access(normalizedPath).then(() => true).catch(() => false);
+      
+      if (exists) {
+        const backupId = crypto.randomUUID();
+        const backupPath = path.join(
+          path.dirname(normalizedPath),
+          `.backup_${backupId}_${path.basename(normalizedPath)}`
+        );
+        
+        await fs.copyFile(normalizedPath, backupPath);
+        
+        tx.backups.set(normalizedPath, {
+          backupPath,
+          backupId,
+          originalPath: normalizedPath,
+          createdAt: new Date()
+        });
+      } else {
+        // File doesn't exist, record this for rollback
+        tx.backups.set(normalizedPath, {
+          backupPath: null,
+          backupId: null,
+          originalPath: normalizedPath,
+          existed: false,
+          createdAt: new Date()
+        });
+      }
+    } catch (error) {
+      throw new Error(`Failed to create backup for ${filePath}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Execute a single operation
+   * @param {Object} operation - Operation to execute
+   * @param {string} transactionId - Transaction ID
+   */
+  async executeOperation(operation, transactionId) {
+    await this.acquireLock(operation.source, transactionId);
+    
+    if (operation.target) {
+      await this.acquireLock(operation.target, transactionId);
+    }
+
+    // Create backup before modification
+    await this.createBackup(operation.source, transactionId);
+    
+    if (operation.target) {
+      await this.createBackup(operation.target, transactionId);
+    }
 
     try {
-      let backupPath = null;
-
-      // Create backup for existing files
-      if (type === 'move' || type === 'copy') {
-        if (await this.fileExists(source)) {
-          backupPath = await this.createBackup(source, transactionId);
-          transaction.backups.push({ source, backup: backupPath });
-        }
-      }
-
-      // Execute the operation
-      switch (type) {
+      switch (operation.type) {
         case 'move':
-          await this.atomicMove(source, destination);
+          await this.executeMove(operation);
           break;
         case 'copy':
-          await this.atomicCopy(source, destination);
-          break;
-        case 'create':
-          await this.atomicCreate(destination, data);
+          await this.executeCopy(operation);
           break;
         case 'delete':
-          if (await this.fileExists(source)) {
-            backupPath = await this.createBackup(source, transactionId);
-            transaction.backups.push({ source, backup: backupPath });
-            await fs.unlink(source);
-          }
+          await this.executeDelete(operation);
+          break;
+        case 'create':
+          await this.executeCreate(operation);
           break;
         default:
-          throw new Error(`Unknown operation type: ${type}`);
+          throw new Error(`Unknown operation type: ${operation.type}`);
       }
-
-      return { success: true, backupPath };
     } catch (error) {
-      throw error;
+      throw new Error(`Failed to execute ${operation.type} operation: ${error.message}`);
     }
   }
 
   /**
-   * Atomic move operation with directory creation
+   * Execute move operation
+   * @param {Object} operation - Move operation
    */
-  async atomicMove(source, destination) {
-    // Ensure destination directory exists
-    await fs.mkdir(path.dirname(destination), { recursive: true });
+  async executeMove(operation) {
+    const sourceExists = await fs.access(operation.source).then(() => true).catch(() => false);
     
-    // Check if destination exists and handle conflicts
-    if (await this.fileExists(destination)) {
-      const uniqueDestination = await this.generateUniqueFilename(destination);
-      destination = uniqueDestination;
+    if (!sourceExists) {
+      throw new Error(`Source file does not exist: ${operation.source}`);
     }
 
-    await fs.rename(source, destination);
-    return destination;
+    // Ensure target directory exists
+    await fs.mkdir(path.dirname(operation.target), { recursive: true });
+    
+    // Use rename for atomic move
+    await fs.rename(operation.source, operation.target);
   }
 
   /**
-   * Atomic copy operation
+   * Execute copy operation
+   * @param {Object} operation - Copy operation
    */
-  async atomicCopy(source, destination) {
-    await fs.mkdir(path.dirname(destination), { recursive: true });
+  async executeCopy(operation) {
+    const sourceExists = await fs.access(operation.source).then(() => true).catch(() => false);
     
-    if (await this.fileExists(destination)) {
-      const uniqueDestination = await this.generateUniqueFilename(destination);
-      destination = uniqueDestination;
+    if (!sourceExists) {
+      throw new Error(`Source file does not exist: ${operation.source}`);
     }
 
-    await fs.copyFile(source, destination);
-    return destination;
+    // Ensure target directory exists
+    await fs.mkdir(path.dirname(operation.target), { recursive: true });
+    
+    await fs.copyFile(operation.source, operation.target);
   }
 
   /**
-   * Atomic create operation
+   * Execute delete operation
+   * @param {Object} operation - Delete operation
    */
-  async atomicCreate(filePath, data) {
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
+  async executeDelete(operation) {
+    const sourceExists = await fs.access(operation.source).then(() => true).catch(() => false);
     
-    const tempFile = `${filePath}.tmp.${Date.now()}`;
-    
-    try {
-      await fs.writeFile(tempFile, data);
-      await fs.rename(tempFile, filePath);
-      return filePath;
-    } catch (error) {
-      // Cleanup temp file on failure
-      try {
-        await fs.unlink(tempFile);
-      } catch (cleanupError) {
-        // Ignore cleanup errors
-      }
-      throw error;
+    if (sourceExists) {
+      await fs.unlink(operation.source);
     }
   }
 
   /**
-   * Generate unique filename to avoid conflicts
+   * Execute create operation
+   * @param {Object} operation - Create operation
    */
-  async generateUniqueFilename(originalPath) {
-    const dir = path.dirname(originalPath);
-    const ext = path.extname(originalPath);
-    const name = path.basename(originalPath, ext);
+  async executeCreate(operation) {
+    // Ensure target directory exists
+    await fs.mkdir(path.dirname(operation.source), { recursive: true });
     
-    let counter = 1;
-    let uniquePath = originalPath;
-    
-    while (await this.fileExists(uniquePath)) {
-      uniquePath = path.join(dir, `${name}_${counter}${ext}`);
-      counter++;
-      
-      if (counter > 1000) {
-        throw new Error('Unable to generate unique filename after 1000 attempts');
-      }
-    }
-    
-    return uniquePath;
+    const content = operation.content || '';
+    await fs.writeFile(operation.source, content);
   }
 
   /**
-   * Check if file exists
-   */
-  async fileExists(filePath) {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Execute all operations in a transaction
+   * Commit transaction - execute all operations
+   * @param {string} transactionId - Transaction ID
+   * @returns {Object} Commit result
    */
   async commitTransaction(transactionId) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) {
+    const tx = this.transactions.get(transactionId);
+    if (!tx) {
       throw new Error(`Transaction ${transactionId} not found`);
     }
 
-    if (transaction.status !== 'active') {
+    if (tx.status !== 'active') {
       throw new Error(`Transaction ${transactionId} is not active`);
     }
 
+    tx.status = 'committing';
     const results = [];
-    let failedOperation = null;
+    let successCount = 0;
 
     try {
-      // Set timeout for the entire transaction
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Transaction ${transactionId} timed out`));
-        }, this.operationTimeout);
-      });
-
-      const operationPromise = (async () => {
-        for (const operation of transaction.operations) {
-          try {
-            const result = await this.executeOperation(transactionId, operation);
+      for (const operation of tx.operations) {
+        try {
+          await this.executeOperation(operation, transactionId);
             results.push({
-              operation: operation.id,
+            operation,
               success: true,
-              result
+            timestamp: new Date()
             });
+          successCount++;
           } catch (error) {
-            failedOperation = operation;
-            throw error;
-          }
+          results.push({
+            operation,
+            success: false,
+            error: error.message,
+            timestamp: new Date()
+          });
+          
+          // Rollback on first failure
+          await this.rollbackTransaction(transactionId);
+          throw new Error(`Transaction failed at operation ${operation.id}: ${error.message}`);
         }
-      })();
-
-      await Promise.race([operationPromise, timeoutPromise]);
-
-      transaction.status = 'committed';
-      // Transaction committed successfully
-      
-      // Clean up old backups after successful commit (optional)
-      setTimeout(() => this.cleanupBackups(transactionId), 60000); // 1 minute delay
-      
-      return { success: true, results };
-
-    } catch (error) {
-      // Transaction failed, will be rolled back
-      
-      // Attempt to rollback
-      try {
-        await this.rollbackTransaction(transactionId);
-        return { 
-          success: false, 
-          error: error.message, 
-          failedOperation: failedOperation?.id,
-          rollbackSuccessful: true 
-        };
-      } catch (rollbackError) {
-        // Rollback failed - this is a critical error but we can't do much about it
-        return { 
-          success: false, 
-          error: error.message, 
-          failedOperation: failedOperation?.id,
-          rollbackSuccessful: false,
-          rollbackError: rollbackError.message 
-        };
       }
+
+      tx.status = 'committed';
+      tx.completedAt = new Date();
+      
+      // Clean up backups after successful commit
+      await this.cleanupBackups(transactionId);
+      
+      // Release locks
+      this.releaseLocks(transactionId);
+      
+      return {
+        success: true,
+        transactionId,
+        operationsExecuted: successCount,
+        results
+      };
+    } catch (error) {
+      tx.status = 'failed';
+      tx.error = error.message;
+      tx.failedAt = new Date();
+      
+      throw error;
     }
   }
 
   /**
-   * Rollback a transaction using backups
+   * Rollback transaction - restore from backups
+   * @param {string} transactionId - Transaction ID
    */
   async rollbackTransaction(transactionId) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) {
+    const tx = this.transactions.get(transactionId);
+    if (!tx) {
       throw new Error(`Transaction ${transactionId} not found`);
     }
 
-    // Rolling back transaction
-    transaction.status = 'rolling_back';
-
-    const rollbackErrors = [];
-
-    // Restore files from backups in reverse order
-    for (let i = transaction.backups.length - 1; i >= 0; i--) {
-      const { source, backup } = transaction.backups[i];
+    tx.status = 'rolling-back';
+    
+    try {
+      // Restore from backups in reverse order
+      const backupEntries = Array.from(tx.backups.entries()).reverse();
       
-      try {
-        // Check if backup exists
-        if (await this.fileExists(backup)) {
-          // Ensure source directory exists
-          await fs.mkdir(path.dirname(source), { recursive: true });
-          
-          // Restore the file
-          await fs.copyFile(backup, source);
-          // File restored from backup
+      for (const [originalPath, backup] of backupEntries) {
+        try {
+          if (backup.existed === false) {
+            // File didn't exist originally, so delete it if it was created
+            const exists = await fs.access(originalPath).then(() => true).catch(() => false);
+            if (exists) {
+              await fs.unlink(originalPath);
+            }
+          } else if (backup.backupPath) {
+            // Restore from backup
+            await fs.copyFile(backup.backupPath, originalPath);
+          }
+        } catch (error) {
+          console.error(`Failed to restore ${originalPath} from backup:`, error);
         }
-      } catch (error) {
-        rollbackErrors.push({ source, error: error.message });
       }
+
+      tx.status = 'rolled-back';
+      tx.rolledBackAt = new Date();
+      
+      // Clean up backups
+      await this.cleanupBackups(transactionId);
+      
+      // Release locks
+      this.releaseLocks(transactionId);
+      
+    } catch (error) {
+      tx.status = 'rollback-failed';
+      tx.rollbackError = error.message;
+      throw new Error(`Rollback failed for transaction ${transactionId}: ${error.message}`);
     }
-
-    transaction.status = 'rolled_back';
-
-    if (rollbackErrors.length > 0) {
-      throw new Error(`Rollback completed with errors: ${JSON.stringify(rollbackErrors)}`);
-    }
-
-    // Transaction rolled back successfully
   }
 
   /**
-   * Clean up backup files for a transaction
+   * Clean up backup files
+   * @param {string} transactionId - Transaction ID
    */
   async cleanupBackups(transactionId) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) return;
+    const tx = this.transactions.get(transactionId);
+    if (!tx) return;
 
-    for (const { backup } of transaction.backups) {
-      try {
-        if (await this.fileExists(backup)) {
-          await fs.unlink(backup);
+    for (const backup of tx.backups.values()) {
+      if (backup.backupPath) {
+        try {
+          await fs.unlink(backup.backupPath);
+        } catch (error) {
+          console.warn(`Failed to clean up backup ${backup.backupPath}:`, error);
         }
-      } catch (error) {
-        // Ignore cleanup errors
       }
     }
+    
+    tx.backups.clear();
+  }
 
-    // Remove from active transactions
-    this.activeTransactions.delete(transactionId);
+  /**
+   * Release all locks for a transaction
+   * @param {string} transactionId - Transaction ID
+   */
+  releaseLocks(transactionId) {
+    const tx = this.transactions.get(transactionId);
+    if (!tx) return;
+
+    for (const lockedPath of tx.locks) {
+      this.lockManager.delete(lockedPath);
+    }
+    
+    tx.locks.clear();
   }
 
   /**
    * Get transaction status
+   * @param {string} transactionId - Transaction ID
+   * @returns {Object} Transaction status
    */
   getTransactionStatus(transactionId) {
-    const transaction = this.activeTransactions.get(transactionId);
-    if (!transaction) return null;
+    const tx = this.transactions.get(transactionId);
+    if (!tx) {
+      return { exists: false };
+    }
 
     return {
-      id: transaction.id,
-      status: transaction.status,
-      operationCount: transaction.operations.length,
-      backupCount: transaction.backups.length,
-      duration: Date.now() - transaction.startTime
+      exists: true,
+      id: tx.id,
+      status: tx.status,
+      operationCount: tx.operations.length,
+      backupCount: tx.backups.size,
+      lockCount: tx.locks.size,
+      createdAt: tx.createdAt,
+      completedAt: tx.completedAt,
+      error: tx.error
     };
   }
 
   /**
-   * List all active transactions
+   * Clean up old transactions
+   * @param {number} maxAge - Maximum age in milliseconds
    */
-  getActiveTransactions() {
-    return Array.from(this.activeTransactions.keys()).map(id => 
-      this.getTransactionStatus(id)
-    );
-  }
-
-  /**
-   * Force cleanup of stale transactions
-   */
-  async cleanupStaleTransactions(maxAge = 3600000) { // 1 hour
-    const now = Date.now();
-    const staleTransactions = [];
-
-    for (const [id, transaction] of this.activeTransactions) {
-      if (now - transaction.startTime > maxAge) {
-        staleTransactions.push(id);
+  cleanupOldTransactions(maxAge = 3600000) { // 1 hour default
+    const now = new Date();
+    
+    for (const [txId, tx] of this.transactions.entries()) {
+      const age = now - tx.createdAt;
+      
+      if (age > maxAge && ['committed', 'rolled-back', 'failed'].includes(tx.status)) {
+        this.transactions.delete(txId);
       }
     }
-
-    for (const id of staleTransactions) {
-      try {
-        await this.cleanupBackups(id);
-      } catch (error) {
-        // Ignore cleanup errors for stale transactions
-      }
-    }
-
-    return staleTransactions.length;
   }
 }
 
 // Export singleton instance
-const atomicFileOps = new AtomicFileOperations();
+const atomicFileOperations = new AtomicFileOperations();
 
 module.exports = {
   AtomicFileOperations,
-  atomicFileOps,
+  atomicFileOperations,
   
   // Convenience functions
   async organizeFilesAtomically(operations) {
-    const transactionId = await atomicFileOps.beginTransaction();
+    const transaction = atomicFileOperations.beginTransaction();
     
     try {
       // Convert operations to atomic operations
       for (const op of operations) {
-        atomicFileOps.addOperation(transactionId, {
+        atomicFileOperations.addOperation(transaction.id, {
           type: 'move',
           source: op.originalPath,
-          destination: op.targetPath,
+          target: op.targetPath,
           metadata: op.analysisData
         });
       }
 
-      const result = await atomicFileOps.commitTransaction(transactionId);
+      const result = await atomicFileOperations.commitTransaction(transaction.id);
       return result;
     } catch (error) {
       throw error;
@@ -457,16 +523,16 @@ module.exports = {
   },
 
   async backupAndReplace(filePath, newContent) {
-    const transactionId = await atomicFileOps.beginTransaction();
+    const transaction = atomicFileOperations.beginTransaction();
     
     try {
-      atomicFileOps.addOperation(transactionId, {
+      atomicFileOperations.addOperation(transaction.id, {
         type: 'create',
-        destination: filePath,
-        data: newContent
+        source: filePath,
+        content: newContent
       });
 
-      return await atomicFileOps.commitTransaction(transactionId);
+      return await atomicFileOperations.commitTransaction(transaction.id);
     } catch (error) {
       throw error;
     }

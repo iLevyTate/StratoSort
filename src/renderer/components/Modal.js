@@ -112,7 +112,7 @@ const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-fib-13 animate-modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-modal-backdrop"
       style={{ position: 'fixed', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '21px', zIndex: 2147483646 }}
       onClick={handleOverlayClick}
     >
@@ -123,7 +123,7 @@ const Modal = ({
       <div
         ref={modalRef}
         className={`
-          relative bg-white rounded-xl shadow-2xl border border-system-gray-200 
+          relative glass-card-strong rounded-2xl shadow-2xl
           w-full ${getSizeClasses()} max-h-[90vh] overflow-hidden
           animate-modal-enter ${className}
         `}
@@ -135,19 +135,19 @@ const Modal = ({
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-fib-21 border-b border-system-gray-200">
+          <div className="flex items-center justify-between p-8 border-b border-white/20">
             {title && (
-              <h2 id="modal-title" className="text-xl font-semibold text-system-gray-900">
+              <h2 id="modal-title" className="text-xl font-bold text-on-glass">
                 {title}
               </h2>
             )}
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="p-fib-5 text-system-gray-400 hover:text-system-gray-600 hover:bg-system-gray-100 rounded-md transition-colors"
+                className="glass-button w-10 h-10 flex items-center justify-center hover:scale-105 transition-all duration-300"
                 aria-label="Close modal"
               >
-                <span className="text-xl leading-none">×</span>
+                <span className="text-lg">×</span>
               </button>
             )}
           </div>
@@ -175,125 +175,54 @@ export const ConfirmModal = ({
   fileName = null // For file operations
 }) => {
   const getConfirmButtonClass = () => {
-    const baseClass = 'px-6 py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 transform hover:scale-105 active:scale-95';
-    
     switch (variant) {
       case 'danger':
-        return `${baseClass} bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 hover:shadow-lg shadow-red-500/25`;
+        return 'btn-danger';
       case 'warning':
-        return `${baseClass} bg-amber-600 hover:bg-amber-700 text-white focus:ring-amber-500 hover:shadow-lg shadow-amber-500/25`;
+        return 'btn-warning';
       case 'info':
-        return `${baseClass} bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 hover:shadow-lg shadow-blue-500/25`;
+        return 'btn-info';
       default:
-        return `${baseClass} bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500 hover:shadow-lg shadow-gray-500/25`;
+        return 'btn-primary';
     }
   };
 
   const getCancelButtonClass = () => {
-    return 'bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transform hover:scale-105 active:scale-95 hover:shadow-sm';
+    return 'btn-secondary';
   };
 
   const getIcon = () => {
+    const iconBaseClass = "w-12 h-12 rounded-full flex items-center justify-center";
     switch (variant) {
       case 'danger':
-        return (
-          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-        );
+        return <div className={`${iconBaseClass} bg-danger/10 text-danger text-2xl`}>!</div>;
       case 'warning':
-        return (
-          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-        );
+        return <div className={`${iconBaseClass} bg-warning/10 text-warning text-2xl`}>⚠️</div>;
       case 'info':
-        return (
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        );
+        return <div className={`${iconBaseClass} bg-info/10 text-info text-2xl`}>ℹ️</div>;
       default:
-        return (
-          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        );
+        return <div className={`${iconBaseClass} bg-blue-600/10 text-blue-600 text-2xl`}>?</div>;
     }
   };
 
-  const getBackdropClass = () => {
-    switch (variant) {
-      case 'danger':
-        return 'bg-red-50/80';
-      case 'warning':
-        return 'bg-amber-50/80';
-      case 'info':
-        return 'bg-blue-50/80';
-      default:
-        return 'bg-gray-50/80';
-    }
-  };
+  if (!isOpen) return null;
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      size="small"
-      closeOnOverlayClick={false}
-      showCloseButton={false}
-      className="card-glass-subtle"
-    >
-      <div className="p-8">
-        {/* Icon and Content */}
-        <div className="flex items-start gap-4 mb-6">
-          <div className={variant === 'danger' ? 'animate-confirm-bounce' : ''}>
-            {getIcon()}
-          </div>
-          <div className="flex-1 pt-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              {title}
-            </h3>
-            <div className="text-gray-600 leading-relaxed">
-              {message}
-              {fileName && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className="font-medium text-gray-700">{fileName}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+    <Modal isOpen={isOpen} onClose={onClose} size="small" closeOnOverlayClick={false}>
+      <div className="p-8 text-center">
+        <div className="mx-auto mb-6">
+          {getIcon()}
         </div>
-        
-        {/* Action Buttons */}
-        <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
-          <button
-            onClick={onClose}
-            className={getCancelButtonClass()}
-          >
+        <h3 className="text-lg font-semibold mb-3">{title}</h3>
+        {fileName && <p className="text-sm text-gray-500 font-mono mb-4 truncate" title={fileName}>{fileName}</p>}
+        <p className="text-text-secondary mb-6">
+          {message || "Are you sure you want to proceed? This action may not be reversible."}
+        </p>
+        <div className="flex justify-center gap-4">
+          <button onClick={onClose} className={getCancelButtonClass()}>
             {cancelText}
           </button>
-          <button
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-            className={getConfirmButtonClass()}
-            autoFocus
-          >
+          <button onClick={onConfirm} className={getConfirmButtonClass()}>
             {confirmText}
           </button>
         </div>

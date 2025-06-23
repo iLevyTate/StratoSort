@@ -1,7 +1,8 @@
 // Undo/Redo System - Implementing Shneiderman's Golden Rule #6: Action Reversal Infrastructure
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import Modal from './Modal';
 
-// Undo/Redo Context
+// Undo/Redo Context (proxy to main-process service)
 const UndoRedoContext = createContext();
 
 // Simple notification interface for UndoRedo system
@@ -9,30 +10,25 @@ function useSimpleNotifications() {
   return {
     showSuccess: (title, description) => {
       console.log(`✅ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available
     },
     showError: (title, description) => {
       console.error(`❌ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available  
     },
     showInfo: (title, description) => {
       console.log(`ℹ️ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available
     }
   };
 }
 
-// Action types that can be undone
+// Action types mirrored from shared constants (kept for metadata)
 const ACTION_TYPES = {
-  FILE_MOVE: 'file_move',
-  FILE_DELETE: 'file_delete',
-  FILE_RENAME: 'file_rename',
-  FOLDER_CREATE: 'folder_create',
-  FOLDER_DELETE: 'folder_delete',
-  FOLDER_RENAME: 'folder_rename',
-  SETTINGS_CHANGE: 'settings_change',
-  ANALYSIS_RESULT: 'analysis_result',
-  BATCH_OPERATION: 'batch_operation'
+  FILE_MOVE: 'FILE_MOVE',
+  FILE_RENAME: 'FILE_RENAME',
+  FILE_DELETE: 'FILE_DELETE',
+  FOLDER_CREATE: 'FOLDER_CREATE',
+  FOLDER_DELETE: 'FOLDER_DELETE',
+  SETTINGS_CHANGE: 'SETTINGS_CHANGE',
+  BATCH_OPERATION: 'BATCH_OPERATION'
 };
 
 // Action metadata for user-friendly descriptions
@@ -84,113 +80,32 @@ const ACTION_METADATA = {
   }
 };
 
-// Undo Stack Manager
-class UndoStack {
-  constructor(maxSize = 100) {
-    this.stack = [];
-    this.pointer = -1;
-    this.maxSize = maxSize;
-    this.listeners = new Set();
-  }
-
-  push(action) {
-    // Remove any actions after current pointer (when undoing then doing new action)
-    this.stack = this.stack.slice(0, this.pointer + 1);
-    
-    // Add new action
-    this.stack.push({
-      ...action,
-      id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Maintain max size
-    if (this.stack.length > this.maxSize) {
-      this.stack.shift();
-    } else {
-      this.pointer++;
-    }
-    
-    this.notifyListeners();
-  }
-
-  canUndo() {
-    return this.pointer >= 0;
-  }
-
-  canRedo() {
-    return this.pointer < this.stack.length - 1;
-  }
-
-  undo() {
-    if (!this.canUndo()) return null;
-    
-    const action = this.stack[this.pointer];
-    this.pointer--;
-    this.notifyListeners();
-    
-    return action;
-  }
-
-  redo() {
-    if (!this.canRedo()) return null;
-    
-    this.pointer++;
-    const action = this.stack[this.pointer];
-    this.notifyListeners();
-    
-    return action;
-  }
-
-  peek() {
-    return this.canUndo() ? this.stack[this.pointer] : null;
-  }
-
-  peekRedo() {
-    return this.canRedo() ? this.stack[this.pointer + 1] : null;
-  }
-
-  getHistory() {
-    return this.stack.slice(0, this.pointer + 1);
-  }
-
-  clear() {
-    this.stack = [];
-    this.pointer = -1;
-    this.notifyListeners();
-  }
-
-  addListener(listener) {
-    this.listeners.add(listener);
-  }
-
-  removeListener(listener) {
-    this.listeners.delete(listener);
-  }
-
-  notifyListeners() {
-    this.listeners.forEach(listener => listener());
-  }
-}
-
-// Undo/Redo Provider Component
+// ------------------------------
+// Provider now proxies to main service
+// ------------------------------
 export function UndoRedoProvider({ children }) {
-  const [undoStack] = useState(() => new UndoStack());
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const { showSuccess, showError, showInfo } = useSimpleNotifications();
 
-  // Update state when stack changes
-  const updateState = useCallback(() => {
-    setCanUndo(undoStack.canUndo());
-    setCanRedo(undoStack.canRedo());
-  }, [undoStack]);
+  // Fetch remote canUndo / canRedo after each change
+  const refreshStatus = useCallback(async () => {
+    try {
+      const [undoAble, redoAble] = await Promise.all([
+        window.electronAPI.undoRedo.canUndo(),
+        window.electronAPI.undoRedo.canRedo()
+      ]);
+      setCanUndo(!!undoAble);
+      setCanRedo(!!redoAble);
+    } catch (err) {
+      console.error('Failed to refresh undo/redo status:', err);
+    }
+  }, []);
 
   useEffect(() => {
-    undoStack.addListener(updateState);
-    return () => undoStack.removeListener(updateState);
-  }, [undoStack, updateState]);
+    refreshStatus();
+  }, [refreshStatus]);
 
   // Execute action with undo capability
   const executeAction = async (actionConfig) => {
@@ -198,15 +113,8 @@ export function UndoRedoProvider({ children }) {
       // Execute the action
       const result = await actionConfig.execute();
       
-      // Add to undo stack if successful
-      undoStack.push({
-        type: actionConfig.type,
-        description: actionConfig.description,
-        undo: actionConfig.undo,
-        redo: actionConfig.redo || actionConfig.execute,
-        metadata: actionConfig.metadata || {},
-        result
-      });
+      // Refresh status after backend recorded action
+      await refreshStatus();
 
       showSuccess(
         'Action Completed',
@@ -223,51 +131,9 @@ export function UndoRedoProvider({ children }) {
     }
   };
 
-  // Undo last action
-  const undo = async () => {
-    const action = undoStack.undo();
-    if (!action) return;
-
-    try {
-      await action.undo();
-      showInfo(
-        'Action Undone',
-        `Undid: ${action.description}`
-      );
-    } catch (error) {
-      // If undo fails, restore the action to the stack
-      undoStack.push(action);
-      showError(
-        'Undo Failed',
-        `Failed to undo ${action.description}: ${error.message}`
-      );
-    }
-  };
-
-  // Redo last undone action
-  const redo = async () => {
-    const action = undoStack.redo();
-    if (!action) return;
-
-    try {
-      await action.redo();
-      showInfo(
-        'Action Redone',
-        `Redid: ${action.description}`
-      );
-    } catch (error) {
-      // If redo fails, move pointer back
-      undoStack.pointer--;
-      undoStack.notifyListeners();
-      showError(
-        'Redo Failed',
-        `Failed to redo ${action.description}: ${error.message}`
-      );
-    }
-  };
-
   // Get action description for UI
   const getActionDescription = (action) => {
+    if (!action) return '';
     const metadata = ACTION_METADATA[action.type];
     if (metadata) {
       return `${metadata.icon} ${action.description || metadata.description}`;
@@ -276,10 +142,48 @@ export function UndoRedoProvider({ children }) {
   };
 
   // Clear history
-  const clearHistory = () => {
-    undoStack.clear();
-    showInfo('History Cleared', 'Undo/redo history has been cleared');
+  const clearHistory = async () => {
+    try {
+      await window.electronAPI.undoRedo.clear();
+      showInfo('History Cleared', 'Undo/redo history has been cleared');
+      refreshStatus();
+    } catch (err) {
+      showError('Clear History Failed', err.message);
+    }
   };
+
+  // Remote undo/redo helpers
+  const undo = async () => {
+    try {
+      const result = await window.electronAPI.undoRedo.undo();
+      if (result?.success) {
+        showInfo('Action Undone', result.message || 'Undid last action');
+      } else {
+        showError('Undo Failed', result?.message || 'Unable to undo');
+      }
+    } catch (err) {
+      showError('Undo Failed', err.message);
+    } finally {
+      refreshStatus();
+    }
+  };
+
+  const redo = async () => {
+    try {
+      const result = await window.electronAPI.undoRedo.redo();
+      if (result?.success) {
+        showInfo('Action Redone', result.message || 'Redid last action');
+      } else {
+        showError('Redo Failed', result?.message || 'Unable to redo');
+      }
+    } catch (err) {
+      showError('Redo Failed', err.message);
+    } finally {
+      refreshStatus();
+    }
+  };
+
+  const toggleHistory = () => setIsHistoryVisible(v => !v);
 
   const contextValue = {
     executeAction,
@@ -287,19 +191,24 @@ export function UndoRedoProvider({ children }) {
     redo,
     canUndo,
     canRedo,
-    getHistory: () => undoStack.getHistory(),
-    peek: () => undoStack.peek(),
-    peekRedo: () => undoStack.peekRedo(),
+    getHistory: async (limit = 100) => {
+      try {
+        return await window.electronAPI.undoRedo.getHistory(limit);
+      } catch {
+        return [];
+      }
+    },
+    peek: () => null,
+    peekRedo: () => null,
     getActionDescription,
     clearHistory,
-    isHistoryVisible,
-    setIsHistoryVisible
+    toggleHistory,
+    isHistoryVisible
   };
 
   return (
     <UndoRedoContext.Provider value={contextValue}>
       {children}
-      {isHistoryVisible && <HistoryModal />}
     </UndoRedoContext.Provider>
   );
 }
@@ -314,141 +223,109 @@ export function useUndoRedo() {
 }
 
 // History Modal Component
-function HistoryModal() {
-  const { 
-    getHistory, 
-    setIsHistoryVisible, 
-    getActionDescription, 
-    clearHistory 
-  } = useUndoRedo();
+function HistoryModal({ isOpen, onClose }) {
+  const { getHistory, clearHistory, getActionDescription } = useUndoRedo();
+  const [history, setHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const history = getHistory();
+  useEffect(() => {
+    if (isOpen) {
+      const fetchHistory = async () => {
+        setIsLoading(true);
+        const historyData = await getHistory(50);
+        setHistory(historyData);
+        setIsLoading(false);
+      };
+      fetchHistory();
+    }
+  }, [isOpen, getHistory]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style={{position:'fixed', inset:0, display:'flex', justifyContent:'center', alignItems:'center', zIndex:2147483645}}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Action History</h2>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={clearHistory}
-              className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-            >
-              Clear History
-            </button>
-            <button
-              onClick={() => setIsHistoryVisible(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Action History"
+      size="large"
+    >
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-6">
+          <p className="text-sm text-text-secondary">
+            Review the sequence of actions. You can undo them sequentially.
+          </p>
+          <button onClick={clearHistory} className="btn-danger-secondary text-sm">
+            Clear History
+          </button>
         </div>
         
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {history.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p>No actions in history</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {history.slice().reverse().map((action, index) => (
-                <div
-                  key={action.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg">
-                      {ACTION_METADATA[action.type]?.icon || '📄'}
-                    </span>
-                    <div>
-                      <div className="font-medium text-gray-900">
-                        {action.description}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(action.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    #{history.length - index}
-                  </div>
+        {isLoading ? (
+          <div className="text-center p-8">
+             <div className="animate-spin w-8 h-8 border-3 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+             <p className="text-gray-500">Loading history...</p>
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center p-8 glass-card">
+            <div className="text-4xl mb-4">📂</div>
+            <h3 className="text-lg font-semibold text-on-glass mb-2">No Operations Yet</h3>
+            <p className="text-readable-light">
+              Start organizing files to see undo/redo options here.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-4 max-h-[60vh] overflow-y-auto modern-scrollbar pr-4">
+            {history.map((action, index) => (
+              <li
+                key={index}
+                className="flex items-center p-4 glass-card"
+              >
+                <span className="text-lg mr-4">{getActionDescription(action).split(' ')[0]}</span>
+                <div className="flex-grow">
+                  <p className="font-medium text-gray-900">
+                    {getActionDescription(action).substring(getActionDescription(action).indexOf(' ') + 1)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(action.timestamp).toLocaleString()}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                {index === 0 && (
+                  <span className="text-xs font-semibold uppercase text-blue-600 bg-blue-600/10 px-3 py-1 rounded-full">
+                    Last Action
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
-// Undo/Redo Toolbar Component
-export function UndoRedoToolbar({ className = '' }) {
-  const { 
-    undo, 
-    redo, 
-    canUndo, 
-    canRedo, 
-    peek, 
-    peekRedo, 
-    getActionDescription,
-    setIsHistoryVisible 
-  } = useUndoRedo();
-
-  const lastAction = peek();
-  const nextAction = peekRedo();
-
+// ------------------------------
+// Toolbar component
+// ------------------------------
+export function UndoRedoToolbar({ onUndo, onRedo, canUndo, canRedo, onToggleHistory, className = '' }) {
+  const buttonClass = (enabled) =>
+    `btn-secondary flex items-center gap-2 px-4 py-3 text-sm ${
+      enabled ? 'text-gray-900' : 'text-gray-400 cursor-not-allowed'
+    }`;
+    
   return (
-    <div className={`flex items-center space-x-1 ${className}`}>
-      <button
-        onClick={undo}
-        disabled={!canUndo}
-        className={`          p-2 rounded-lg transition-colors
-          ${canUndo 
-            ? 'text-gray-700 hover:bg-gray-100 hover:text-gray-900' 
-            : 'text-gray-300 cursor-not-allowed'
-          }
-        `}
-        title={lastAction ? `Undo: ${getActionDescription(lastAction)}` : 'Nothing to undo'}
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-        </svg>
+    <div className={`flex items-center gap-3 p-2 rounded-lg glass-card ${className}`}>
+      <button onClick={onUndo} disabled={!canUndo} className={buttonClass(canUndo)} aria-label="Undo last action">
+        <span className="text-lg">↩️</span>
+        <span>Undo</span>
       </button>
-      
-      <button
-        onClick={redo}
-        disabled={!canRedo}
-        className={`
-          p-2 rounded-lg transition-colors
-          ${canRedo 
-            ? 'text-gray-700 hover:bg-gray-100 hover:text-gray-900' 
-            : 'text-gray-300 cursor-not-allowed'
-          }
-        `}
-        title={nextAction ? `Redo: ${getActionDescription(nextAction)}` : 'Nothing to redo'}
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
-        </svg>
+      <button onClick={onRedo} disabled={!canRedo} className={buttonClass(canRedo)} aria-label="Redo last action">
+        <span className="text-lg">↪️</span>
+        <span>Redo</span>
       </button>
-      
-      <div className="w-px h-6 bg-gray-300 mx-1" />
-      
       <button
-        onClick={() => setIsHistoryVisible(true)}
-        className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-        title="View action history"
+        onClick={onToggleHistory}
+        className="btn-secondary flex items-center gap-2 px-4 py-3 text-sm text-gray-900"
+        aria-label="View action history"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <span className="text-lg">📜</span>
+        <span>History</span>
       </button>
     </div>
   );

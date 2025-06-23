@@ -932,6 +932,9 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
       'server', 'network', 'security', 'backup', 'config', 'setup'
     ],
     
+    // 3D printing patterns
+    '3d_printing': ['3d', 'printing', 'model'],
+    
     // Research patterns
     research: [
       'research', 'study', 'analysis', 'report', 'findings', 'data', 'survey',
@@ -951,7 +954,10 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
       'employee', 'staff', 'hiring', 'recruitment', 'onboarding', 'training',
       'performance', 'review', 'evaluation', 'benefits', 'policy', 'handbook',
       'job', 'position', 'salary', 'compensation', 'leave'
-    ]
+    ],
+    
+    // Image patterns
+    'image': ['image', 'visual', 'graphic']
   };
   
   // Score each category
@@ -989,6 +995,10 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
     '.jpeg': 'image',
     '.gif': 'image',
     '.svg': 'image',
+    '.stl': '3d_printing',
+    '.obj': '3d_printing',
+    '.3mf': '3d_printing',
+    '.blend': '3d_printing',
     '.mp3': 'audio',
     '.wav': 'audio',
     '.mp4': 'video',
@@ -1019,6 +1029,7 @@ function getIntelligentKeywords(fileName, extension) {
     'personal': ['personal', 'individual', 'private'],
     'technical': ['technical', 'manual', 'guide'],
     'document': ['document', 'file', 'text'],
+    '3d_printing': ['3d', 'printing', 'model'],
     'image': ['image', 'visual', 'graphic']
   };
   

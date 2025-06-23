@@ -34,14 +34,14 @@ const Toast = ({
   const getSeverityClasses = () => {
     switch (severity) {
       case 'success':
-        return 'toast-success border-system-green bg-system-green/10 text-system-green';
+        return 'toast-success border-success bg-success/10 text-text-on-success-bg';
       case 'error':
-        return 'toast-error border-system-red bg-system-red/10 text-system-red';
+        return 'toast-error border-danger bg-danger/10 text-text-on-danger-bg';
       case 'warning':
-        return 'toast-warning border-yellow-500 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/90 dark:text-yellow-200';
+        return 'toast-warning border-warning bg-warning/10 text-text-on-warning-bg';
       case 'info':
       default:
-        return 'toast-info border-stratosort-blue bg-stratosort-blue/10 text-stratosort-blue';
+        return 'toast-info border-primary bg-primary/10 text-text-on-primary-bg';
     }
   };
 
@@ -77,19 +77,19 @@ const Toast = ({
       onKeyDown={handleKeyDown}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-fib-5">
-          <span className="text-sm flex-shrink-0 opacity-80" aria-hidden="true">
-            {getSeverityIcon()}
-          </span>
-          <div className="flex-1">
-            <div className="text-xs font-normal leading-tight opacity-90">
-              {message}
+                  <div className="flex items-center gap-2">
+            <span className="text-sm flex-shrink-0 opacity-80" aria-hidden="true">
+              {getSeverityIcon()}
+            </span>
+            <div className="flex-1">
+              <div className="text-xs font-normal leading-tight opacity-90">
+                {message}
+              </div>
             </div>
           </div>
-        </div>
-        <button
-          onClick={handleClose}
-          className="ml-fib-5 text-current opacity-50 hover:opacity-80 p-fib-1 rounded hover:bg-black/5 transition-all duration-150"
+          <button
+            onClick={handleClose}
+            className="ml-2 text-current opacity-60 hover:opacity-100 p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-all duration-150"
           aria-label="Close notification"
         >
           <span className="text-sm leading-none">×</span>
@@ -111,7 +111,7 @@ const Toast = ({
 export const ToastContainer = ({ toasts = [], onRemoveToast }) => {
   return (
     <div 
-      className="fixed bottom-fib-21 right-fib-21 z-40 space-y-fib-5 pointer-events-none"
+      className="fixed bottom-6 right-6 z-40 space-y-2 pointer-events-none"
       style={{ position: 'fixed', bottom: '21px', right: '21px', zIndex: 1000 }}
       aria-live="polite"
       aria-label="Notifications"

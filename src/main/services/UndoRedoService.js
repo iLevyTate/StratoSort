@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const { app } = require('electron');
+const { ACTION_TYPES } = require('../shared/constants');
 
 class UndoRedoService {
   constructor() {
@@ -140,17 +141,17 @@ class UndoRedoService {
 
   async executeReverseAction(action) {
     switch (action.type) {
-      case 'FILE_MOVE':
+      case ACTION_TYPES.FILE_MOVE:
         // Move file back to original location
         await fs.rename(action.data.newPath, action.data.originalPath);
         break;
         
-      case 'FILE_RENAME':
+      case ACTION_TYPES.FILE_RENAME:
         // Rename file back to original name
         await fs.rename(action.data.newPath, action.data.originalPath);
         break;
         
-      case 'FILE_DELETE':
+      case ACTION_TYPES.FILE_DELETE:
         // Restore file from backup (if we have one)
         if (action.data.backupPath && await this.fileExists(action.data.backupPath)) {
           await fs.rename(action.data.backupPath, action.data.originalPath);
@@ -159,7 +160,7 @@ class UndoRedoService {
         }
         break;
         
-      case 'FOLDER_CREATE':
+      case ACTION_TYPES.FOLDER_CREATE:
         // Remove the created folder (if empty)
         try {
           await fs.rmdir(action.data.folderPath);
@@ -169,7 +170,7 @@ class UndoRedoService {
         }
         break;
         
-      case 'BATCH_ORGANIZE':
+      case ACTION_TYPES.BATCH_ORGANIZE:
         // Reverse each file operation in the batch
         for (const operation of action.data.operations.reverse()) {
           await this.reverseFileOperation(operation);
@@ -183,17 +184,17 @@ class UndoRedoService {
 
   async executeForwardAction(action) {
     switch (action.type) {
-      case 'FILE_MOVE':
+      case ACTION_TYPES.FILE_MOVE:
         // Move file to new location
         await fs.rename(action.data.originalPath, action.data.newPath);
         break;
         
-      case 'FILE_RENAME':
+      case ACTION_TYPES.FILE_RENAME:
         // Rename file to new name
         await fs.rename(action.data.originalPath, action.data.newPath);
         break;
         
-      case 'FILE_DELETE':
+      case ACTION_TYPES.FILE_DELETE:
         // Delete file again (move to backup if configured)
         if (action.data.createBackup) {
           await fs.rename(action.data.originalPath, action.data.backupPath);
@@ -202,12 +203,12 @@ class UndoRedoService {
         }
         break;
         
-      case 'FOLDER_CREATE':
+      case ACTION_TYPES.FOLDER_CREATE:
         // Create the folder again
         await fs.mkdir(action.data.folderPath, { recursive: true });
         break;
         
-      case 'BATCH_ORGANIZE':
+      case ACTION_TYPES.BATCH_ORGANIZE:
         // Re-execute each file operation in the batch
         for (const operation of action.data.operations) {
           await this.executeFileOperation(operation);
@@ -264,16 +265,20 @@ class UndoRedoService {
 
   getActionDescription(actionType, actionData) {
     switch (actionType) {
-      case 'FILE_MOVE':
+      case ACTION_TYPES.FILE_MOVE:
         return `Move ${path.basename(actionData.originalPath)} to ${path.dirname(actionData.newPath)}`;
-      case 'FILE_RENAME':
+      case ACTION_TYPES.FILE_RENAME:
         return `Rename ${path.basename(actionData.originalPath)} to ${path.basename(actionData.newPath)}`;
-      case 'FILE_DELETE':
+      case ACTION_TYPES.FILE_DELETE:
         return `Delete ${path.basename(actionData.originalPath)}`;
-      case 'FOLDER_CREATE':
+      case ACTION_TYPES.FOLDER_CREATE:
         return `Create folder ${path.basename(actionData.folderPath)}`;
-      case 'BATCH_ORGANIZE':
+      case ACTION_TYPES.FOLDER_RENAME:
+        return `Rename folder ${path.basename(actionData.originalPath)} to ${path.basename(actionData.newPath)}`;
+      case ACTION_TYPES.BATCH_ORGANIZE:
         return `Organize ${actionData.operations.length} files`;
+      case ACTION_TYPES.ANALYSIS_RESULT:
+        return `Analyze ${path.basename(actionData.filePath)}`;
       default:
         return `Unknown action: ${actionType}`;
     }

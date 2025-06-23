@@ -8,6 +8,7 @@ const AppConfig = {
   ai: {
     audioAnalysis: {
       textModel: 'gemma3:4b', // Use gemma3 for analyzing audio content descriptions
+      whisperModel: 'whisper:latest', // Whisper model for audio transcription
       defaultHost: 'http://127.0.0.1:11434',
       timeout: 180000, // 3 minutes for audio processing
       temperature: 0.1,

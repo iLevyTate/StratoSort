@@ -796,14 +796,14 @@ ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_IN_FOLDER, async (event, filePath) => {
     shell.showItemInFolder(normalizedPath);
     logger.info('File revealed in folder successfully', { 
       component: 'file-ops',
-      operation: 'reveal-in-folder',
+      operation: 'reveal-file',
       filePath: normalizedPath 
     });
     return { success: true };
   } catch (error) {
     logger.error('Failed to reveal file in folder', { 
       component: 'file-ops',
-      operation: 'reveal-in-folder',
+      operation: 'reveal-file',
       error: error.message,
       filePath 
     });
@@ -1696,6 +1696,75 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
   }
 });
 
+// Helper function for directory scanning
+async function scanDirectory(dirPath, options = {}) {
+  const { maxDepth = 3, includeSystemFiles = false } = options;
+  
+  const scanFolder = async (folderPath, depth = 0) => {
+    if (depth > maxDepth) return [];
+    
+    try {
+      const items = await fs.readdir(folderPath, { withFileTypes: true });
+      const files = [];
+      
+      for (const item of items) {
+        // Skip system files if not included
+        if (!includeSystemFiles && item.name.startsWith('.')) {
+          continue;
+        }
+        
+        const itemPath = path.join(folderPath, item.name);
+        
+        if (item.isFile()) {
+          const ext = path.extname(item.name).toLowerCase();
+          const supportedExts = [
+            '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf',
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff',
+            '.mp3', '.wav', '.m4a', '.flac', '.ogg',
+            '.mp4', '.mov', '.avi', '.mkv',
+            '.zip', '.rar', '.7z', '.tar', '.gz'
+          ];
+          
+          if (supportedExts.includes(ext)) {
+            try {
+              const stats = await fs.stat(itemPath);
+              files.push({
+                name: item.name,
+                path: itemPath,
+                type: 'file',
+                extension: ext,
+                size: stats.size,
+                modified: stats.mtime,
+                directory: folderPath
+              });
+            } catch (statError) {
+              logger.warn('Failed to get file stats', {
+                component: 'directory-scan',
+                file: itemPath,
+                error: statError.message
+              });
+            }
+          }
+        } else if (item.isDirectory() && !item.name.startsWith('.')) {
+          const subFiles = await scanFolder(itemPath, depth + 1);
+          files.push(...subFiles);
+        }
+      }
+      
+      return files;
+    } catch (error) {
+      logger.warn('Error scanning folder', {
+        component: 'directory-scan',
+        folderPath,
+        error: error.message
+      });
+      return [];
+    }
+  };
+  
+  return await scanFolder(dirPath);
+}
+
 // System scan handler for common directories
 ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
   try {
@@ -1711,7 +1780,6 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
     ];
 
     const files = [];
-    // const { scanDirectory } = require('./folderScanner'); // Using system scan instead
 
     for (const dir of commonDirs) {
       try {

@@ -172,14 +172,21 @@ class SecureIPCManager {
       for (const value of Object.values(obj)) {
         if (typeof value === 'string') {
           channels.push(value);
+        } else if (Array.isArray(value)) {
+          // Handle arrays of strings (like FILE_ACTIONS)
+          channels.push(...value);
         } else if (typeof value === 'object' && value !== null) {
           flattenChannels(value);
         }
       }
     }
     
+    // Process both IPC_CHANNELS and ALLOWED_CHANNELS
     flattenChannels(IPC_CHANNELS);
-    return channels;
+    flattenChannels(ALLOWED_CHANNELS);
+    
+    // Remove duplicates and return
+    return [...new Set(channels)];
   }
 
   /**
@@ -295,7 +302,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FILE, filePath),
     // Add missing file operations that the UI is calling
     open: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FILE, filePath),
-    reveal: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.REVEAL_FILE, filePath),
+    reveal: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.REVEAL_IN_FOLDER, filePath),
     copy: (sourcePath, destinationPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.COPY_FILE, sourcePath, destinationPath),
     deleteFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FOLDER, folderPath),
     openFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FOLDER, folderPath),

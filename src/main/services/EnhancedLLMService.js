@@ -363,8 +363,35 @@ Provide detailed JSON analysis with all relevant fields:`;
       // Semantic similarity matching using LLM
       const semanticScores = await this.semanticSimilarityMatching(suggestedCategory, smartFolders, content);
       
+      // Validate semanticScores is an array
+      if (!Array.isArray(semanticScores) || semanticScores.length === 0) {
+        console.warn('[ENHANCED-LLM] Invalid semantic scores, using fallback');
+        return { 
+          category: smartFolders[0]?.name || suggestedCategory, 
+          matchConfidence: 0.5,
+          matchMethod: 'fallback-invalid-scores'
+        };
+      }
+      
+      // Validate each score object has required properties
+      const validScores = semanticScores.filter(score => 
+        score && 
+        typeof score === 'object' && 
+        score.folder && 
+        typeof score.similarity === 'number'
+      );
+      
+      if (validScores.length === 0) {
+        console.warn('[ENHANCED-LLM] No valid semantic scores, using fallback');
+        return { 
+          category: smartFolders[0]?.name || suggestedCategory, 
+          matchConfidence: 0.5,
+          matchMethod: 'fallback-no-valid-scores'
+        };
+      }
+      
       // Select best match
-      const bestMatch = semanticScores.reduce((best, current) => 
+      const bestMatch = validScores.reduce((best, current) => 
         current.similarity > best.similarity ? current : best
       );
 
@@ -372,14 +399,14 @@ Provide detailed JSON analysis with all relevant fields:`;
         category: bestMatch.folder,
         matchConfidence: bestMatch.similarity,
         matchMethod: 'semantic',
-        reasoning: bestMatch.reasoning
+        reasoning: bestMatch.reasoning || 'AI semantic matching'
       };
     } catch (error) {
       console.error('[ENHANCED-LLM] Enhanced folder matching failed:', error.message);
       return { 
         category: smartFolders[0]?.name || suggestedCategory, 
         matchConfidence: 0.5,
-        matchMethod: 'fallback'
+        matchMethod: 'fallback-error'
       };
     }
   }
@@ -397,7 +424,7 @@ Provide detailed JSON analysis with all relevant fields:`;
     const prompt = `Analyze semantic similarity between the suggested category and available folders:
 
 SUGGESTED CATEGORY: "${category}"
-CONTENT CONTEXT: "${content.substring(0, 2000)}"
+CONTENT CONTEXT: "${content ? content.substring(0, 2000) : 'No content context available'}"
 
 AVAILABLE FOLDERS:
 ${folderDescriptions.map((f, i) => `${i + 1}. ${f.name}: ${f.description}
@@ -413,17 +440,53 @@ Respond with JSON array:
 ]`;
 
     try {
-      const response = await this.ollama.generate({
-        model: 'gemma3:4b',
-        prompt,
-        options: this.parameterProfiles.factual,
-        format: 'json'
+      const response = await Promise.race([
+        this.ollama.generate({
+          model: 'gemma3:4b',
+          prompt,
+          options: {
+            ...this.parameterProfiles.factual,
+            num_predict: 800
+          },
+          format: 'json'
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Semantic matching timeout')), 30000)
+        )
+      ]);
+
+      if (!response || !response.response) {
+        throw new Error('Empty response from Ollama');
+      }
+
+      const parsedResponse = JSON.parse(response.response);
+      
+      // Validate the parsed response is an array
+      if (!Array.isArray(parsedResponse)) {
+        throw new Error('Response is not an array');
+      }
+      
+      // Ensure all folders are represented
+      const responseMap = new Map(parsedResponse.map(item => [item.folder, item]));
+      const completeResults = smartFolders.map(folder => {
+        const existing = responseMap.get(folder.name);
+        return existing || {
+          folder: folder.name,
+          similarity: 0.5,
+          reasoning: 'Default similarity score'
+        };
       });
 
-      return JSON.parse(response.response);
+      return completeResults;
     } catch (error) {
       console.error('[ENHANCED-LLM] Semantic matching failed:', error.message);
-      return smartFolders.map((f) => ({ folder: f.name, similarity: 0.5, reasoning: 'fallback' }));
+      
+      // Return fallback scores for all folders
+      return smartFolders.map((f) => ({ 
+        folder: f.name, 
+        similarity: 0.5, 
+        reasoning: `Fallback due to error: ${error.message}` 
+      }));
     }
   }
 

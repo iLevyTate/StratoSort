@@ -1,17 +1,19 @@
 const path = require('path');
+
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
   
-  return {
+  // Base configuration for renderer
+  const rendererConfig = {
     mode: argv.mode || 'development',
-    entry: './src/renderer/App.js',
+    entry: './src/renderer/App.jsx',
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'renderer.js',
-      clean: true
+      clean: false // Don't clean when building multiple targets
     },
     target: 'electron-renderer',
     module: {
@@ -39,19 +41,19 @@ module.exports = (env, argv) => {
         '@': path.resolve(__dirname, 'src/renderer')
       },
       fallback: {
-        "path": require.resolve("path-browserify"),
-        "os": require.resolve("os-browserify/browser"),
-        "crypto": require.resolve("crypto-browserify"),
-        "buffer": require.resolve("buffer"),
-        "process": require.resolve("process/browser"),
-        "stream": require.resolve("stream-browserify"),
-        "util": require.resolve("util"),
-        "url": require.resolve("url"),
-        "querystring": require.resolve("querystring-es3"),
-        "assert": require.resolve("assert"),
-        "fs": false,
-        "child_process": false,
-        "worker_threads": false
+        'path': require.resolve('path-browserify'),
+        'os': require.resolve('os-browserify/browser'),
+        'crypto': require.resolve('crypto-browserify'),
+        'buffer': require.resolve('buffer'),
+        'process': require.resolve('process/browser'),
+        'stream': require.resolve('stream-browserify'),
+        'util': require.resolve('util'),
+        'url': require.resolve('url'),
+        'querystring': require.resolve('querystring-es3'),
+        'assert': require.resolve('assert'),
+        'fs': false,
+        'child_process': false,
+        'worker_threads': false
       }
     },
     externals: {
@@ -69,30 +71,69 @@ module.exports = (env, argv) => {
       }),
       new webpack.ProvidePlugin({
         process: 'process/browser',
-        Buffer: ['buffer', 'Buffer']
+        Buffer: ['buffer', 'Buffer'],
+        React: 'react',
+        ReactDOM: 'react-dom'
       })
     ],
-    // Use secure devtool options
     devtool: isProduction ? false : 'source-map',
-    
-    // Development server configuration
     devServer: isProduction ? undefined : {
       static: {
-        directory: path.join(__dirname, 'dist'),
+        directory: path.join(__dirname, 'dist')
       },
       compress: true,
       port: 3000,
       hot: true,
-      // Security headers
       headers: {
         'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
       }
     },
-    
-    // Optimization
     optimization: {
       minimize: isProduction,
-      splitChunks: false // Electron doesn't need code splitting
+      splitChunks: false
     }
   };
+
+  // If we're building for production, also build main and preload
+  if (isProduction) {
+    return [
+      rendererConfig,
+      // Main process config
+      {
+        mode: 'production',
+        entry: './src/main/index.js',
+        target: 'electron-main',
+        output: {
+          path: path.resolve(__dirname, 'dist/main'),
+          filename: 'index.js'
+        },
+        node: {
+          __dirname: false,
+          __filename: false
+        },
+        externals: {
+          electron: 'require("electron")'
+        }
+      },
+      // Preload process config
+      {
+        mode: 'production',
+        entry: './src/preload/index.js',
+        target: 'electron-preload',
+        output: {
+          path: path.resolve(__dirname, 'dist/preload'),
+          filename: 'index.js'
+        },
+        node: {
+          __dirname: false,
+          __filename: false
+        },
+        externals: {
+          electron: 'require("electron")'
+        }
+      }
+    ];
+  }
+
+  return rendererConfig;
 }; 

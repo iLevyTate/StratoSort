@@ -526,12 +526,11 @@ describe('Refactored Components Integration', () => {
         EnhancedAiAnalysis = class {
           constructor() {
             this.analyzers = new Map();
+            this.analyzeFile = jest.fn();
+            this.analyzeFiles = jest.fn();
+            this.addProgressCallback = jest.fn();
+            this.getProcessingStats = jest.fn();
           }
-          
-          analyzeFile = jest.fn();
-          analyzeFiles = jest.fn();
-          addProgressCallback = jest.fn();
-          getProcessingStats = jest.fn();
         };
       }
     });

@@ -1,40 +1,27 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
+
 const path = require('path');
 const fs = require('fs').promises;
 const { existsSync } = require('fs');
-const os = require('os');
-const { performance } = require('perf_hooks');
 
-// Load environment variables from .env, .env.local, etc.
+// Load environment variables
 require('dotenv-flow').config();
 
+// Environment detection
 const isDev = process.env.NODE_ENV === 'development';
 
-// Import error handling system
+const { IPC_CHANNELS } = require('../shared/constants');
+const { logger } = require('../shared/logger');
+
+const { analyzeDocumentFile } = require('./analysis/ollamaDocumentAnalysis');
+const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
 const { 
   AnalysisError, 
   ModelMissingError, 
   FileProcessingError,
   OllamaConnectionError 
 } = require('./errors/AnalysisError');
-
-const { scanDirectory } = require('./folderScanner');
-const { getOrganizationSuggestions } = require('./llmService');
-const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig, getOllamaConfigPath } = require('./ollamaUtils');
-
-// Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
-
-// Import shared constants
-const { IPC_CHANNELS } = require('../shared/constants');
-
-// Import services
-const { analyzeDocumentFile } = require('./analysis/ollamaDocumentAnalysis');
-const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
-// Audio analysis removed - const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-
-// Import OCR library
-const tesseract = require('node-tesseract-ocr');
 
 let mainWindow;
 let customFolders = []; // Initialize customFolders at module level
@@ -55,7 +42,10 @@ async function loadCustomFolders() {
     const data = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    console.log('[STARTUP] No saved custom folders found, using defaults');
+    logger.info('No saved custom folders found, using defaults', { 
+      component: 'startup',
+      configPath: getCustomFoldersPath() 
+    });
     
     // Get the Documents path for default folders
     const documentsPath = app.getPath('documents');
@@ -85,9 +75,17 @@ async function saveCustomFolders(folders) {
   try {
     const filePath = getCustomFoldersPath();
     await fs.writeFile(filePath, JSON.stringify(folders, null, 2));
-    console.log('[STORAGE] Saved custom folders to:', filePath);
+    logger.info('Custom folders saved successfully', { 
+      component: 'storage',
+      filePath,
+      folderCount: folders.length 
+    });
   } catch (error) {
-    console.error('[ERROR] Failed to save custom folders:', error);
+    logger.error('Failed to save custom folders', { 
+      component: 'storage',
+      error: error.message,
+      filePath 
+    });
   }
 }
 
@@ -148,7 +146,10 @@ const systemAnalytics = {
         rss: Math.round(memUsage.rss / 1024 / 1024) // MB
       };
     } catch (error) {
-      console.warn('Could not collect memory metrics:', error.message);
+      logger.warn('Could not collect memory metrics', { 
+        component: 'analytics',
+        error: error.message 
+      });
     }
 
     return metrics;
@@ -161,22 +162,25 @@ const systemAnalytics = {
   destroy() {
     // Cleanup analytics data
     this.errors = [];
-    console.log('[ANALYTICS] System analytics cleaned up');
+    logger.info('System analytics cleaned up', { component: 'analytics' });
   }
 };
 
 // Create the browser window
 function createWindow() {
-  console.log('[DEBUG] createWindow() called');
+  logger.debug('createWindow() called', { component: 'window-manager' });
   
   // Prevent creating multiple windows
   if (mainWindow && !mainWindow.isDestroyed()) {
-    console.log('[DEBUG] Window already exists, focusing...');
+    logger.debug('Window already exists, focusing existing window', { 
+      component: 'window-manager',
+      windowExists: true 
+    });
     mainWindow.focus();
     return;
   }
   
-  console.log('[DEBUG] Creating new window...');
+  logger.debug('Creating new browser window', { component: 'window-manager' });
   
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -203,17 +207,26 @@ function createWindow() {
     autoHideMenuBar: !isDev // Hide menu bar in production
   });
   
-  console.log('[DEBUG] BrowserWindow created');
+  logger.debug('BrowserWindow created successfully', { 
+    component: 'window-manager',
+    isDev,
+    devTools: isDev 
+  });
 
   // Load the app
   if (isDev) {
     // Try to load from webpack dev server, fallback to built files
     mainWindow.loadURL('http://localhost:3000').catch((error) => {
-      console.log('Development server not available:', error.message);
-      console.log('Loading from built files instead...');
+      logger.warn('Development server not available, loading from built files', { 
+        component: 'window-manager',
+        error: error.message 
+      });
       const distPath = path.join(__dirname, '../../dist/index.html');
       mainWindow.loadFile(distPath).catch((fileError) => {
-        console.error('Failed to load from built files, trying original:', fileError);
+        logger.error('Failed to load from built files, trying original', { 
+          component: 'window-manager',
+          error: fileError.message 
+        });
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
       });
     });
@@ -225,7 +238,10 @@ function createWindow() {
     // In production, load from built files
     const distPath = path.join(__dirname, '../../dist/index.html');
     mainWindow.loadFile(distPath).catch((error) => {
-      console.error('Failed to load from dist, falling back:', error);
+      logger.error('Failed to load from dist, falling back to renderer', { 
+        component: 'window-manager',
+        error: error.message 
+      });
       mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
     });
   }
@@ -245,8 +261,8 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus(); // Ensure window is focused
-    console.log('✅ StratoSort window ready and focused');
-    console.log('[DEBUG] Window state:', {
+    logger.info('StratoSort window ready and focused', { 
+      component: 'window-manager',
       isVisible: mainWindow.isVisible(),
       isFocused: mainWindow.isFocused(),
       isMinimized: mainWindow.isMinimized()
@@ -267,7 +283,7 @@ function createWindow() {
       'https://ollama.ai'
     ];
     
-    if (allowedDomains.some(domain => url.startsWith(domain))) {
+    if (allowedDomains.some((domain) => url.startsWith(domain))) {
       shell.openExternal(url);
     }
     return { action: 'deny' };
@@ -277,22 +293,25 @@ function createWindow() {
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
 
-// NOTE: Old handle-file-selection handler removed - using IPC_CHANNELS.FILES.SELECT instead
 
-// NOTE: Old select-directory handler removed - using IPC_CHANNELS.FILES.SELECT_DIRECTORY instead
 
-// NOTE: Old get-documents-path handler removed - using IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH instead
-
-// NOTE: Old get-file-stats handler removed - using IPC_CHANNELS.FILES.GET_FILE_STATS instead
-
-ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, basePath, folderName) => {
+ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, folderPath) => {
   try {
-    const folderPath = path.join(basePath, folderName);
-    await fs.mkdir(folderPath, { recursive: true });
-    console.log('[FILE-OPS] Created folder:', folderPath);
-    return { success: true, path: folderPath };
+    const normalizedPath = path.resolve(folderPath);
+    await fs.mkdir(normalizedPath, { recursive: true });
+    logger.info('Folder created successfully', { 
+      component: 'file-ops',
+      operation: 'create-folder',
+      folderPath: normalizedPath 
+    });
+    return { success: true, path: normalizedPath };
   } catch (error) {
-    console.error('[FILE-OPS] Error creating folder:', error);
+    logger.error('Failed to create folder', { 
+      component: 'file-ops',
+      operation: 'create-folder',
+      error: error.message,
+      folderPath 
+    });
     return { success: false, error: error.message };
   }
 });
@@ -307,7 +326,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) 
     try {
       const stats = await fs.stat(normalizedPath);
       if (stats.isDirectory()) {
-        console.log('[FILE-OPS] Folder already exists:', normalizedPath);
+        logger.info('Folder already exists', {
+          component: 'file-operations',
+          path: normalizedPath
+        });
         return { success: true, path: normalizedPath, existed: true };
       }
     } catch (statError) {
@@ -315,10 +337,17 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) 
     }
     
     await fs.mkdir(normalizedPath, { recursive: true });
-    console.log('[FILE-OPS] Created folder:', normalizedPath);
+    logger.info('Created folder successfully', {
+      component: 'file-operations',
+      path: normalizedPath
+    });
     return { success: true, path: normalizedPath, existed: false };
   } catch (error) {
-    console.error('[FILE-OPS] Error creating folder:', error);
+    logger.error('Error creating folder', {
+      component: 'file-operations', 
+      path: normalizedPath,
+      error: error.message
+    });
     
     // Provide more specific error information
     let userMessage = 'Failed to create folder';
@@ -379,14 +408,21 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
     
     // Delete the empty folder
     await fs.rmdir(normalizedPath);
-    console.log('[FILE-OPS] Deleted folder:', normalizedPath);
+    logger.info('Folder deleted successfully', { 
+      component: 'file-ops',
+      path: normalizedPath 
+    });
     return { 
       success: true, 
       path: normalizedPath, 
       message: 'Folder deleted successfully' 
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error deleting folder:', error);
+    logger.error('Error deleting folder', { 
+      component: 'file-ops',
+      path: normalizedPath,
+      error: error.message
+    });
     
     // Provide specific error information
     let userMessage = 'Failed to delete folder';
@@ -410,173 +446,249 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
 ipcMain.handle(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, async (event, dirPath) => {
   try {
     const items = await fs.readdir(dirPath, { withFileTypes: true });
-    const result = items.map(item => ({
+    const result = items.map((item) => ({
       name: item.name,
       path: path.join(dirPath, item.name),
       isDirectory: item.isDirectory(),
       isFile: item.isFile()
     }));
-    console.log('[FILE-OPS] Listed directory contents:', dirPath, result.length, 'items');
+    logger.info('Listed directory contents', { 
+      component: 'file-ops',
+      dirPath,
+      itemCount: result.length 
+    });
     return result;
   } catch (error) {
-    console.error('[FILE-OPS] Error reading directory:', error);
+    logger.error('Error reading directory', { 
+      component: 'file-ops',
+      dirPath,
+      error: error.message
+    });
     return { error: error.message };
   }
 });
 
+// Handle file operations (move, copy, delete, batch organize)
 ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) => {
   try {
-    console.log('[FILE-OPS] Performing operation:', operation.type);
-    console.log('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
+    logger.info('File operation initiated', { 
+      component: 'file-ops',
+      operation: operation.type,
+      details: operation.type === 'batch_organize' ? 
+        { fileCount: operation.operations?.length } : 
+        { source: operation.source, destination: operation.destination }
+    });
     
-    switch (operation.type) {
-      case 'move':
-        console.log(`[FILE-OPS] Moving file: ${operation.source} → ${operation.destination}`);
-        await fs.rename(operation.source, operation.destination);
-        console.log(`[FILE-OPS] ✅ Successfully moved: ${operation.source} → ${operation.destination}`);
-        return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
+    if (operation.type === 'move') {
+      logger.debug('Moving file', { 
+        component: 'file-ops',
+        source: operation.source,
+        destination: operation.destination 
+      });
+      await fs.rename(operation.source, operation.destination);
+      logger.info('File moved successfully', { 
+        component: 'file-ops',
+        source: operation.source,
+        destination: operation.destination 
+      });
+      return { success: true, type: 'move' };
+    } else if (operation.type === 'copy') {
+      logger.debug('Copying file', { 
+        component: 'file-ops',
+        source: operation.source,
+        destination: operation.destination 
+      });
+      await fs.copyFile(operation.source, operation.destination);
+      logger.info('File copied successfully', { 
+        component: 'file-ops',
+        source: operation.source,
+        destination: operation.destination 
+      });
+      return { success: true, type: 'copy' };
+    } else if (operation.type === 'delete') {
+      logger.debug('Deleting file', { 
+        component: 'file-ops',
+        source: operation.source 
+      });
+      await fs.unlink(operation.source);
+      logger.info('File deleted successfully', { 
+        component: 'file-ops',
+        source: operation.source 
+      });
+      return { success: true, type: 'delete' };
+    } else if (operation.type === 'batch_organize') {
+      logger.info('Starting batch file organization', { 
+        component: 'file-ops',
+        fileCount: operation.operations.length 
+      });
+      
+      const results = [];
+      let successCount = 0;
+      let failCount = 0;
         
-      case 'copy':
-        console.log(`[FILE-OPS] Copying file: ${operation.source} → ${operation.destination}`);
-        await fs.copyFile(operation.source, operation.destination);
-        console.log(`[FILE-OPS] ✅ Successfully copied: ${operation.source} → ${operation.destination}`);
-        return { success: true, message: `Copied ${operation.source} to ${operation.destination}` };
+      for (let i = 0; i < operation.operations.length; i++) {
+        const op = operation.operations[i];
         
-      case 'delete':
-        console.log(`[FILE-OPS] Deleting file: ${operation.source}`);
-        await fs.unlink(operation.source);
-        console.log(`[FILE-OPS] ✅ Successfully deleted: ${operation.source}`);
-        return { success: true, message: `Deleted ${operation.source}` };
-        
-      case 'batch_organize':
-        console.log(`[FILE-OPS] Starting batch organization of ${operation.operations.length} files`);
-        const results = [];
-        let successCount = 0;
-        let failCount = 0;
-        
-        for (let i = 0; i < operation.operations.length; i++) {
-          const op = operation.operations[i];
-          try {
-            console.log(`[FILE-OPS] [${i+1}/${operation.operations.length}] Processing: ${op.source}`);
-            console.log(`[FILE-OPS] Target: ${op.destination}`);
+        logger.debug('Processing batch operation', { 
+          component: 'file-ops',
+          progress: `${i+1}/${operation.operations.length}`,
+          source: op.source,
+          destination: op.destination 
+        });
             
-            // Validate operation data
-            if (!op.source || !op.destination) {
-              throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
-            }
-            
-            // Ensure destination directory exists
-            const destDir = path.dirname(op.destination);
-            console.log(`[FILE-OPS] Creating directory if needed: ${destDir}`);
-            await fs.mkdir(destDir, { recursive: true });
-            
-            // Check if source file exists
-            try {
-              await fs.access(op.source);
-              const sourceStats = await fs.stat(op.source);
-              console.log(`[FILE-OPS] ✅ Source file exists: ${op.source} (${sourceStats.size} bytes)`);
-            } catch (accessError) {
-              throw new Error(`Source file does not exist: ${op.source}`);
-            }
-            
-            // Check if destination already exists
-            try {
-              await fs.access(op.destination);
-              console.log(`[FILE-OPS] ⚠️  Destination already exists: ${op.destination}`);
-              // Generate unique filename if destination exists
-              let counter = 1;
-              let uniqueDestination = op.destination;
-              const ext = path.extname(op.destination);
-              const baseName = op.destination.replace(ext, '');
-              
-              while (existsSync(uniqueDestination)) {
-                uniqueDestination = `${baseName}_${counter}${ext}`;
-                counter++;
-              }
-              
-              if (uniqueDestination !== op.destination) {
-                console.log(`[FILE-OPS] Using unique name: ${uniqueDestination}`);
-                op.destination = uniqueDestination;
-              }
-            } catch (accessError) {
-              console.log(`[FILE-OPS] ✅ Destination path is clear: ${op.destination}`);
-            }
-            
-            // Move the file (handle cross-drive moves on Windows)
-            console.log(`[FILE-OPS] Moving: ${op.source} → ${op.destination}`);
-            
-            try {
-              await fs.rename(op.source, op.destination);
-              console.log(`[FILE-OPS] ✅ Successfully moved: ${path.basename(op.source)}`);
-            } catch (renameError) {
-              if (renameError.code === 'EXDEV') {
-                // Cross-device link error - copy then delete
-                console.log(`[FILE-OPS] Cross-device move detected, using copy+delete`);
-                await fs.copyFile(op.source, op.destination);
-                
-                // Verify copy was successful
-                const sourceStats = await fs.stat(op.source);
-                const destStats = await fs.stat(op.destination);
-                if (sourceStats.size !== destStats.size) {
-                  throw new Error('File copy verification failed - size mismatch');
-                }
-                
-                await fs.unlink(op.source);
-                console.log(`[FILE-OPS] ✅ Successfully copied and removed: ${path.basename(op.source)}`);
-              } else {
-                throw renameError;
-              }
-            }
-            
-            results.push({
-              success: true,
-              source: op.source,
-              destination: op.destination,
-              operation: op.type || 'move'
-            });
-            
-            successCount++;
-            
-            // Send progress update to renderer
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('operation-progress', {
-                current: i + 1,
-                total: operation.operations.length,
-                file: path.basename(op.source)
-              });
-            }
-            
-          } catch (error) {
-            console.error(`[FILE-OPS] ❌ Operation ${i+1} failed:`, error.message);
-            
-            results.push({
-              success: false,
-              source: op.source,
-              destination: op.destination,
-              error: error.message,
-              operation: op.type || 'move'
-            });
-            
-            failCount++;
+        try {
+          // Validate operation data
+          if (!op.source || !op.destination) {
+            throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
           }
+            
+          // Ensure destination directory exists
+          const destDir = path.dirname(op.destination);
+          logger.debug('Ensuring destination directory exists', { 
+            component: 'file-ops',
+            destDir 
+          });
+          await fs.mkdir(destDir, { recursive: true });
+            
+          // Check if source file exists
+          const sourceStats = await fs.stat(op.source);
+          if (!sourceStats.isFile()) {
+            throw new Error(`Source file does not exist: ${op.source}`);
+          }
+
+          logger.debug('Source file verified', { 
+            component: 'file-ops',
+            source: op.source,
+            size: sourceStats.size 
+          });
+            
+          // Check if destination already exists
+          try {
+            await fs.access(op.destination);
+            logger.warn('Destination already exists, generating unique name', { 
+              component: 'file-ops',
+              destination: op.destination 
+            });
+            // Generate unique filename if destination exists
+            let counter = 1;
+            let uniqueDestination = op.destination;
+            const ext = path.extname(op.destination);
+            const baseName = op.destination.replace(ext, '');
+              
+            while (existsSync(uniqueDestination)) {
+              uniqueDestination = `${baseName}_${counter}${ext}`;
+              counter++;
+            }
+              
+            if (uniqueDestination !== op.destination) {
+              logger.info('Using unique filename', { 
+                component: 'file-ops',
+                original: op.destination,
+                unique: uniqueDestination 
+              });
+              op.destination = uniqueDestination;
+            }
+          } catch (accessError) {
+            logger.debug('Destination path is available', { 
+              component: 'file-ops',
+              destination: op.destination 
+            });
+          }
+            
+          // Move the file (handle cross-drive moves on Windows)
+          logger.debug('Moving file to destination', { 
+            component: 'file-ops',
+            source: op.source,
+            destination: op.destination 
+          });
+            
+          try {
+            await fs.rename(op.source, op.destination);
+            logger.info('File moved successfully', { 
+              component: 'file-ops',
+              fileName: path.basename(op.source),
+              destination: path.dirname(op.destination) 
+            });
+          } catch (renameError) {
+            if (renameError.code === 'EXDEV') {
+              // Cross-device move detected, use copy+delete
+              logger.debug('Cross-device move detected, using copy+delete', { 
+                component: 'file-ops' 
+              });
+              
+              await fs.copyFile(op.source, op.destination);
+                
+              // Verify the copy was successful before deleting original
+              const copyStats = await fs.stat(op.destination);
+              if (copyStats.size !== sourceStats.size) {
+                throw new Error('File copy verification failed - size mismatch');
+              }
+                
+              await fs.unlink(op.source);
+              logger.info('File copied and removed successfully', { 
+                component: 'file-ops',
+                fileName: path.basename(op.source) 
+              });
+            } else {
+              throw renameError;
+            }
+          }
+            
+          results.push({
+            source: op.source,
+            destination: op.destination,
+            success: true
+          });
+          successCount++;
+            
+        } catch (error) {
+          logger.error('Batch operation failed for file', { 
+            component: 'file-ops',
+            operation: i+1,
+            error: error.message,
+            source: op.source 
+          });
+            
+          results.push({
+            source: op.source,
+            destination: op.destination,
+            success: false,
+            error: error.message
+          });
+          failCount++;
         }
+      }
         
-        console.log(`[FILE-OPS] Batch operation complete: ${successCount} success, ${failCount} failed`);
+      logger.info('Batch operation completed', { 
+        component: 'file-ops',
+        successCount,
+        failCount,
+        totalFiles: operation.operations.length 
+      });
         
-        return {
-          success: successCount > 0,
-          results: results,
-          successCount: successCount,
-          failCount: failCount,
-          summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`
-        };
-        
-      default:
-        console.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
-        return { success: false, error: `Unknown operation type: ${operation.type}` };
+      return {
+        success: true,
+        type: 'batch_organize',
+        results,
+        summary: {
+          total: operation.operations.length,
+          successful: successCount,
+          failed: failCount
+        }
+      };
+    } else {
+      logger.error('Unknown operation type', { 
+        component: 'file-ops',
+        operationType: operation.type 
+      });
+      return { success: false, error: `Unknown operation type: ${operation.type}` };
     }
   } catch (error) {
-    console.error('[FILE-OPS] Error performing operation:', error);
+    logger.error('File operation failed', { 
+      component: 'file-ops',
+      operation: operation.type,
+      error: error.message 
+    });
     return { success: false, error: error.message };
   }
 });
@@ -608,7 +720,11 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
     const stats = await fs.stat(filePath);
     
     await fs.unlink(filePath);
-    console.log('[FILE-OPS] Deleted file:', filePath, `(${stats.size} bytes)`);
+    logger.info('File deleted successfully', { 
+      component: 'file-ops',
+      filePath,
+      size: stats.size
+    });
     
     return { 
       success: true, 
@@ -620,7 +736,11 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
       }
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error deleting file:', error);
+    logger.error('Failed to delete file', { 
+      component: 'file-ops',
+      error: error.message,
+      filePath
+    });
     
     // Provide specific error codes for different failure types
     let errorCode = 'DELETE_FAILED';
@@ -650,23 +770,43 @@ ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
 // Open file with default application
 ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FILE, async (event, filePath) => {
   try {
-    await shell.openPath(filePath);
-    console.log('[FILE-OPS] Opened file:', filePath);
+    const normalizedPath = path.resolve(filePath);
+    await shell.openPath(normalizedPath);
+    logger.info('File opened successfully', { 
+      component: 'file-ops',
+      operation: 'open-file',
+      filePath: normalizedPath 
+    });
     return { success: true };
   } catch (error) {
-    console.error('[FILE-OPS] Error opening file:', error);
+    logger.error('Failed to open file', { 
+      component: 'file-ops',
+      operation: 'open-file',
+      error: error.message,
+      filePath 
+    });
     return { success: false, error: error.message };
   }
 });
 
 // Reveal file in file explorer
-ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_FILE, async (event, filePath) => {
+ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_IN_FOLDER, async (event, filePath) => {
   try {
-    await shell.showItemInFolder(filePath);
-    console.log('[FILE-OPS] Revealed file in folder:', filePath);
+    const normalizedPath = path.resolve(filePath);
+    shell.showItemInFolder(normalizedPath);
+    logger.info('File revealed in folder successfully', { 
+      component: 'file-ops',
+      operation: 'reveal-in-folder',
+      filePath: normalizedPath 
+    });
     return { success: true };
   } catch (error) {
-    console.error('[FILE-OPS] Error revealing file:', error);
+    logger.error('Failed to reveal file in folder', { 
+      component: 'file-ops',
+      operation: 'reveal-in-folder',
+      error: error.message,
+      filePath 
+    });
     return { success: false, error: error.message };
   }
 });
@@ -674,74 +814,62 @@ ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_FILE, async (event, filePath) => {
 // Enhanced copy operation with progress and validation
 ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, async (event, sourcePath, destinationPath) => {
   try {
-    // Validate paths
-    if (!sourcePath || !destinationPath) {
-      return { 
-        success: false, 
-        error: 'Source and destination paths are required',
-        errorCode: 'INVALID_PATHS'
-      };
-    }
-
-    // Normalize paths for cross-platform compatibility
     const normalizedSource = path.resolve(sourcePath);
     const normalizedDestination = path.resolve(destinationPath);
-    
-    // Check if source exists
-    try {
-      await fs.access(normalizedSource);
-    } catch (accessError) {
-      return { 
-        success: false, 
-        error: 'Source file not found',
-        errorCode: 'SOURCE_NOT_FOUND',
-        details: accessError.message
-      };
-    }
 
     // Ensure destination directory exists
     const destDir = path.dirname(normalizedDestination);
     await fs.mkdir(destDir, { recursive: true });
     
-    // Get source file stats
-    const sourceStats = await fs.stat(normalizedSource);
-    
+    // Copy the file
     await fs.copyFile(normalizedSource, normalizedDestination);
-    console.log('[FILE-OPS] Copied file:', normalizedSource, 'to', normalizedDestination);
+    
+    // Get file stats for logging
+    const stats = await fs.stat(normalizedDestination);
+    
+    logger.info('File copied successfully', { 
+      component: 'file-ops',
+      operation: 'copy-file',
+      source: normalizedSource,
+      destination: normalizedDestination,
+      size: stats.size 
+    });
     
     return { 
       success: true,
-      message: 'File copied successfully',
-      operation: {
-        source: normalizedSource,
-        destination: normalizedDestination,
-        size: sourceStats.size,
-        copiedAt: new Date().toISOString()
-      }
+      source: normalizedSource,
+      destination: normalizedDestination,
+      size: stats.size 
     };
   } catch (error) {
-    console.error('[FILE-OPS] Error copying file:', error);
+    logger.error('Failed to copy file', { 
+      component: 'file-ops',
+      operation: 'copy-file',
+      error: error.message,
+      sourcePath,
+      destinationPath 
+    });
     
+    // Provide specific error codes for different failure types
     let errorCode = 'COPY_FAILED';
     let userMessage = 'Failed to copy file';
     
-    if (error.code === 'ENOSPC') {
-      errorCode = 'INSUFFICIENT_SPACE';
-      userMessage = 'Insufficient disk space';
+    if (error.code === 'ENOENT') {
+      errorCode = 'SOURCE_NOT_FOUND';
+      userMessage = 'Source file not found';
     } else if (error.code === 'EACCES' || error.code === 'EPERM') {
       errorCode = 'PERMISSION_DENIED';
       userMessage = 'Permission denied';
-    } else if (error.code === 'EEXIST') {
-      errorCode = 'DESTINATION_EXISTS';
-      userMessage = 'Destination file already exists';
+    } else if (error.code === 'ENOSPC') {
+      errorCode = 'INSUFFICIENT_SPACE';
+      userMessage = 'Insufficient disk space';
     }
     
     return { 
       success: false, 
       error: userMessage,
       errorCode,
-      details: error.message,
-      systemError: error.code
+      details: error.message 
     };
   }
 });
@@ -749,50 +877,44 @@ ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, async (event, sourcePath, destinati
 // Enhanced folder opening with better path handling
 ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
   try {
-    if (!folderPath || typeof folderPath !== 'string') {
-      return { 
-        success: false, 
-        error: 'Invalid folder path provided',
-        errorCode: 'INVALID_PATH'
-      };
-    }
-
-    // Normalize path for cross-platform compatibility
     const normalizedPath = path.resolve(folderPath);
     
-    // Check if folder exists
-    try {
-      const stats = await fs.stat(normalizedPath);
-      if (!stats.isDirectory()) {
-        return { 
-          success: false, 
-          error: 'Path is not a directory',
-          errorCode: 'NOT_A_DIRECTORY'
-        };
-      }
-    } catch (accessError) {
-      return { 
-        success: false, 
-        error: 'Folder not found or inaccessible',
-        errorCode: 'FOLDER_NOT_FOUND',
-        details: accessError.message
-      };
+    // Verify it's a directory
+    const stats = await fs.stat(normalizedPath);
+    if (!stats.isDirectory()) {
+      throw new Error('Path is not a directory');
     }
 
     await shell.openPath(normalizedPath);
-    console.log('[FILE-OPS] Opened folder:', normalizedPath);
+    logger.info('Folder opened successfully', { 
+      component: 'file-ops',
+      operation: 'open-folder',
+      folderPath: normalizedPath 
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to open folder', { 
+      component: 'file-ops',
+      operation: 'open-folder',
+      error: error.message,
+      folderPath 
+    });
+    
+    let errorCode = 'OPEN_FAILED';
+    let userMessage = 'Failed to open folder';
+    
+    if (error.code === 'ENOENT') {
+      errorCode = 'FOLDER_NOT_FOUND';
+      userMessage = 'Folder not found';
+    } else if (error.message.includes('not a directory')) {
+      errorCode = 'NOT_A_DIRECTORY';
+      userMessage = 'Path is not a directory';
+    }
     
     return { 
-      success: true,
-      message: 'Folder opened successfully',
-      openedPath: normalizedPath
-    };
-  } catch (error) {
-    console.error('[FILE-OPS] Error opening folder:', error);
-    return { 
       success: false, 
-      error: 'Failed to open folder',
-      errorCode: 'OPEN_FAILED',
+      error: userMessage,
+      errorCode,
       details: error.message
     };
   }
@@ -800,7 +922,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
 
 // Enhanced Smart Folders with comprehensive validation and atomic operations
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
-  console.log('[SMART-FOLDERS] Getting Smart Folders for UI:', customFolders.length);
+  logger.info('Getting Smart Folders for UI', { customFoldersCount: customFolders.length });
   
   // Check physical existence of each folder
   const foldersWithStatus = await Promise.all(
@@ -824,7 +946,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, async () => {
-  console.log('[SMART-FOLDERS] Getting Custom Folders for UI:', customFolders.length);
+  logger.info('Getting Custom Folders for UI', { customFoldersCount: customFolders.length });
   return customFolders;
 });
 
@@ -841,7 +963,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
     try {
       customFolders = folders;
       await saveCustomFolders(folders);
-      console.log('[SMART-FOLDERS] Saved Smart Folders:', folders.length);
+      logger.info('Saved Smart Folders', { foldersCount: folders.length });
       return { success: true, folders: customFolders };
     } catch (saveError) {
       // Rollback on failure
@@ -849,7 +971,10 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to save smart folders:', error);
+    logger.error('Failed to save smart folders', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
     return { success: false, error: error.message, errorCode: 'SAVE_FAILED' };
   }
 });
@@ -867,7 +992,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) 
     try {
       customFolders = folders;
       await saveCustomFolders(folders);
-      console.log('[SMART-FOLDERS] Updated Custom Folders:', folders.length);
+      logger.info('Updated Custom Folders', { foldersCount: folders.length });
       return { success: true, folders: customFolders };
     } catch (saveError) {
       // Rollback on failure
@@ -875,7 +1000,10 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) 
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to update custom folders:', error);
+    logger.error('Failed to update custom folders', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
     return { success: false, error: error.message, errorCode: 'UPDATE_FAILED' };
   }
 });
@@ -891,7 +1019,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       return { success: false, error: 'Valid folder data is required', errorCode: 'INVALID_FOLDER_DATA' };
     }
 
-    const folderIndex = customFolders.findIndex(f => f.id === folderId);
+    const folderIndex = customFolders.findIndex((f) => f.id === folderId);
     if (folderIndex === -1) {
       return { success: false, error: 'Folder not found', errorCode: 'FOLDER_NOT_FOUND' };
     }
@@ -908,7 +1036,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       }
 
       // Check for duplicate names (excluding current folder)
-      const existingFolder = customFolders.find(f => 
+      const existingFolder = customFolders.find((f) => 
         f.id !== folderId && f.name.toLowerCase() === updatedFolder.name.trim().toLowerCase()
       );
 
@@ -964,9 +1092,16 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
 
         // Attempt rename
         await fs.rename(oldPath, newPath);
-        console.log(`[SMART-FOLDERS] Renamed directory \"${oldPath}\" -> \"${newPath}\"`);
+        logger.info('Renamed directory', {
+          component: 'smart-folders',
+          oldPath,
+          newPath
+        });
       } catch (renameErr) {
-        console.error('[SMART-FOLDERS] Directory rename failed:', renameErr.message);
+        logger.error('Directory rename failed', {
+          component: 'smart-folders',
+          error: renameErr.message
+        });
         return { success: false, error: 'Failed to rename directory', errorCode: 'RENAME_FAILED', details: renameErr.message };
       }
     }
@@ -980,7 +1115,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       };
       
       await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Edited Smart Folder:', folderId);
+      logger.info('Edited Smart Folder', { folderId });
       
       return { 
         success: true, 
@@ -993,7 +1128,10 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedF
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to edit smart folder:', error);
+    logger.error('Failed to edit smart folder', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
     return { 
       success: false, 
       error: error.message,
@@ -1009,7 +1147,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
       return { success: false, error: 'Valid folder ID is required', errorCode: 'INVALID_FOLDER_ID' };
     }
 
-    const folderIndex = customFolders.findIndex(f => f.id === folderId);
+    const folderIndex = customFolders.findIndex((f) => f.id === folderId);
     if (folderIndex === -1) {
       return { success: false, error: 'Folder not found', errorCode: 'FOLDER_NOT_FOUND' };
     }
@@ -1019,9 +1157,9 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
     const deletedFolder = customFolders[folderIndex];
     
     try {
-      customFolders = customFolders.filter(f => f.id !== folderId);
+      customFolders = customFolders.filter((f) => f.id !== folderId);
       await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Deleted Smart Folder:', folderId);
+      logger.info('Deleted Smart Folder', { folderId });
       
       let directoryRemoved = false;
       let removalError = null;
@@ -1038,7 +1176,10 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
       } catch (dirErr) {
         // If directory missing, that's fine; otherwise record error
         if (dirErr.code !== 'ENOENT') {
-          console.warn('[SMART-FOLDERS] Directory removal failed:', dirErr.message);
+          logger.warn('Directory removal failed', { 
+            component: 'smart-folders',
+            error: dirErr.message 
+          });
           removalError = dirErr.message;
         }
       }
@@ -1049,15 +1190,22 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
         deletedFolder,
         directoryRemoved,
         removalError,
-        message: `Smart folder \"${deletedFolder.name}\" deleted successfully` + (directoryRemoved ? ' and its empty directory was removed.' : '')
+        message: `Smart folder "${deletedFolder.name}" deleted successfully${  directoryRemoved ? ' and its empty directory was removed.' : ''}`
       };
     } catch (saveError) {
       // Rollback on failure
       customFolders = originalFolders;
+      logger.error('Failed to save smart folder changes', { 
+        component: 'smart-folders',
+        error: saveError.message 
+      });
       throw saveError;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to delete smart folder:', error);
+    logger.error('Failed to delete smart folder', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
     return { 
       success: false, 
       error: error.message,
@@ -1066,14 +1214,15 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
   }
 });
 
-// NOTE: Old get-analysis-statistics handler removed - using IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS instead
 
-// NOTE: Old duplicate handlers removed - using IPC_CHANNELS constants instead
 
 // Folder scanning
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath) => {
   try {
-    console.log('[FOLDER-SCAN] Scanning folder structure:', rootPath);
+    logger.info('Scanning folder structure', { 
+      component: 'folder-scan',
+      rootPath 
+    });
     
     const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
       if (depth > maxDepth) return [];
@@ -1106,22 +1255,34 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
         
         return files;
       } catch (error) {
-        console.warn('[FOLDER-SCAN] Error scanning folder:', folderPath, error.message);
+        logger.warn('Error scanning folder', { 
+          component: 'folder-scan',
+          folderPath,
+          error: error.message 
+        });
         return [];
       }
     };
     
     const files = await scanFolder(rootPath);
-    console.log('[FOLDER-SCAN] Found', files.length, 'supported files');
+    logger.info('Folder scan completed', { 
+      component: 'folder-scan',
+      rootPath,
+      fileCount: files.length 
+    });
     return files;
     
   } catch (error) {
-    console.error('[FOLDER-SCAN] Error scanning folder structure:', error);
+    logger.error('Error scanning folder structure', { 
+      component: 'folder-scan',
+      error: error.message,
+      rootPath 
+    });
     return { error: error.message };
   }
 });
 
-// NOTE: Old analyze-document handler removed - using IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT instead
+
 
 // Helper function for semantic folder matching using Ollama
 async function calculateFolderSimilarities(suggestedCategory, folderCategories) {
@@ -1150,7 +1311,7 @@ Respond with only a number between 0.0 and 1.0:`;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: getOllamaModel(),
-            prompt: prompt,
+            prompt,
             stream: false,
             options: { temperature: 0.1, num_predict: 10 }
           })
@@ -1170,7 +1331,11 @@ Respond with only a number between 0.0 and 1.0:`;
           }
         }
       } catch (folderError) {
-        console.warn(`[SEMANTIC] Failed to analyze folder ${folder.name}:`, folderError.message);
+        logger.warn('Failed to analyze folder similarity', { 
+          component: 'semantic-analysis',
+          folderName: folder.name,
+          error: folderError.message 
+        });
         // Fallback to basic string similarity
         const basicSimilarity = calculateBasicSimilarity(suggestedCategory, folder.name);
         similarities.push({
@@ -1186,7 +1351,10 @@ Respond with only a number between 0.0 and 1.0:`;
     // Sort by confidence descending
     return similarities.sort((a, b) => b.confidence - a.confidence);
   } catch (error) {
-    console.error('[SEMANTIC] Folder similarity calculation failed:', error);
+    logger.error('Folder similarity calculation failed', { 
+      component: 'semantic-analysis',
+      error: error.message 
+    });
     return [];
   }
 }
@@ -1202,232 +1370,243 @@ function calculateBasicSimilarity(str1, str2) {
   // Simple word overlap scoring
   const words1 = s1.split(/\s+/);
   const words2 = s2.split(/\s+/);
-  const overlap = words1.filter(w => words2.includes(w)).length;
+  const overlap = words1.filter((w) => words2.includes(w)).length;
   const total = Math.max(words1.length, words2.length);
   
   return overlap / total;
 }
 
-// NOTE: Old analyze-image and analyze-audio handlers removed - using IPC_CHANNELS constants instead
+
 
 // Ollama management
 ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
   try {
-    const ollama = getOllama();
-    
-    // Add timeout protection
-    const response = await Promise.race([
-      ollama.list(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Ollama request timeout (30s)')), 30000)
-      )
-    ]);
-    
-    const models = response.models || [];
-    const modelNames = models.map(m => m.name);
-    
-    // Update health status
-    systemAnalytics.ollamaHealth = {
-      status: 'healthy',
-      host: 'http://localhost:11434',
-      modelCount: models.length,
-      lastCheck: Date.now(),
-      models: modelNames
-    };
-    
-    console.log(`[OLLAMA] Found ${models.length} models:`, modelNames);
-    
-    return {
-      models: modelNames,
-      selectedModel: getOllamaModel(),
-      ollamaHealth: systemAnalytics.ollamaHealth 
-    };
-  } catch (error) {
-    console.error('[IPC] Error fetching Ollama models:', error);
-    
-    // Determine error type for better user feedback
-    let errorType = 'unknown';
-    let userMessage = error.message;
-    
-    if (error.message.includes('ECONNREFUSED') || error.cause?.code === 'ECONNREFUSED') {
-      errorType = 'connection_refused';
-      userMessage = 'Ollama service is not running. Please start with: ollama serve';
-    } else if (error.message.includes('timeout')) {
-      errorType = 'timeout';
-      userMessage = 'Ollama service is not responding. Check if it\'s running properly.';
-    } else if (error.message.includes('ENOTFOUND')) {
-      errorType = 'host_not_found';
-      userMessage = 'Cannot connect to Ollama host. Check your network connection.';
+    const response = await fetch('http://127.0.0.1:11434/api/tags');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
-    systemAnalytics.ollamaHealth = { 
-      status: 'unhealthy', 
-      error: userMessage,
-      errorType,
-      host: 'http://localhost:11434',
-      lastCheck: Date.now() 
-    };
+    const data = await response.json();
+    const models = data.models || [];
+    const modelNames = models.map((model) => model.name);
     
-    return { 
-      models: [], 
-      selectedModel: getOllamaModel(), 
-      error: userMessage,
-      errorType,
-      ollamaHealth: systemAnalytics.ollamaHealth 
-    };
+    logger.info('Ollama models retrieved successfully', { 
+      component: 'ollama',
+      operation: 'get-models',
+      modelCount: models.length,
+      models: modelNames
+    });
+    
+    return { success: true, models: modelNames };
+  } catch (error) {
+    logger.error('Failed to fetch Ollama models', { 
+      component: 'ollama',
+      error: error.message
+    });
+    return { success: false, error: error.message, models: [] };
   }
 });
 
-// Ollama connection test
-ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async (event, hostUrl) => {
-  const testUrl = hostUrl || 'http://localhost:11434';
-  console.log(`[OLLAMA] Testing connection to ${testUrl}...`);
+// Test Ollama connection and verify models
+ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async () => {
+  const testUrl = 'http://127.0.0.1:11434/api/tags';
   
   try {
-    const testOllama = new Ollama({ host: testUrl });
+    logger.debug('Testing Ollama connection', { 
+      component: 'ollama',
+      testUrl 
+    });
     
-    // Test connection with timeout
-    const response = await Promise.race([
-      testOllama.list(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection test timeout (15s)')), 15000)
-      )
-    ]);
+    const response = await fetch(testUrl, { 
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
     
-    const models = response.models || [];
-    const modelNames = models.map(m => m.name);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const models = data.models || [];
+    const modelNames = models.map((model) => model.name);
     
     // Check for required models
-    const requiredModels = ['gemma3:4b', 'whisper'];
-    const missingModels = requiredModels.filter(required => 
-      !modelNames.some(installed => 
-        installed === required || installed.startsWith(required + ':')
-      )
+    const requiredModels = ['llama3.2:latest', 'mxbai-embed-large:latest'];
+    const missingModels = requiredModels.filter((required) => 
+      !modelNames.some((available) => available.includes(required.split(':')[0]))
     );
     
-    systemAnalytics.ollamaHealth = {
-      status: 'healthy',
-      host: testUrl,
+    logger.info('Ollama connection test completed', { 
+      component: 'ollama',
       modelCount: models.length,
-      models: modelNames,
-      missingModels,
-      lastCheck: Date.now()
-    };
+      missingModels: missingModels.length > 0 ? missingModels : undefined 
+    });
     
-    console.log(`[OLLAMA] Connection test successful - ${models.length} models found`);
-    if (missingModels.length > 0) {
-      console.log(`[OLLAMA] Missing required models:`, missingModels);
-    }
-    
-    return {
+    const result = {
       success: true,
-      host: testUrl,
-      modelCount: models.length,
+      connected: true,
       models: modelNames,
-      missingModels,
-      ollamaHealth: systemAnalytics.ollamaHealth
+      modelCount: models.length
     };
-  } catch (error) {
-    console.error('[IPC] Ollama connection test failed:', error);
     
-    // Provide specific error guidance
-    let errorType = 'unknown';
-    let userMessage = error.message;
-    let suggestions = [];
-    
-    if (error.message.includes('ECONNREFUSED')) {
-      errorType = 'connection_refused';
-      userMessage = 'Ollama service is not running';
-      suggestions = [
-        'Start Ollama service: ollama serve',
-        'Check if another service is using port 11434',
-        'Restart Ollama if it was previously running'
-      ];
-    } else if (error.message.includes('timeout')) {
-      errorType = 'timeout';
-      userMessage = 'Ollama service is not responding';
-      suggestions = [
-        'Check if Ollama is running: ollama serve',
-        'Verify system resources (CPU/Memory)',
-        'Try restarting Ollama service'
-      ];
-    } else if (error.message.includes('ENOTFOUND')) {
-      errorType = 'host_not_found';
-      userMessage = `Cannot resolve host: ${testUrl}`;
-      suggestions = [
-        'Check the Ollama host URL',
-        'Verify network connectivity',
-        'Use default: http://localhost:11434'
-      ];
+    if (missingModels.length > 0) {
+      logger.warn('Required Ollama models missing', { 
+        component: 'ollama',
+        missingModels 
+      });
+      result.missingModels = missingModels;
+      result.warning = `Missing required models: ${missingModels.join(', ')}`;
     }
     
-    systemAnalytics.ollamaHealth = {
-      status: 'unhealthy',
-      host: testUrl,
-      error: userMessage,
-      errorType,
-      suggestions,
-      lastCheck: Date.now()
-    };
+    return result;
+  } catch (error) {
+    logger.error('Ollama connection test failed', { 
+      component: 'ollama',
+      error: error.message,
+      testUrl 
+    });
     
     return {
       success: false,
-      host: testUrl,
-      error: userMessage,
-      errorType,
-      suggestions,
-      ollamaHealth: systemAnalytics.ollamaHealth
+      connected: false,
+      error: error.message,
+      models: []
     };
   }
 });
 
-// Ollama set selected model
-ipcMain.handle(IPC_CHANNELS.OLLAMA.SET_MODEL, async (_event, modelName) => {
+// Set current Ollama model
+ipcMain.handle(IPC_CHANNELS.OLLAMA.SET_MODEL, async (event, modelName) => {
   try {
     if (!modelName || typeof modelName !== 'string') {
       throw new Error('Invalid model name provided');
     }
     
-    console.log(`[OLLAMA] Setting model to: ${modelName}`);
-    await setOllamaModel(modelName);
+    logger.info('Setting Ollama model', { 
+      component: 'ollama',
+      operation: 'set-model',
+      modelName 
+    });
     
-    // Verify the model is actually available
-    const ollama = getOllama();
-    const response = await ollama.list();
-    const availableModels = response.models.map(m => m.name);
-    
-    const modelExists = availableModels.some(available => 
-      available === modelName || available.startsWith(modelName + ':')
-    );
-    
-    if (!modelExists) {
-      console.warn(`[OLLAMA] Model ${modelName} not found in available models`);
-      return { 
-        success: false, 
-        error: `Model '${modelName}' is not installed. Run: ollama pull ${modelName}`,
-        availableModels
-      };
+    // Get available models to verify the model exists
+    const modelsResponse = await fetch('http://127.0.0.1:11434/api/tags');
+    if (modelsResponse.ok) {
+      const data = await modelsResponse.json();
+      const models = data.models || [];
+      const modelNames = models.map((model) => model.name);
+      
+      if (!modelNames.includes(modelName)) {
+        logger.warn('Requested model not found in available models', { 
+          component: 'ollama',
+          requestedModel: modelName,
+          availableModels: modelNames 
+        });
+        return { 
+          success: false, 
+          error: `Model ${modelName} not found in available models`,
+          availableModels: modelNames 
+        };
+      }
     }
     
-    console.log(`[OLLAMA] Successfully set model to: ${modelName}`);
-    return { success: true, selectedModel: modelName };
+    // Set the model using Ollama utilities
+    await setOllamaModel(modelName);
+    
+    logger.info('Ollama model set successfully', { 
+      component: 'ollama',
+      modelName 
+    });
+    
+    return { success: true, model: modelName };
   } catch (error) {
-    console.error('[IPC] Failed to set Ollama model:', error);
+    logger.error('Failed to set Ollama model', { 
+      component: 'ollama',
+      error: error.message,
+      modelName 
+    });
     return { success: false, error: error.message };
   }
 });
 
-// ===== ADDITIONAL IPC HANDLERS =====
-
-// Missing IPC handlers that UI is calling but not implemented
-
-// Undo/Redo action handlers (not just status checks)
+// Handle undo/redo operations
 ipcMain.handle(IPC_CHANNELS.UNDO_REDO.UNDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.undo() || { success: false, message: 'Undo service unavailable' };
   } catch (error) {
-    console.error('Failed to execute undo:', error);
+    logger.error('Failed to execute undo', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return { success: false, message: error.message };
+  }
+});
+
+// Settings management
+ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
+  try {
+    logger.debug('Getting application settings', { component: 'settings' });
+    
+    // Default settings
+    const defaultSettings = {
+      aiModel: 'llama3.2:latest',
+      embeddingModel: 'mxbai-embed-large:latest',
+      smartFolders: [],
+      theme: 'system',
+      autoSave: true,
+      performanceMode: 'balanced'
+    };
+    
+      // Try to load settings from storage
+  const { default: Store } = await import('electron-store');
+  const store = new Store();
+  const settings = store.get('settings', defaultSettings);
+    
+    logger.info('Settings loaded successfully', { 
+      component: 'settings',
+      hasSettings: !!settings 
+    });
+    
+    return { success: true, settings };
+  } catch (error) {
+    logger.error('Failed to get settings', { 
+      component: 'settings',
+      error: error.message 
+    });
+    return { success: false, error: error.message, settings: {} };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
+  try {
+    logger.debug('Saving application settings', { 
+      component: 'settings',
+      settingsKeys: Object.keys(settings || {}) 
+    });
+    
+    if (!settings || typeof settings !== 'object') {
+      throw new Error('Invalid settings data provided');
+    }
+    
+    // Save settings to storage
+    const { default: Store } = await import('electron-store');
+    const store = new Store();
+    store.set('settings', settings);
+    
+    logger.info('Settings saved successfully', { 
+      component: 'settings',
+      settingsCount: Object.keys(settings).length 
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to save settings', { 
+      component: 'settings',
+      error: error.message 
+    });
+    return { success: false, error: error.message };
   }
 });
 
@@ -1435,35 +1614,46 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.REDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.redo() || { success: false, message: 'Redo service unavailable' };
   } catch (error) {
-    console.error('Failed to execute redo:', error);
+    logger.error('Failed to execute redo', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return { success: false, message: error.message };
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, async (event, limit = 50) => {
+ipcMain.handle(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, async () => {
   try {
-    return await serviceIntegration?.undoRedo?.getHistory(limit) || [];
+    return await serviceIntegration?.undoRedo?.getHistory() || [];
   } catch (error) {
-    console.error('Failed to get action history:', error);
+    logger.error('Failed to get action history', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return [];
   }
 });
 
 ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CLEAR_HISTORY, async () => {
   try {
-    return await serviceIntegration?.undoRedo?.clearHistory() || { success: true };
+    return await serviceIntegration?.undoRedo?.clearHistory() || { success: false, message: 'Undo service unavailable' };
   } catch (error) {
-    console.error('Failed to clear action history:', error);
+    logger.error('Failed to clear action history', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return { success: false, message: error.message };
   }
 });
 
-// Undo/Redo handlers
 ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CAN_UNDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.canUndo() || false;
   } catch (error) {
-    console.error('Failed to check undo status:', error);
+    logger.error('Failed to check undo status', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return false;
   }
 });
@@ -1472,941 +1662,117 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CAN_REDO, async () => {
   try {
     return await serviceIntegration?.undoRedo?.canRedo() || false;
   } catch (error) {
-    console.error('Failed to check redo status:', error);
+    logger.error('Failed to check redo status', { 
+      component: 'undo-redo',
+      error: error.message 
+    });
     return false;
   }
 });
-
-// NOTE: Duplicate UNDO/REDO handlers removed - already defined above
 
 // Analysis History handlers
 ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
   try {
     return await serviceIntegration?.analysisHistory?.getStatistics() || {};
   } catch (error) {
-    console.error('Failed to get analysis statistics:', error);
+    logger.error('Failed to get analysis statistics', { 
+      component: 'analysis-history',
+      error: error.message 
+    });
     return {};
   }
 });
 
-
-
-// System handlers
-ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
+// System monitoring handlers
+ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
   try {
-    // Prefer the aggregated statistics from ServiceIntegration if available
-    if (serviceIntegration && serviceIntegration.initialized) {
-      return await serviceIntegration.getApplicationStatistics();
-    }
-
-    // Fallback to basic system metrics if ServiceIntegration isn't ready
     return await systemAnalytics.collectMetrics();
   } catch (error) {
-    console.error('Failed to get system statistics:', error);
-    return {};
-  }
-});
-
-// File operation handlers
-ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
-  console.log('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
-  console.log('[MAIN-FILE-SELECT] mainWindow exists?', !!mainWindow);
-  console.log('[MAIN-FILE-SELECT] mainWindow visible?', mainWindow?.isVisible());
-  console.log('[MAIN-FILE-SELECT] mainWindow focused?', mainWindow?.isFocused());
-  
-  try {
-    // Make sure window is focused before opening dialog
-    if (mainWindow && !mainWindow.isFocused()) {
-      console.log('[MAIN-FILE-SELECT] Focusing window before dialog...');
-      mainWindow.focus();
-    }
-    
-    console.log('[MAIN-FILE-SELECT] Opening file dialog...');
-    
-    // Try to ensure window is visible and focused before showing dialog
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        console.log('[MAIN-FILE-SELECT] Restoring minimized window');
-        mainWindow.restore();
-      }
-      if (!mainWindow.isVisible()) {
-        console.log('[MAIN-FILE-SELECT] Showing hidden window');
-        mainWindow.show();
-      }
-      if (!mainWindow.isFocused()) {
-        console.log('[MAIN-FILE-SELECT] Focusing window');
-        mainWindow.focus();
-      }
-      
-      // Small delay to ensure window is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    // On Windows, we can't use openFile and openDirectory together reliably
-    // So we'll use just openFile with multiSelections, and handle folders separately
-    const result = await dialog.showOpenDialog(mainWindow || null, {
-      properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
-      title: 'Select Files to Organize',
-      buttonLabel: 'Select Files',
-      filters: [
-        { name: 'All Supported Files', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'mp3', 'wav', 'm4a', 'flac', 'ogg', 'zip', 'rar', '7z', 'tar', 'gz'] },
-        { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'] },
-        // Audio removed - { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'flac', 'ogg'] },
-        { name: 'Archives', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
-    });
-    
-    console.log('[MAIN-FILE-SELECT] Dialog closed, result:', result);
-    
-    if (result.canceled || !result.filePaths.length) {
-      return { success: false, files: [] };
-    }
-    
-    console.log(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
-    
-    const allFiles = [];
-    const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
-    
-    // Helper function to scan folders recursively
-    const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
-      if (depth > maxDepth) return [];
-      
-      try {
-        const items = await fs.readdir(folderPath, { withFileTypes: true });
-        const foundFiles = [];
-        
-        for (const item of items) {
-          const itemPath = path.join(folderPath, item.name);
-          
-          if (item.isFile()) {
-            const ext = path.extname(item.name).toLowerCase();
-            if (supportedExts.includes(ext)) {
-              foundFiles.push(itemPath);
-            }
-          } else if (item.isDirectory() && !item.name.startsWith('.') && !item.name.startsWith('node_modules')) {
-            const subFiles = await scanFolder(itemPath, depth + 1, maxDepth);
-            foundFiles.push(...subFiles);
-          }
-        }
-        
-        return foundFiles;
-      } catch (error) {
-        console.warn(`[FILE-SELECTION] Error scanning folder ${folderPath}:`, error.message);
-        return [];
-      }
-    };
-    
-    // Process each selected item
-    for (const selectedPath of result.filePaths) {
-      try {
-        const stats = await fs.stat(selectedPath);
-        
-        if (stats.isFile()) {
-          // It's a file - add directly if supported
-          const ext = path.extname(selectedPath).toLowerCase();
-          if (supportedExts.includes(ext)) {
-            allFiles.push(selectedPath);
-            console.log(`[FILE-SELECTION] Added file: ${path.basename(selectedPath)}`);
-          }
-        } else if (stats.isDirectory()) {
-          // It's a folder - scan for supported files
-          console.log(`[FILE-SELECTION] Scanning folder: ${selectedPath}`);
-          const folderFiles = await scanFolder(selectedPath);
-          allFiles.push(...folderFiles);
-          console.log(`[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${path.basename(selectedPath)}`);
-        }
-      } catch (error) {
-        console.warn(`[FILE-SELECTION] Error processing ${selectedPath}:`, error.message);
-      }
-    }
-    
-    // Remove duplicates
-    const uniqueFiles = [...new Set(allFiles)];
-    console.log(`[FILE-SELECTION] Total files collected: ${uniqueFiles.length} (${allFiles.length - uniqueFiles.length} duplicates removed)`);
-    
-    return { 
-      success: true, 
-      files: uniqueFiles,
-      summary: {
-        totalSelected: result.filePaths.length,
-        filesFound: uniqueFiles.length,
-        duplicatesRemoved: allFiles.length - uniqueFiles.length
-      }
-    };
-  } catch (error) {
-    console.error('[MAIN-FILE-SELECT] Failed to select files:', error);
-    console.error('[MAIN-FILE-SELECT] Error stack:', error.stack);
-    
-    // Provide more helpful error messages
-    let userMessage = error.message;
-    if (error.message.includes('Cannot read properties of undefined')) {
-      userMessage = 'File dialog failed to open. Please try again.';
-    } else if (error.message.includes('User did not grant permission')) {
-      userMessage = 'Permission denied to access files. Please grant file access permissions.';
-    }
-    
-    return { 
-      success: false, 
-      error: userMessage, 
-      files: [],
-      debugInfo: {
-        originalError: error.message,
-        windowExists: !!mainWindow,
-        windowVisible: mainWindow?.isVisible(),
-        windowFocused: mainWindow?.isFocused()
-      }
-    };
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
-  try {
-    console.log('[IPC] Opening directory selection dialog');
-    
-    const result = await dialog.showOpenDialog(mainWindow || null, {
-      properties: ['openDirectory', 'dontAddToRecent'],
-      title: 'Select Directory to Scan',
-      buttonLabel: 'Select Directory'
-    });
-    
-    console.log('[IPC] Directory selection result:', result);
-    
-    if (result.canceled || !result.filePaths.length) {
-      return { success: false, folder: null };
-    }
-    
-    const selectedFolder = result.filePaths[0];
-    console.log('[IPC] Selected directory:', selectedFolder);
-    
-    return { 
-      success: true, 
-      folder: selectedFolder
-    };
-  } catch (error) {
-    console.error('[IPC] Directory selection failed:', error);
-    return { 
-      success: false, 
-      folder: null,
+    logger.error('Failed to get system statistics', { 
+      component: 'system-monitoring',
       error: error.message
-    };
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, async () => {
-  try {
-    return app.getPath('documents');
-  } catch (error) {
-    console.error('Failed to get documents path:', error);
-    return null;
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
-  try {
-    const stats = await fs.stat(filePath);
-    return {
-      size: stats.size,
-      isDirectory: stats.isDirectory(),
-      isFile: stats.isFile(),
-      modified: stats.mtime,
-      created: stats.birthtime
-    };
-  } catch (error) {
-    console.error('Failed to get file stats:', error);
-    return null;
-  }
-});
-
-// Analysis handlers
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) => {
-  try {
-    const startTime = performance.now();
-    console.log(`[IPC-ANALYSIS] Starting document analysis for: ${filePath}`);
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-      console.log(`[IPC-ANALYSIS] ✅ File exists: ${filePath}`);
-    } catch (accessError) {
-      console.error(`[IPC-ANALYSIS] ❌ File not found: ${filePath}`);
-      return {
-        error: `File not found: ${filePath}`,
-        suggestedName: path.basename(filePath, path.extname(filePath)),
-        category: 'documents',
-        keywords: [],
-        confidence: 0
-      };
-    }
-    
-    // Get current smart folders to pass to analysis
-    const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-    const folderCategories = smartFolders.map(f => ({
-      name: f.name,
-      description: f.description || '',
-      id: f.id
-    }));
-    
-    console.log(`[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-    
-    const result = await analyzeDocumentFile(filePath, folderCategories);
-    
-    const duration = performance.now() - startTime;
-    systemAnalytics.recordProcessingTime(duration);
-    
-    console.log(`[IPC-ANALYSIS] Document analysis completed for: ${filePath}`);
-    console.log(`[IPC-ANALYSIS] Result summary:`, {
-      success: !result.error,
-      category: result.category,
-      keywords: result.keywords?.length || 0,
-      confidence: result.confidence,
-      extractionMethod: result.extractionMethod
     });
-    
-    return result;
-  } catch (error) {
-    console.error(`[IPC] Document analysis failed for ${filePath}:`, error);
-    systemAnalytics.recordFailure(error);
-    return {
-      error: error.message,
-      suggestedName: path.basename(filePath, path.extname(filePath)),
-      category: 'documents',
-      keywords: [],
-      confidence: 0
-    };
-  }
-});
-
-// Image analysis handler
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
-  try {
-    console.log(`[IPC] Starting image analysis for: ${filePath}`);
-    
-    // Get current smart folders to pass to analysis
-    const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-    const folderCategories = smartFolders.map(f => ({
-      name: f.name,
-      description: f.description || '',
-      id: f.id
-    }));
-    
-    console.log(`[IPC-IMAGE-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-    
-    const result = await analyzeImageFile(filePath, folderCategories);
-    
-    console.log(`[IPC-IMAGE-ANALYSIS] Result:`, {
-      success: !result.error,
-      category: result.category,
-      keywords: result.keywords?.length || 0,
-      confidence: result.confidence
-    });
-    
-    return result;
-  } catch (error) {
-    console.error(`[IPC] Image analysis failed for ${filePath}:`, error);
-    return {
-      error: error.message,
-      suggestedName: path.basename(filePath, path.extname(filePath)),
-      category: 'images',
-      keywords: [],
-      confidence: 0
-    };
-  }
-});
-
-// OCR handler
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath) => {
-  try {
-    const start = performance.now();
-    const text = await tesseract.recognize(filePath, { lang: 'eng', oem: 1, psm: 3 });
-    const duration = performance.now() - start;
-    systemAnalytics.recordProcessingTime(duration);
-    return { success: true, text };
-  } catch (error) {
-    console.error('OCR failed:', error);
-    systemAnalytics.recordFailure(error);
-    return { success: false, error: error.message };
-  }
-});
-
-// AUDIO ANALYSIS DISABLED - handler removed
-/* ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-  console.log('[IPC] Audio analysis requested for:', filePath);
-  
-  try {
-    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-    const smartFolders = await getSmartFolders();
-    
-    const startTime = Date.now();
-    const result = await analyzeAudioFile(filePath, smartFolders);
-    const processingTime = Date.now() - startTime;
-    
-    systemAnalytics.recordProcessingTime(processingTime);
-    systemAnalytics.recordSuccess();
-    
-    // Record in analysis history
-    if (serviceIntegration?.analysisHistory) {
-      await serviceIntegration.analysisHistory.recordAnalysis({
-        path: filePath,
-        size: await getFileSize(filePath),
-        lastModified: await getFileModified(filePath),
-        mimeType: 'audio/*'
-      }, {
-        ...result,
-        processingTime
-      });
-    }
-    
-    console.log(`[IPC] Audio analysis completed in ${processingTime}ms`);
-    mainWindow?.webContents.send('analysis-progress', {
-      filePath,
-      status: 'completed',
-      result
-    });
-    
-    return result;
-  } catch (error) {
-    console.error('[IPC] Audio analysis failed:', error);
-    systemAnalytics.recordFailure(error);
-    mainWindow?.webContents.send('analysis-error', {
-      filePath,
-      error: error.message,
-      type: 'audio'
-    });
-    throw error;
-  }
-}); */
-
-// Settings handlers
-ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
-  try {
-    // Return default settings for now - could be expanded to use a proper settings service
-    return {
-      theme: 'system',
-      autoAnalyze: true,
-      concurrentAnalysis: 3,
-      smartFolderDefaults: true,
-      notifications: true
-    };
-  } catch (error) {
-    console.error('Failed to get settings:', error);
     return {};
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
+// System scan handler for common directories
+ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
   try {
-    // For now, just return success - could be expanded to persist settings
-    console.log('[SETTINGS] Saving settings:', settings);
-    return { success: true, settings };
+    logger.info('Starting system scan of common directories', { component: 'system-scan' });
+    
+    const commonDirs = [
+      app.getPath('documents'),
+      app.getPath('downloads'),
+      app.getPath('desktop'),
+      app.getPath('pictures'),
+      app.getPath('music'),
+      app.getPath('videos')
+    ];
+
+    const files = [];
+    // const { scanDirectory } = require('./folderScanner'); // Using system scan instead
+
+    for (const dir of commonDirs) {
+      try {
+        const dirFiles = await scanDirectory(dir, { maxDepth: 2, includeSystemFiles: false });
+        if (dirFiles && Array.isArray(dirFiles)) {
+          files.push(...dirFiles);
+        }
+      } catch (error) {
+        logger.warn(`Failed to scan directory ${dir}`, { 
+          component: 'system-scan',
+          directory: dir,
+          error: error.message 
+        });
+      }
+    }
+
+    logger.info(`System scan completed: ${files.length} files found`, { 
+      component: 'system-scan',
+      fileCount: files.length 
+    });
+
+    return { success: true, files, totalDirectories: commonDirs.length };
   } catch (error) {
-    console.error('Failed to save settings:', error);
-    return { success: false, error: error.message };
+    logger.error('System scan failed', { 
+      component: 'system-scan',
+      error: error.message 
+    });
+    return { success: false, error: error.message, files: [] };
   }
 });
 
-// NOTE: Removed all old-style handlers that have IPC_CHANNELS constant-based duplicates
-// This prevents "Attempted to register a second handler" errors
-// All functionality is handled by the constant-based handlers above
-
-// Prevent multiple instances
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Someone tried to run a second instance, focus our window instead
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-
-  // Production optimizations - ensure GPU acceleration
-  if (!isDev) {
-    // Production GPU optimizations
-    app.commandLine.appendSwitch('enable-gpu-rasterization');
-    app.commandLine.appendSwitch('enable-gpu-memory-buffer-compositor-resources');
-    app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-    app.commandLine.appendSwitch('ignore-gpu-blacklist');
-    app.commandLine.appendSwitch('disable-software-rasterizer');
-    
-    // Performance optimizations
-    app.commandLine.appendSwitch('enable-zero-copy');
-    app.commandLine.appendSwitch('enable-hardware-overlays');
-    
-    console.log('[PRODUCTION] GPU acceleration optimizations enabled');
-  } else {
-    console.log('[DEVELOPMENT] GPU acceleration using default settings');
-  }
-
-  // Initialize services after app is ready
-  app.whenReady().then(async () => {
-    try {
-      // Load custom folders
-      customFolders = await loadCustomFolders();
-      console.log('[STARTUP] Loaded custom folders:', customFolders.length, 'folders');
+// Initialize the application
+app.whenReady().then(() => {
+  logger.info('Electron app ready, creating window', { component: 'startup' });
+  createWindow();
       
-      // Initialize service integration
-      serviceIntegration = new ServiceIntegration();
-      await serviceIntegration.initialize();
-      console.log('[MAIN] Service integration initialized successfully');
+  // Initialize service integration
+  serviceIntegration = new ServiceIntegration();
+  
+  logger.info('Application initialization complete', { component: 'startup' });
+});
       
-      // Verify AI models on startup
-      const ModelVerifier = require('./services/ModelVerifier');
-      const modelVerifier = new ModelVerifier();
-      const modelStatus = await modelVerifier.verifyEssentialModels();
-      
-      if (!modelStatus.success) {
-        console.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
-        console.log('[STARTUP] Install missing models:');
-        modelStatus.installationCommands.forEach(cmd => console.log('  ', cmd));
-      } else {
-        console.log('[STARTUP] ✅ All essential AI models verified and ready');
-        if (modelStatus.hasWhisper) {
-          console.log('[STARTUP] ✅ Whisper model available for audio analysis');
-        }
-      }
-      
-      createWindow();
-      
-      // Load Ollama config
-      await loadOllamaConfig();
-      console.log('[STARTUP] Ollama configuration loaded');
-      
-    } catch (error) {
-      console.error('[STARTUP] Failed to initialize:', error);
-      createWindow();
-    }
-  });
-}
-
-// ===== APP LIFECYCLE =====
-console.log('[STARTUP] Organizer AI App - Main Process Started with Full AI Features');
-console.log('[UI] Modern UI loaded with GPU acceleration');
-
-// App lifecycle
+// Handle window management
 app.on('window-all-closed', () => {
-  systemAnalytics.destroy();
+  logger.info('All windows closed, quitting app', { component: 'window-manager' });
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('activate', () => {
+  logger.debug('App activated, checking for windows', { component: 'window-manager' });
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
+// Cleanup on app quit
 app.on('before-quit', () => {
-  systemAnalytics.destroy();
-});
-
-ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
-  try {
-    // Enhanced validation
-    if (!folder || typeof folder !== 'object') {
-      return { 
-        success: false, 
-        error: 'Invalid folder data provided',
-        errorCode: 'INVALID_FOLDER_DATA'
-      };
-    }
-
-    if (!folder.name || typeof folder.name !== 'string' || !folder.name.trim()) {
-      return { 
-        success: false, 
-        error: 'Folder name is required and must be a non-empty string',
-        errorCode: 'INVALID_FOLDER_NAME'
-      };
-    }
-
-    if (!folder.path || typeof folder.path !== 'string' || !folder.path.trim()) {
-      return { 
-        success: false, 
-        error: 'Folder path is required and must be a non-empty string',
-        errorCode: 'INVALID_FOLDER_PATH'
-      };
-    }
-
-    // Validate folder name for illegal characters
-    const illegalChars = /[<>:"|?*\x00-\x1f]/g;
-    if (illegalChars.test(folder.name)) {
-      return { 
-        success: false, 
-        error: 'Folder name contains invalid characters. Please avoid: < > : " | ? *',
-        errorCode: 'INVALID_FOLDER_NAME_CHARS'
-      };
-    }
-
-    // Check for duplicate names or paths
-    const existingFolder = customFolders.find(f => 
-      f.name.toLowerCase() === folder.name.trim().toLowerCase() ||
-      path.resolve(f.path) === path.resolve(folder.path.trim())
-    );
-
-    if (existingFolder) {
-      return { 
-        success: false, 
-        error: `A smart folder with name "${existingFolder.name}" or path "${existingFolder.path}" already exists`,
-        errorCode: 'FOLDER_ALREADY_EXISTS'
-      };
-    }
-
-    // Normalize path for cross-platform compatibility
-    const normalizedPath = path.resolve(folder.path.trim());
-    
-    // Validate parent directory exists and is writable
-    const parentDir = path.dirname(normalizedPath);
-    try {
-      const parentStats = await fs.stat(parentDir);
-      if (!parentStats.isDirectory()) {
-        return { 
-          success: false, 
-          error: `Parent directory "${parentDir}" is not a directory`,
-          errorCode: 'PARENT_NOT_DIRECTORY'
-        };
-      }
-      
-      // Test write permissions by attempting to create a temp file
-      const tempFile = path.join(parentDir, `.stratotest_${Date.now()}`);
-      try {
-        await fs.writeFile(tempFile, 'test');
-        await fs.unlink(tempFile);
-      } catch (writeError) {
-        return { 
-          success: false, 
-          error: `No write permission in parent directory "${parentDir}"`,
-          errorCode: 'PARENT_NOT_WRITABLE'
-        };
-      }
-    } catch (parentError) {
-      return { 
-        success: false, 
-        error: `Parent directory "${parentDir}" does not exist or is not accessible`,
-        errorCode: 'PARENT_NOT_ACCESSIBLE'
-      };
-    }
-
-    // Enhanced LLM analysis for smart folder optimization
-    let llmEnhancedData = {};
-    try {
-      // Use LLM to enhance folder metadata and suggest improvements
-      const llmAnalysis = await enhanceSmartFolderWithLLM(folder, customFolders);
-      if (llmAnalysis && !llmAnalysis.error) {
-        llmEnhancedData = llmAnalysis;
-      }
-    } catch (llmError) {
-      console.warn('[SMART-FOLDERS] LLM enhancement failed, continuing with basic data:', llmError.message);
-    }
-    
-    const newFolder = {
-      id: Date.now().toString(),
-      name: folder.name.trim(),
-      path: normalizedPath,
-      description: llmEnhancedData.enhancedDescription || folder.description?.trim() || `Smart folder for ${folder.name.trim()}`,
-      keywords: llmEnhancedData.suggestedKeywords || [],
-      category: llmEnhancedData.suggestedCategory || 'general',
-      isDefault: folder.isDefault || false,
-      createdAt: new Date().toISOString(),
-      // LLM-enhanced metadata
-      semanticTags: llmEnhancedData.semanticTags || [],
-      relatedFolders: llmEnhancedData.relatedFolders || [],
-      confidenceScore: llmEnhancedData.confidence || 0.8,
-      usageCount: 0,
-      lastUsed: null
-    };
-    
-    // Create the actual directory with enhanced error handling
-    let directoryCreated = false;
-    let directoryExisted = false;
-    
-    // First, check if directory already exists
-    try {
-      const existingStats = await fs.stat(normalizedPath);
-      if (existingStats.isDirectory()) {
-        console.log('[SMART-FOLDERS] Directory already exists:', normalizedPath);
-        directoryExisted = true;
-      } else {
-        return { 
-          success: false, 
-          error: 'Path exists but is not a directory',
-          errorCode: 'PATH_NOT_DIRECTORY'
-        };
-      }
-    } catch (statError) {
-      // Directory doesn't exist, proceed with creation
-      if (statError.code === 'ENOENT') {
-        try {
-          await fs.mkdir(normalizedPath, { recursive: true });
-          console.log('[SMART-FOLDERS] Created directory:', normalizedPath);
-          directoryCreated = true;
-          
-          // Verify directory was created and is accessible
-          const stats = await fs.stat(normalizedPath);
-          if (!stats.isDirectory()) {
-            throw new Error('Created path is not a directory');
-          }
-        } catch (dirError) {
-          console.error('[SMART-FOLDERS] Directory creation failed:', dirError.message);
-          return { 
-            success: false, 
-            error: 'Failed to create directory',
-            errorCode: 'DIRECTORY_CREATION_FAILED',
-            details: dirError.message
-          };
-        }
-      } else {
-        return { 
-          success: false, 
-          error: 'Failed to access directory path',
-          errorCode: 'PATH_ACCESS_FAILED',
-          details: statError.message
-        };
-      }
-    }
-
-    // Add to configuration with rollback capability
-    const originalFolders = [...customFolders];
-    try {
-      customFolders.push(newFolder);
-      await saveCustomFolders(customFolders);
-      console.log('[SMART-FOLDERS] Added Smart Folder:', newFolder.id);
-      
-      return { 
-        success: true, 
-        folder: newFolder, 
-        folders: customFolders,
-        message: directoryCreated ? 'Smart folder created successfully' : 'Smart folder added (directory already existed)',
-        directoryCreated,
-        directoryExisted,
-        llmEnhanced: !!llmEnhancedData.enhancedDescription
-      };
-    } catch (saveError) {
-      // Rollback configuration
-      customFolders.length = 0;
-      customFolders.push(...originalFolders);
-      
-      // Rollback directory creation if we created it
-      if (directoryCreated && !directoryExisted) {
-        try {
-          await fs.rmdir(normalizedPath);
-          console.log('[SMART-FOLDERS] Rolled back directory creation:', normalizedPath);
-        } catch (rollbackError) {
-          console.error('[SMART-FOLDERS] Failed to rollback directory:', rollbackError.message);
-        }
-      }
-      
-      return { 
-        success: false, 
-        error: 'Failed to save configuration, changes rolled back',
-        errorCode: 'CONFIG_SAVE_FAILED',
-        details: saveError.message
-      };
-    }
-  } catch (error) {
-    console.error('[ERROR] Failed to add smart folder:', error);
-    return { 
-      success: false, 
-      error: 'Failed to add smart folder',
-      errorCode: 'ADD_FOLDER_FAILED',
-      details: error.message
-    };
+  logger.info('App quitting, cleaning up resources', { component: 'shutdown' });
+  if (systemAnalytics) {
+    systemAnalytics.destroy();
   }
 });
-
-// Enhanced LLM integration for smart folder optimization
-async function enhanceSmartFolderWithLLM(folderData, existingFolders) {
-  try {
-    console.log('[LLM-ENHANCEMENT] Analyzing smart folder for optimization:', folderData.name);
-    
-    // Build context about existing folders
-    const existingFolderContext = existingFolders.map(f => ({
-      name: f.name,
-      description: f.description,
-      keywords: f.keywords || [],
-      category: f.category || 'general'
-    }));
-
-    const prompt = `You are an expert file organization system. Analyze this new smart folder and provide enhancements based on existing folder structure.
-
-NEW FOLDER:
-Name: "${folderData.name}"
-Path: "${folderData.path}"
-Description: "${folderData.description || ''}"
-
-EXISTING FOLDERS:
-${existingFolderContext.map(f => `- ${f.name}: ${f.description} (Category: ${f.category})`).join('\n')}
-
-Please provide a JSON response with the following enhancements:
-{
-  "improvedDescription": "enhanced description",
-  "suggestedKeywords": ["keyword1", "keyword2"],
-  "organizationTips": "tips for better organization",
-  "confidence": 0.8
-}`;
-
-    const response = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: getOllamaModel(),
-        prompt: prompt,
-        stream: false,
-        format: 'json',
-        options: { 
-          temperature: 0.3, 
-          num_predict: 500 
-        }
-      })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const enhancement = JSON.parse(data.response);
-      
-      // Validate the response structure
-      if (enhancement && typeof enhancement === 'object') {
-        console.log('[LLM-ENHANCEMENT] Successfully enhanced smart folder:', enhancement.reasoning);
-        return enhancement;
-      }
-    }
-    
-    return { error: 'Invalid LLM response format' };
-  } catch (error) {
-    console.error('[LLM-ENHANCEMENT] Failed to enhance smart folder:', error.message);
-    return { error: error.message };
-  }
-}
-
-// Error handling
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-console.log('✅ StratoSort main process initialized');
-
-// Add comprehensive error handling
-process.on('uncaughtException', (error) => {
-  console.error('🔥 UNCAUGHT EXCEPTION:', error);
-  console.error('Stack:', error.stack);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('🔥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
-});
-
-// Keep the process alive for debugging
-console.log('[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.');
-
-// Analysis History handlers
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async (event, options = {}) => {
-  try {
-    const limit = options.limit || 50;
-    return await serviceIntegration?.analysisHistory?.getRecentAnalysis(limit) || [];
-  } catch (error) {
-    console.error('Failed to get analysis history:', error);
-    return [];
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, async (event, query = '', options = {}) => {
-  try {
-    return await serviceIntegration?.analysisHistory?.searchAnalysis(query, options) || [];
-  } catch (error) {
-    console.error('Failed to search analysis history:', error);
-    return [];
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, async (event, filePath) => {
-  try {
-    return await serviceIntegration?.analysisHistory?.getAnalysisByPath(filePath) || null;
-  } catch (error) {
-    console.error('Failed to get file analysis history:', error);
-    return null;
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR, async () => {
-  try {
-    await serviceIntegration?.analysisHistory?.createDefaultStructures();
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to clear analysis history:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, async (event, format = 'json') => {
-  try {
-    const history = await serviceIntegration?.analysisHistory?.getRecentAnalysis(10000) || [];
-    if (format === 'json') {
-      return { success: true, data: JSON.stringify(history, null, 2) };
-    }
-    // Future: handle csv or other formats
-    return { success: true, data: history };
-  } catch (error) {
-    console.error('Failed to export analysis history:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-// System metrics handler
-ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
-  try {
-    return await systemAnalytics.collectMetrics();
-  } catch (error) {
-    console.error('Failed to collect system metrics:', error);
-    return {};
-  }
-});
-
-// AUDIO ANALYSIS DISABLED - handler removed
-/* ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-  try {
-    console.log(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-    
-    // Get current smart folders to pass to analysis
-    const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-    const folderCategories = smartFolders.map(f => ({
-      name: f.name,
-      description: f.description || '',
-      id: f.id
-    }));
-    
-    console.log(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-    
-    const result = await analyzeAudioFile(filePath, folderCategories);
-    
-    console.log(`[IPC-AUDIO-ANALYSIS] Result:`, {
-      success: !result.error,
-      category: result.category,
-      keywords: result.keywords?.length || 0,
-      confidence: result.confidence,
-      has_transcription: result.has_transcription
-    });
-    
-    return result;
-  } catch (error) {
-    console.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
-    return {
-      error: error.message,
-      suggestedName: path.basename(filePath, path.extname(filePath)),
-      category: 'audio',
-      keywords: [],
-      confidence: 0,
-      has_transcription: false
-    };
-  }
-}); */
-
-
-// NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error

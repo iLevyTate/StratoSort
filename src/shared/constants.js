@@ -109,7 +109,8 @@ const IPC_CHANNELS = {
   // System Monitoring
   SYSTEM: {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
-    GET_METRICS: 'get-system-metrics'
+    GET_METRICS: 'get-system-metrics',
+    SCAN_COMMON_DIRECTORIES: 'scan-common-directories'
   },
   
   // Menu Actions

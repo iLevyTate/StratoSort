@@ -5,9 +5,9 @@
  * Verifies all required dependencies and configurations
  */
 
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
 
 // ANSI color codes for console output
 const colors = {
@@ -169,7 +169,7 @@ class SetupVerifier {
       }
       
       const data = await response.json();
-      const installedModels = data.models.map(m => m.name);
+      const installedModels = data.models.map((m) => m.name);
       
       this.log(`Found ${installedModels.length} installed models`, 'info');
       
@@ -178,8 +178,8 @@ class SetupVerifier {
       const foundRequired = [];
       
       for (const model of REQUIRED_MODELS) {
-        const isInstalled = installedModels.some(installed => 
-          installed === model || installed.startsWith(model + ':')
+        const isInstalled = installedModels.some((installed) => 
+          installed === model || installed.startsWith(`${model  }:`)
         );
         
         if (isInstalled) {
@@ -194,8 +194,8 @@ class SetupVerifier {
       // Check optional models
       const foundOptional = [];
       for (const model of OPTIONAL_MODELS) {
-        const isInstalled = installedModels.some(installed => 
-          installed === model || installed.startsWith(model + ':')
+        const isInstalled = installedModels.some((installed) => 
+          installed === model || installed.startsWith(`${model  }:`)
         );
         
         if (isInstalled) {
@@ -259,7 +259,8 @@ class SetupVerifier {
     const requiredBuildFiles = [
       'main/index.js',
       'preload/index.js', 
-      'renderer/index.html'
+      'renderer.js',
+      'index.html'
     ];
     
     let allBuilt = true;
@@ -332,9 +333,9 @@ class SetupVerifier {
 // Main execution
 if (require.main === module) {
   const verifier = new SetupVerifier();
-  verifier.run().then(success => {
+  verifier.run().then((success) => {
     process.exit(success ? 0 : 1);
-  }).catch(error => {
+  }).catch((error) => {
     console.error(`${colors.red}Setup verification failed: ${error.message}${colors.reset}`);
     process.exit(1);
   });

@@ -1,11 +1,17 @@
-const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
 
-console.log('[PRELOAD] Secure preload script loaded');
+const { contextBridge, ipcRenderer } = require('electron');
 
-// Import centralized IPC channel map using an absolute path to avoid resolution issues when the preload is bundled or moved
-const constantsPath = path.resolve(__dirname, '..', 'shared', 'constants.js');
+// Load constants path (relative to preload script)
+const constantsPath = path.resolve(__dirname, '../shared/constants.js');
 const { IPC_CHANNELS } = require(constantsPath);
+
+// Debug mode check
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
+
+if (DEBUG_MODE) {
+  console.log('[PRELOAD] Secure preload script loaded');
+}
 
 // Dynamically derive allowed send channels from centralized IPC_CHANNELS to prevent drift
 const ALLOWED_CHANNELS = {
@@ -67,68 +73,79 @@ class SecureIPCManager {
   }
 
   /**
-   * Secure invoke with validation and error handling
+   * Safe IPC invoke with channel validation and error handling
    */
   async safeInvoke(channel, ...args) {
-    try {
-      // Channel validation
-      if (!ALL_SEND_CHANNELS.includes(channel)) {
+    // Validate channel is in allowed list - properly flatten nested channel objects
+    const allowedChannels = this.getAllowedChannels();
+    if (!allowedChannels.includes(channel)) {
+      if (DEBUG_MODE) {
         console.warn(`[PRELOAD] Blocked invoke to unauthorized channel: ${channel}`);
-        throw new Error(`Unauthorized IPC channel: ${channel}`);
       }
-
-      // Rate limiting
-      this.checkRateLimit(channel);
-
-      // Argument sanitization
-      const sanitizedArgs = this.sanitizeArguments(args);
-
-      console.log(`[PRELOAD] Secure invoke: ${channel}`, sanitizedArgs.length > 0 ? '[with args]' : '');
+      throw new Error(`Unauthorized IPC channel: ${channel}`);
+    }
+    
+    try {
+      // Sanitize arguments to prevent potential attacks
+      const sanitizedArgs = args.map(arg => 
+        typeof arg === 'string' && arg.length > 10000 ? arg.substring(0, 10000) : arg
+      );
+      
+      if (DEBUG_MODE) {
+        console.log(`[PRELOAD] Secure invoke: ${channel}`, sanitizedArgs.length > 0 ? '[with args]' : '');
+      }
       
       const result = await ipcRenderer.invoke(channel, ...sanitizedArgs);
-      
-      // Result validation
-      return this.validateResult(result, channel);
-      
+      return result;
     } catch (error) {
-      console.error(`[PRELOAD] IPC invoke error for ${channel}:`, error.message);
-      throw new Error(`IPC Error: ${error.message}`);
+      if (DEBUG_MODE) {
+        console.error(`[PRELOAD] IPC invoke error for ${channel}:`, error.message);
+      }
+      throw error;
     }
   }
 
   /**
-   * Secure event listener with cleanup tracking
+   * Safe IPC listener with validation
    */
   safeOn(channel, callback) {
-    if (!ALLOWED_RECEIVE_CHANNELS.includes(channel)) {
-      console.warn(`[PRELOAD] Blocked listener on unauthorized channel: ${channel}`);
-      return () => {};
+    const allowedChannels = this.getAllowedChannels();
+    if (!allowedChannels.includes(channel)) {
+      if (DEBUG_MODE) {
+        console.warn(`[PRELOAD] Blocked listener on unauthorized channel: ${channel}`);
+      }
+      return;
     }
-
+    
+    // Wrap callback with security validation
     const wrappedCallback = (event, ...args) => {
-      try {
-        // Validate event source
-        if (!this.validateEventSource(event)) {
+      // Validate event source
+      if (!event || !event.sender) {
+        if (DEBUG_MODE) {
           console.warn(`[PRELOAD] Rejected event from invalid source on channel: ${channel}`);
-          return;
         }
-
-        // Sanitize incoming data
-        const sanitizedArgs = this.sanitizeArguments(args);
-        
-        // Special handling for different event types
-        if (channel === 'system-metrics' && sanitizedArgs.length === 1) {
-          const data = sanitizedArgs[0];
-          if (this.isValidSystemMetrics(data)) {
-            callback(data);
-          } else {
-            console.warn('[PRELOAD] Invalid system-metrics data rejected');
+        return;
+      }
+      
+      try {
+        // Special validation for system metrics
+        if (channel === IPC_CHANNELS.SYSTEM.METRICS && args[0]) {
+          const data = args[0];
+          if (!data || typeof data !== 'object' || 
+              typeof data.cpu !== 'number' || 
+              typeof data.memory !== 'number') {
+            if (DEBUG_MODE) {
+              console.warn('[PRELOAD] Invalid system-metrics data rejected');
+            }
+            return;
           }
-        } else {
-          callback(...sanitizedArgs);
         }
+        
+        callback(event, ...args);
       } catch (error) {
-        console.error(`[PRELOAD] Error in ${channel} event handler:`, error);
+        if (DEBUG_MODE) {
+          console.error(`[PRELOAD] Error in ${channel} event handler:`, error);
+        }
       }
     };
 
@@ -146,6 +163,26 @@ class SecureIPCManager {
   }
 
   /**
+   * Get all allowed IPC channels by properly flattening nested objects
+   */
+  getAllowedChannels() {
+    const channels = [];
+    
+    function flattenChannels(obj) {
+      for (const value of Object.values(obj)) {
+        if (typeof value === 'string') {
+          channels.push(value);
+        } else if (typeof value === 'object' && value !== null) {
+          flattenChannels(value);
+        }
+      }
+    }
+    
+    flattenChannels(IPC_CHANNELS);
+    return channels;
+  }
+
+  /**
    * Validate event source to prevent spoofing
    */
   validateEventSource(event) {
@@ -157,7 +194,7 @@ class SecureIPCManager {
    * Sanitize arguments to prevent injection attacks
    */
   sanitizeArguments(args) {
-    return args.map(arg => {
+    return args.map((arg) => {
       if (typeof arg === 'string') {
         // Basic XSS prevention
         return arg.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
@@ -175,7 +212,7 @@ class SecureIPCManager {
    */
   sanitizeObject(obj) {
     if (Array.isArray(obj)) {
-      return obj.map(item => this.sanitizeObject(item));
+      return obj.map((item) => this.sanitizeObject(item));
     }
     
     if (typeof obj === 'object' && obj !== null) {
@@ -254,6 +291,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDirectoryContents: (dirPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
     organize: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch_organize', operations }),
     performOperation: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, operations),
+    executeBatchOperations: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch', operations }),
     delete: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FILE, filePath),
     // Add missing file operations that the UI is calling
     open: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FILE, filePath),
@@ -294,7 +332,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     document: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
     image: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
     // audio: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath), // REMOVED - audio analysis disabled
-    extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath),
+    extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath)
     // transcribe: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, filePath) // REMOVED - audio analysis disabled
   },
 
@@ -318,12 +356,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     canRedo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CAN_REDO)
   },
 
-
-
   // System Monitoring (only metrics and app statistics currently implemented)
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
-    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS)
+    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS),
+    scanCommonDirectories: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES)
   },
 
   // Ollama (only implemented endpoints)
@@ -361,4 +398,6 @@ contextBridge.exposeInMainWorld('electron', {
   }
 });
 
-console.log('[PRELOAD] Secure context bridge exposed with structured API'); 
+  if (DEBUG_MODE) {
+    console.log('[PRELOAD] Secure context bridge exposed with structured API');
+  } 

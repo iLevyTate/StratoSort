@@ -20,6 +20,27 @@ class Logger {
     this.enableFile = false;
     this.logFile = null;
     this.context = '';
+    this.sessionId = this.generateSessionId();
+  }
+
+  generateSessionId() {
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  setContext(context) {
+    this.context = context;
+    return this;
+  }
+
+  createChildLogger(context) {
+    const child = new Logger();
+    child.level = this.level;
+    child.enableConsole = this.enableConsole;
+    child.enableFile = this.enableFile;
+    child.logFile = this.logFile;
+    child.context = this.context ? `${this.context}:${context}` : context;
+    child.sessionId = this.sessionId;
+    return child;
   }
 
   setLevel(level) {
@@ -30,51 +51,19 @@ class Logger {
     }
   }
 
-  setContext(context) {
-    this.context = context;
-  }
-
-  enableFileLogging(logFile) {
-    this.enableFile = true;
-    this.logFile = logFile;
-  }
-
-  disableConsoleLogging() {
-    this.enableConsole = false;
-  }
-
-  formatMessage(level, message, data) {
+  formatMessage(level, message, data = {}) {
     const timestamp = new Date().toISOString();
     const levelName = LOG_LEVEL_NAMES[level] || 'UNKNOWN';
-    const contextStr = this.context ? ` [${this.context}]` : '';
+    const contextStr = this.context ? `[${this.context}]` : '';
+    const sessionStr = `[${this.sessionId}]`;
     
-    let formattedMessage = `${timestamp} ${levelName}${contextStr}: ${message}`;
+    let formattedMessage = `${timestamp} ${sessionStr} ${contextStr} [${levelName}] ${message}`;
     
-    if (data && Object.keys(data).length > 0) {
-      formattedMessage += `\n  Data: ${JSON.stringify(data, null, 2)}`;
+    if (Object.keys(data).length > 0) {
+      formattedMessage += ` ${JSON.stringify(data)}`;
     }
     
     return formattedMessage;
-  }
-
-  async writeToFile(formattedMessage) {
-    if (!this.enableFile || !this.logFile) return;
-    
-    try {
-      // Use dynamic import for fs to work in both main and renderer
-      if (typeof window !== 'undefined') {
-        // Renderer process - use electron API if available
-        if (window.electronAPI && window.electronAPI.logger) {
-          await window.electronAPI.logger.write(formattedMessage);
-        }
-      } else {
-        // Main process - use fs directly
-        const fs = require('fs').promises;
-        await fs.appendFile(this.logFile, formattedMessage + '\n');
-      }
-    } catch (error) {
-      console.error('Failed to write to log file:', error);
-    }
   }
 
   log(level, message, data = {}) {
@@ -124,6 +113,47 @@ class Logger {
 
   trace(message, data) {
     this.log(LOG_LEVELS.TRACE, message, data);
+  }
+
+  writeToFile(message) {
+    if (!this.logFile) return;
+    
+    try {
+      // In Node.js environment
+      if (typeof require !== 'undefined') {
+        const fs = require('fs');
+        fs.appendFileSync(this.logFile, `${message  }\n`);
+      }
+    } catch (error) {
+      console.error('Failed to write to log file:', error);
+    }
+  }
+
+  enableFileLogging(logFile) {
+    this.enableFile = true;
+    this.logFile = logFile;
+  }
+
+  disableFileLogging() {
+    this.enableFile = false;
+    this.logFile = null;
+  }
+
+  // Performance timing utilities
+  time(label) {
+    this.debug(`Timer started: ${label}`);
+    return {
+      end: () => {
+        this.debug(`Timer ended: ${label}`);
+      }
+    };
+  }
+
+  // Cleanup method for testing
+  cleanup() {
+    this.context = '';
+    this.enableFile = false;
+    this.logFile = null;
   }
 
   // Convenience methods for common logging patterns

@@ -18,6 +18,7 @@ const path = require('path');
 const { Ollama } = require('ollama');
 
 const PerformanceOptimizer = require('./PerformanceOptimizer');
+const { logger } = require('../../shared/logger');
 
 class EnhancedLLMService {
   constructor(host = 'http://127.0.0.1:11434') {
@@ -31,7 +32,10 @@ class EnhancedLLMService {
     // Initialize domain-specific templates
     this.initializeDomainTemplates();
     
-    console.log('[ENHANCED-LLM] Service initialized with performance optimization');
+    logger.info('Enhanced LLM service initialized', {
+      component: 'enhanced-llm',
+      optimization: true
+    });
     
     // Advanced parameter configurations
     this.parameterProfiles = {
@@ -374,7 +378,7 @@ Provide detailed JSON analysis with all relevant fields:`;
       }
       
       // Validate each score object has required properties
-      const validScores = semanticScores.filter(score => 
+      const validScores = semanticScores.filter((score) => 
         score && 
         typeof score === 'object' && 
         score.folder && 
@@ -467,8 +471,8 @@ Respond with JSON array:
       }
       
       // Ensure all folders are represented
-      const responseMap = new Map(parsedResponse.map(item => [item.folder, item]));
-      const completeResults = smartFolders.map(folder => {
+      const responseMap = new Map(parsedResponse.map((item) => [item.folder, item]));
+      const completeResults = smartFolders.map((folder) => {
         const existing = responseMap.get(folder.name);
         return existing || {
           folder: folder.name,
@@ -498,7 +502,11 @@ Respond with JSON array:
     
     // If confidence is low, try alternative approaches
     if (confidence < 70) {
-      console.log(`[ENHANCED-LLM] Low confidence (${confidence}%), attempting refinement`);
+      logger.warn('Low confidence analysis, attempting refinement', {
+        component: 'enhanced-llm',
+        confidence,
+        threshold: 75
+      });
       
       try {
         // Try different parameter settings for refinement

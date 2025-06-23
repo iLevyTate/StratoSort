@@ -15,11 +15,11 @@ class ModelVerifier {
     this.essentialModels = [
       DEFAULT_AI_MODELS.TEXT_ANALYSIS, // gemma3:4b
       DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // gemma3:4b (multimodal)
-      DEFAULT_AI_MODELS.EMBEDDING_ANALYSIS, // mxbai-embed-large (for semantic search)
+      DEFAULT_AI_MODELS.EMBEDDING_ANALYSIS // mxbai-embed-large (for semantic search)
     ];
     this.recommendedModels = [
       ...DEFAULT_AI_MODELS.FALLBACK_MODELS, // llama3.2, llama3, mistral, phi3
-      DEFAULT_AI_MODELS.VISION_ANALYSIS, // llava:latest (enhanced vision)
+      DEFAULT_AI_MODELS.VISION_ANALYSIS // llava:latest (enhanced vision)
     ];
   }
 
@@ -65,14 +65,14 @@ class ModelVerifier {
     
     try {
       const response = await this.ollama.list();
-      const availableModels = response.models.map(m => m.name);
+      const availableModels = response.models.map((m) => m.name);
       
       const missingModels = [];
       const availableEssential = [];
       
       for (const model of this.essentialModels) {
-        const isAvailable = availableModels.some(available => 
-          available === model || available.startsWith(model + ':')
+        const isAvailable = availableModels.some((available) => 
+          available === model || available.startsWith(`${model  }:`)
         );
         
         if (isAvailable) {
@@ -119,19 +119,19 @@ class ModelVerifier {
     for (const missing of missingModels) {
       if (missing === 'whisper') {
         // Look for any whisper variant
-        const whisperAlts = availableModels.filter(m => m.includes('whisper'));
+        const whisperAlts = availableModels.filter((m) => m.includes('whisper'));
         if (whisperAlts.length > 0) {
           alternatives.push({ missing, alternative: whisperAlts[0] });
         }
       } else if (missing.includes('gemma')) {
         // Look for any gemma variant
-        const gemmaAlts = availableModels.filter(m => m.includes('gemma'));
+        const gemmaAlts = availableModels.filter((m) => m.includes('gemma'));
         if (gemmaAlts.length > 0) {
           alternatives.push({ missing, alternative: gemmaAlts[0] });
         }
       } else if (missing.includes('llama')) {
         // Look for any llama variant
-        const llamaAlts = availableModels.filter(m => m.includes('llama'));
+        const llamaAlts = availableModels.filter((m) => m.includes('llama'));
         if (llamaAlts.length > 0) {
           alternatives.push({ missing, alternative: llamaAlts[0] });
         }

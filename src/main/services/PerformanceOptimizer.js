@@ -5,6 +5,8 @@
 
 const { EventEmitter } = require('events');
 
+const { logger } = require('../../shared/logger');
+
 class PerformanceOptimizer extends EventEmitter {
   constructor() {
     super();
@@ -65,13 +67,33 @@ class PerformanceOptimizer extends EventEmitter {
    * Initialize all optimization strategies
    */
   initializeOptimizations() {
-    // Start cache cleanup interval
-    setInterval(() => this.cleanupCache(), 5 * 60 * 1000); // Every 5 minutes
+    // Initialize cleanup intervals with proper cleanup
+    this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), 5 * 60 * 1000); // Every 5 minutes
+    this.memoryMonitorInterval = setInterval(() => this.monitorMemoryUsage(), 30000); // Every 30 seconds
     
-    // Monitor memory usage
-    setInterval(() => this.monitorMemoryUsage(), 30000); // Every 30 seconds
-    
-    console.log('[PERF-OPTIMIZER] Performance optimizer initialized with advanced caching and concurrency control');
+    logger.info('Performance optimizer initialized', {
+      component: 'performance-optimizer',
+      features: ['caching', 'concurrency-control']
+    });
+  }
+
+  /**
+   * Cleanup resources and clear intervals
+   */
+  destroy() {
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval);
+      this.cacheCleanupInterval = null;
+    }
+    if (this.memoryMonitorInterval) {
+      clearInterval(this.memoryMonitorInterval);
+      this.memoryMonitorInterval = null;
+    }
+    this.performanceMetrics.analysisCache.clear();
+    this.performanceMetrics.parameterCache.clear();
+    logger.info('Performance optimizer destroyed and cleaned up', {
+      component: 'performance-optimizer'
+    });
   }
 
   /**
@@ -86,7 +108,11 @@ class PerformanceOptimizer extends EventEmitter {
       this.updateCacheHitRate(true);
       this.updatePerformanceMetrics(5); // 5ms for cache retrieval
       
-      console.log(`[PERF-CACHE] Cache HIT for ${analysisType} analysis`);
+      logger.debug('Cache hit for analysis', {
+        component: 'performance-optimizer',
+        analysisType,
+        cache: 'hit'
+      });
       return { ...cached.result, fromCache: true };
     }
     

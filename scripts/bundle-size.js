@@ -31,14 +31,14 @@ function main() {
   console.log(`🎯 Size limit: ${BUNDLE_SIZE_LIMIT_MB} MB`);
   
   if (bundleSizeMB > BUNDLE_SIZE_LIMIT_MB) {
-    console.error(`❌ Bundle size exceeds limit!`);
+    console.error('❌ Bundle size exceeds limit!');
     console.error(`   Current: ${bundleSizeMB.toFixed(2)} MB`);
     console.error(`   Limit: ${BUNDLE_SIZE_LIMIT_MB} MB`);
     console.error(`   Overage: +${(bundleSizeMB - BUNDLE_SIZE_LIMIT_MB).toFixed(2)} MB`);
     process.exit(1);
   }
   
-  console.log(`✅ Bundle size within limits`);
+  console.log('✅ Bundle size within limits');
   
   // Write size to snapshot file for tracking
   const snapshotPath = path.join(__dirname, '../.bundle-size-snapshot');
@@ -49,7 +49,7 @@ function main() {
   };
   
   fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2));
-  console.log(`📸 Snapshot saved to .bundle-size-snapshot`);
+  console.log('📸 Snapshot saved to .bundle-size-snapshot');
 }
 
 if (require.main === module) {

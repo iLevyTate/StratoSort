@@ -3,16 +3,6 @@ const path = require('path');
 
 const { Ollama } = require('ollama');
 
-// Try to import node-wav for audio processing
-/* eslint-disable no-unused-vars */
-let _wav = null;
-try {
-  _wav = require('node-wav');
-} catch (e) {
-  console.log('node-wav not available, audio analysis will use external tools');
-}
-/* eslint-enable no-unused-vars */
-
 // App configuration for audio analysis
 const AppConfig = {
   ai: {

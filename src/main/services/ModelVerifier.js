@@ -15,13 +15,11 @@ class ModelVerifier {
     this.essentialModels = [
       DEFAULT_AI_MODELS.TEXT_ANALYSIS, // gemma3:4b
       DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // gemma3:4b (multimodal)
-      DEFAULT_AI_MODELS.AUDIO_ANALYSIS, // whisper
-      'mxbai-embed-large' // For semantic search
+      DEFAULT_AI_MODELS.EMBEDDING_ANALYSIS, // mxbai-embed-large (for semantic search)
     ];
     this.recommendedModels = [
       ...DEFAULT_AI_MODELS.FALLBACK_MODELS, // llama3.2, llama3, mistral, phi3
-      'whisper:medium', // Better accuracy Whisper model
-      'whisper:large' // Highest accuracy Whisper model
+      DEFAULT_AI_MODELS.VISION_ANALYSIS, // llava:latest (enhanced vision)
     ];
   }
 
@@ -57,6 +55,114 @@ class ModelVerifier {
         total: 0
       };
     }
+  }
+
+  /**
+   * Check if essential models are available
+   */
+  async checkEssentialModels() {
+    console.log('[ModelVerifier] Checking essential models...');
+    
+    try {
+      const response = await this.ollama.list();
+      const availableModels = response.models.map(m => m.name);
+      
+      const missingModels = [];
+      const availableEssential = [];
+      
+      for (const model of this.essentialModels) {
+        const isAvailable = availableModels.some(available => 
+          available === model || available.startsWith(model + ':')
+        );
+        
+        if (isAvailable) {
+          availableEssential.push(model);
+        } else {
+          missingModels.push(model);
+        }
+      }
+      
+      console.log(`[ModelVerifier] Found ${availableEssential.length}/${this.essentialModels.length} essential models`);
+      
+      if (missingModels.length > 0) {
+        console.log('[ModelVerifier] Missing models:', missingModels);
+        
+        // Check for alternative models
+        const alternatives = this.findAlternativeModels(missingModels, availableModels);
+        
+        if (alternatives.length > 0) {
+          console.log('[ModelVerifier] Found alternative models:', alternatives);
+        }
+        
+        // Provide installation instructions for critical missing models
+        this.provideMissingModelInstructions(missingModels);
+      }
+      
+      return {
+        available: availableEssential,
+        missing: missingModels,
+        total: this.essentialModels.length,
+        allAvailable: missingModels.length === 0
+      };
+    } catch (error) {
+      console.error('[ModelVerifier] Failed to check models:', error);
+      throw new OllamaConnectionError(this.ollamaHost);
+    }
+  }
+
+  /**
+   * Find alternative models for missing essential models
+   */
+  findAlternativeModels(missingModels, availableModels) {
+    const alternatives = [];
+    
+    for (const missing of missingModels) {
+      if (missing === 'whisper') {
+        // Look for any whisper variant
+        const whisperAlts = availableModels.filter(m => m.includes('whisper'));
+        if (whisperAlts.length > 0) {
+          alternatives.push({ missing, alternative: whisperAlts[0] });
+        }
+      } else if (missing.includes('gemma')) {
+        // Look for any gemma variant
+        const gemmaAlts = availableModels.filter(m => m.includes('gemma'));
+        if (gemmaAlts.length > 0) {
+          alternatives.push({ missing, alternative: gemmaAlts[0] });
+        }
+      } else if (missing.includes('llama')) {
+        // Look for any llama variant
+        const llamaAlts = availableModels.filter(m => m.includes('llama'));
+        if (llamaAlts.length > 0) {
+          alternatives.push({ missing, alternative: llamaAlts[0] });
+        }
+      }
+    }
+    
+    return alternatives;
+  }
+
+  /**
+   * Provide installation instructions for missing models
+   */
+  provideMissingModelInstructions(missingModels) {
+    if (missingModels.length === 0) return;
+    
+    console.log('[STARTUP] Missing AI models detected:', missingModels);
+    console.log('[STARTUP] Install missing models:');
+    
+    for (const model of missingModels) {
+      console.log(`   # Install ${model}:`);
+      console.log(`   ollama pull ${model}`);
+      
+      if (model === 'whisper') {
+        console.log('# Alternative Whisper models:');
+        console.log('# ollama pull whisper:medium  # Better accuracy');
+        console.log('# ollama pull whisper:large   # Highest accuracy');
+      }
+    }
+    
+    console.log('   # Verify installation:');
+    console.log('   ollama list');
   }
 
   async verifyEssentialModels() {

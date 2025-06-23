@@ -1,36 +1,68 @@
 import React, { useState, useEffect } from "react";
 import { usePhase } from "../contexts/PhaseContext";
 import useConfirmDialog from "../hooks/useConfirmDialog";
-import { useToast } from "../components/Toast";
 import { SmartFolderSkeleton } from "../components/LoadingSkeleton";
+import { useNotification } from "../contexts/NotificationContext";
 const { PHASES } = require("../../shared/constants");
 
 function SetupPhase() {
   const { actions, phaseData } = usePhase();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
-  const { toasts, addToast, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
+  const { addNotification, showSuccess, showError, showWarning, showInfo } = useNotification();
+  
+  // State management
   const [smartFolders, setSmartFolders] = useState([]);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderPath, setNewFolderPath] = useState('');
-  const [newFolderDescription, setNewFolderDescription] = useState('');
-  const [editingFolder, setEditingFolder] = useState(null);
-  const [defaultLocation, setDefaultLocation] = useState('Documents');
   const [isLoading, setIsLoading] = useState(true);
-  const [isAddingFolder, setIsAddingFolder] = useState(false);
-  const [isEditingFolder, setIsEditingFolder] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [isDeletingFolder, setIsDeletingFolder] = useState(null);
-  const [isCreatingAllFolders, setIsCreatingAllFolders] = useState(false);
-
+  const [activeTab, setActiveTab] = useState('ai'); // 'ai', 'folders', 'performance'
+  
+  // AI Configuration state
+  const [settings, setSettings] = useState({
+    selectedModel: 'gemma3:4b',
+    concurrentFiles: 3,
+    namingConvention: 'keep-original'
+  });
+  
+  // Performance settings
+  const [performanceSettings, setPerformanceSettings] = useState({
+    maxConcurrentFiles: 3,
+    analysisTimeout: 30000,
+    enableGpuAcceleration: true,
+    cacheSize: 100,
+    enablePreloading: true
+  });
+  
+  // Folder management
+  const [newFolder, setNewFolder] = useState({ name: '', emoji: '📁', path: '', description: '' });
+  const [editingFolder, setEditingFolder] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const initializeSetup = async () => {
       setIsLoading(true);
       try {
-        await Promise.all([
-          loadSmartFolders(),
-          loadDefaultLocation()
+        const [loadedSettings, folders] = await Promise.all([
+          window.electronAPI.settings.get(),
+          window.electronAPI.smartFolders.get()
         ]);
+        
+        if (loadedSettings) {
+          setSettings({
+            selectedModel: loadedSettings.selectedModel || 'gemma3:4b',
+            concurrentFiles: loadedSettings.concurrentFiles || 3,
+            namingConvention: loadedSettings.namingConvention || 'keep-original'
+          });
+          
+          // Load performance settings
+          setPerformanceSettings({
+            maxConcurrentFiles: loadedSettings.maxConcurrentFiles || 3,
+            analysisTimeout: loadedSettings.analysisTimeout || 30000,
+            enableGpuAcceleration: loadedSettings.enableGpuAcceleration !== false,
+            cacheSize: loadedSettings.cacheSize || 100,
+            enablePreloading: loadedSettings.enablePreloading !== false
+          });
+        }
+        
+        setSmartFolders(folders || []);
       } catch (error) {
         console.error('Failed to initialize setup:', error);
         showError('Failed to load setup data');
@@ -42,673 +74,408 @@ function SetupPhase() {
     initializeSetup();
   }, []);
 
-  // Handle ESC key for canceling edit mode
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && editingFolder) {
-        setEditingFolder(null);
-        setIsEditingFolder(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingFolder]);
-
-  const loadDefaultLocation = async () => {
+  const handleSaveConfig = async () => {
     try {
-      const settings = await window.electronAPI.settings.get();
-      if (settings?.defaultSmartFolderLocation) {
-        setDefaultLocation(settings.defaultSmartFolderLocation);
-      } else {
-        // If no explicit default is configured, fall back to the OS Documents directory
-        const documentsPath = await window.electronAPI.files.getDocumentsPath();
-        if (documentsPath) {
-          setDefaultLocation(documentsPath);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load default location:', error);
-    }
-  };
-
-  const loadSmartFolders = async () => {
-    try {
-      const folders = await window.electronAPI.smartFolders.get();
-      setSmartFolders(folders || []);
-      actions.setPhaseData('smartFolders', folders || []);
+      const configToSave = {
+        ...settings,
+        ...performanceSettings
+      };
       
-      // Update all phase data that depends on smart folders
-      await propagateSmartFolderChanges(folders || []);
-      
-      // Only show notification if this isn't the initial load
-      if (folders && folders.length > 0 && smartFolders.length > 0) {
-        showInfo('Smart folders updated. Files may need re-analysis to match new folder structure.', 7000);
-      }
+      await window.electronAPI.settings.save(configToSave);
+      showSuccess('Configuration saved successfully');
     } catch (error) {
-      console.error('Failed to load smart folders:', error);
-      showError('Failed to load smart folders');
-    }
-  };
-
-  // Propagate smart folder changes to other phases
-  const propagateSmartFolderChanges = async (folders) => {
-    try {
-      // Update phase data for all phases that use smart folders
-      actions.setPhaseData('smartFolders', folders);
-      
-      // Notify other components about smart folder changes
-      window.dispatchEvent(new CustomEvent('smartFoldersUpdated', { 
-        detail: { folders } 
-      }));
-    } catch (error) {
-      console.error('Failed to propagate smart folder changes:', error);
+      console.error('Failed to save configuration:', error);
+      showError('Failed to save configuration');
     }
   };
 
   const handleAddFolder = async () => {
-    if (!newFolderName.trim()) {
+    if (!newFolder.name.trim()) {
       showWarning('Please enter a folder name');
       return;
     }
     
-    setIsAddingFolder(true);
     try {
-      let targetPath;
-      
-      if (newFolderPath.trim()) {
-        // User provided a specific path
-        targetPath = newFolderPath.trim();
-      } else {
-        // Use default location - resolve it to full path if needed
-        let resolvedDefaultLocation = defaultLocation;
-        
-        // If defaultLocation is just "Documents" or relative, resolve to full path
-        if (!/^[A-Za-z]:[\\/]/.test(defaultLocation) && !defaultLocation.startsWith('/')) {
-          try {
-            const documentsPath = await window.electronAPI.files.getDocumentsPath();
-            if (documentsPath) {
-              resolvedDefaultLocation = documentsPath;
-            }
-          } catch (error) {
-            console.warn('Failed to resolve documents path, using defaultLocation as-is');
-          }
-        }
-        
-        targetPath = `${resolvedDefaultLocation}/${newFolderName.trim()}`;
-      }
-      
-      // If the target path is still relative, resolve using Documents path
-      if (!/^[A-Za-z]:[\\/]/.test(targetPath) && !targetPath.startsWith('/')) {
-        try {
-          const documentsPath = await window.electronAPI.files.getDocumentsPath();
-          if (documentsPath) {
-            targetPath = `${documentsPath}/${targetPath}`;
-          }
-        } catch (error) {
-          console.warn('Failed to resolve documents path, continuing with provided path');
-        }
-      }
-      
-      // Normalize path separators (convert backslashes to forward slashes)
-      targetPath = targetPath.replace(/\\\\/g, '/').replace(/\\/g, '/');
-      
-      // Enhanced client-side validation
-      const illegalChars = /[<>:"|?*\x00-\x1f]/g;
-      if (illegalChars.test(newFolderName)) {
-        showError('Folder name contains invalid characters. Please avoid: < > : " | ? *');
-        return;
-      }
-      
-      // Check if folder already exists in configuration
-      const existingFolder = smartFolders.find((f) => 
-        f.name.toLowerCase() === newFolderName.trim().toLowerCase() ||
-        (f.path && f.path.toLowerCase() === targetPath.toLowerCase())
-      );
-      
-      if (existingFolder) {
-        showWarning(`A smart folder with name "${existingFolder.name}" or path "${existingFolder.path}" already exists`);
-        return;
-      }
-      
-      // Validate write permissions for parent directory (optional client-side check)
-      const parentPath = targetPath.substring(0, targetPath.lastIndexOf('/') || targetPath.lastIndexOf('\\'));
-      try {
-        if (parentPath) {
-          const parentStats = await window.electronAPI.files.getStats(parentPath);
-          if (!parentStats || !parentStats.isDirectory) {
-            showError(`Parent directory "${parentPath}" does not exist or is not accessible`);
-            return;
-          }
-        }
-      } catch (error) {
-        showWarning('Cannot verify parent directory permissions. Folder creation may fail.');
-      }
-      
-      const newFolder = {
-        name: newFolderName.trim(),
-        path: targetPath,
-        description: newFolderDescription.trim() || `Smart folder for ${newFolderName.trim()}`,
-        isDefault: false
+      const folderToAdd = {
+        id: Date.now().toString(),
+        name: newFolder.name.trim(),
+        emoji: newFolder.emoji,
+        path: newFolder.path.trim() || `Documents/${newFolder.name.trim()}`,
+        description: newFolder.description.trim(),
+        type: 'smart'
       };
       
-      const result = await window.electronAPI.smartFolders.add(newFolder);
-      
-      if (result.success) {
-        if (result.directoryCreated) {
-          showSuccess(`✅ Added smart folder and created directory: ${newFolder.name}`);
-        } else if (result.directoryExisted) {
-          showSuccess(`✅ Added smart folder: ${newFolder.name} (directory already exists)`);
-        } else {
-          showSuccess(`✅ Added smart folder: ${newFolder.name}`);
-        }
-        
-        if (result.llmEnhanced) {
-          showInfo('🤖 Smart folder enhanced with AI suggestions', 5000);
-        }
-        
-        showInfo('💡 Tip: You can reanalyze files to see how they fit with your new smart folder', 5000);
-        
-        await loadSmartFolders();
-        setNewFolderName('');
-        setNewFolderPath('');
-        setNewFolderDescription('');
-      } else {
-        showError(`❌ Failed to add folder: ${result.error}`);
-      }
+      const updatedFolders = [...smartFolders, folderToAdd];
+      await window.electronAPI.smartFolders.save(updatedFolders);
+      setSmartFolders(updatedFolders);
+      setNewFolder({ name: '', emoji: '📁', path: '', description: '' });
+      setShowAddModal(false);
+      showSuccess('Smart folder added successfully');
     } catch (error) {
-      console.error('Failed to add smart folder:', error);
+      console.error('Failed to add folder:', error);
       showError('Failed to add smart folder');
-    } finally {
-      setIsAddingFolder(false);
     }
-  };
-
-  const handleEditFolder = (folder) => {
-    setEditingFolder({ ...folder });
-    setIsEditingFolder(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingFolder.name.trim()) {
-      showWarning('Folder name cannot be empty');
-      return;
-    }
-
-    setIsSavingEdit(true);
-    try {
-      const result = await window.electronAPI.smartFolders.edit(editingFolder.id, editingFolder);
-      
-      if (result.success) {
-        showSuccess(`✅ Updated folder: ${editingFolder.name}`);
-        showInfo('💡 Tip: You can reanalyze files to see how they fit with updated smart folders', 5000);
-        await loadSmartFolders();
-        setEditingFolder(null);
-      } else {
-        showError(`❌ Failed to update folder: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Failed to update folder:', error);
-      showError('Failed to update folder');
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingFolder(null);
-    setIsEditingFolder(false);
   };
 
   const handleDeleteFolder = async (folderId) => {
-    const folder = smartFolders.find((f) => f.id === folderId);
-    if (!folder) return;
-
-    const confirmDelete = await showConfirm({
-      title: 'Delete Smart Folder',
-      message: 'Are you sure you want to remove this smart folder? This will also delete the physical directory and any files inside it.',
-      confirmText: 'Delete Folder & Directory',
-      cancelText: 'Cancel',
-      variant: 'danger',
-      fileName: folder.name
-    });
+    const confirmed = await showConfirm(
+      'Delete Smart Folder',
+      'Are you sure you want to delete this smart folder? This action cannot be undone.'
+    );
     
-    if (!confirmDelete) return;
-
-    setIsDeletingFolder(folderId);
-    try {
-      const result = await window.electronAPI.smartFolders.delete(folderId);
-      
-      if (result.success) {
-        if (result.deletedFolder) {
-          showSuccess(`✅ Removed smart folder: ${result.deletedFolder.name}`);
-        } else {
-          showSuccess('✅ Removed smart folder');
-        }
-        await loadSmartFolders();
-      } else {
-        showError(`❌ Failed to delete folder: ${result.error}`);
-      }
+    if (confirmed) {
+      try {
+        const updatedFolders = smartFolders.filter(f => f.id !== folderId);
+        await window.electronAPI.smartFolders.save(updatedFolders);
+        setSmartFolders(updatedFolders);
+        showSuccess('Smart folder deleted successfully');
     } catch (error) {
       console.error('Failed to delete folder:', error);
-      showError('❌ Failed to delete folder');
-    } finally {
-      setIsDeletingFolder(null);
-    }
-  };
-
-  const deleteFolderFromFileSystem = async (folderPath) => {
-    try {
-      // This would need to be implemented as an IPC call
-      // For now, return a placeholder response
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
-  const handleCreateAllFolders = async () => {
-    if (smartFolders.length === 0) {
-      showWarning('No smart folders to create');
-      return;
-    }
-
-    setIsCreatingAllFolders(true);
-    try {
-      let createdCount = 0;
-      let existedCount = 0;
-      let errorCount = 0;
-
-      for (const folder of smartFolders) {
-        try {
-          // Check if directory already exists
-          const stats = await window.electronAPI.files.getStats(folder.path);
-          if (stats && stats.isDirectory) {
-            existedCount++;
-          } else {
-            // Create directory
-            await window.electronAPI.files.createFolder(folder.path);
-            createdCount++;
-          }
-        } catch (error) {
-          console.error(`Failed to create folder ${folder.path}:`, error);
-          errorCount++;
-        }
+        showError('Failed to delete smart folder');
       }
-
-      if (createdCount > 0) {
-        showSuccess(`✅ Created ${createdCount} smart folder directories`);
-      }
-      if (existedCount > 0) {
-        showInfo(`📁 ${existedCount} directories already existed`);
-      }
-      if (errorCount > 0) {
-        showWarning(`⚠️ Failed to create ${errorCount} directories`);
-      }
-      if (createdCount === 0 && errorCount === 0) {
-        showInfo('📁 All smart folder directories already exist');
-      }
-    } catch (error) {
-      console.error('Failed to create folders:', error);
-      showError('Failed to create folder directories');
-    } finally {
-      setIsCreatingAllFolders(false);
-    }
-  };
-
-  const handleBrowseFolder = async () => {
-    try {
-      const folderPath = await window.electronAPI.files.selectDirectory();
-      if (folderPath) {
-        setNewFolderPath(folderPath);
-      }
-    } catch (error) {
-      console.error('Failed to browse folder:', error);
-      showError('Failed to browse folder');
-    }
-  };
-
-  const handleOpenFolder = async (folderPath) => {
-    try {
-      const result = await window.electronAPI.files.openFolder(folderPath);
-      if (result?.success) {
-        showSuccess(`📁 Opened folder: ${folderPath.split(/[/\\]/).pop()}`);
-      } else {
-        showError(`Failed to open folder: ${result?.error || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Failed to open folder:', error);
-      showError('Failed to open folder');
-    }
-  };
-
-  const createSingleFolder = async (folderPath) => {
-    try {
-      // Use the files.createFolder API to create the directory
-      await window.electronAPI.files.createFolder(folderPath);
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to create folder:', error);
-      return { success: false, error: error.message };
     }
   };
 
   const canProceed = () => {
-    if (smartFolders.length === 0) {
-      showWarning('Please add at least one smart folder before continuing');
-      return false;
-    }
-    return true;
+    return smartFolders.length > 0 && settings.selectedModel;
   };
 
-  return (
-    <div className="w-full animate-slide-up">
-      <div className="mb-fib-21 text-center">
-        <h2 className="heading-primary">
-          ⚙️ Configure{' '}
-          <span className="text-gradient inline-block">
-            Smart Folders
-          </span>
-        </h2>
-        <p className="text-lg text-system-gray-600 leading-relaxed">
-          Set up smart folders where StratoSort will organize your files based on AI analysis.
-        </p>
-      </div>
+  const handleProceed = () => {
+    actions.advancePhase(PHASES.DISCOVER);
+  };
 
-      {/* Current Smart Folders */}
-      <div className="card-enhanced mb-fib-21" role="region" aria-labelledby="current-folders-heading">
-        <div className="flex justify-between items-center mb-fib-13">
-          <h3 id="current-folders-heading" className="heading-tertiary">📁 Current Smart Folders</h3>
-          {smartFolders.length > 0 && (
-            <button
-              onClick={handleCreateAllFolders}
-              className="btn-primary text-sm"
-              title="Create all smart folder directories"
-            >
-              📁 Create All Folders
-            </button>
-          )}
+  const renderAISettings = () => (
+    <div className="glass-card p-6 space-y-6">
+      <h3 className="text-on-glass text-xl font-bold mb-4">AI Configuration</h3>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            AI Model
+          </label>
+          <select
+            value={settings.selectedModel}
+            onChange={(e) => setSettings({...settings, selectedModel: e.target.value})}
+            className="glass-input w-full"
+          >
+            <option value="gemma3:4b">Gemma 3 4B (Recommended)</option>
+            <option value="llama3.2:latest">Llama 3.2 Latest</option>
+            <option value="llava:latest">LLaVA (Vision)</option>
+          </select>
         </div>
-        {isLoading ? (
-          <SmartFolderSkeleton count={3} />
-        ) : smartFolders.length === 0 ? (
-          <div className="text-center py-fib-21">
-            <div className="text-4xl mb-fib-8 opacity-50" role="img" aria-label="empty folder">📂</div>
-            <p className="text-muted italic">No smart folders configured yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-fib-8">
-            {smartFolders.map((folder, index) => (
-              <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right" style={{ animationDelay: `${index * 0.1}s` }}>
-                {editingFolder?.id === folder.id ? (
-                  // Edit mode
-                  <div className="space-y-fib-8" role="form" aria-label="Edit smart folder">
-                    <div className="flex gap-fib-8">
-                      <input
-                        type="text"
-                        value={editingFolder.name}
-                        onChange={(e) => setEditingFolder({ ...editingFolder, name: e.target.value })}
-                        className="form-input-enhanced flex-1"
-                        placeholder="Folder name"
-                        aria-label="Folder name"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveEdit();
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                      />
-                      <input
-                        type="text"
-                        value={editingFolder.path}
-                        onChange={(e) => setEditingFolder({ ...editingFolder, path: e.target.value })}
-                        className="form-input-enhanced flex-1"
-                        placeholder="Folder path"
-                        aria-label="Folder path"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveEdit();
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <textarea
-                        value={editingFolder.description || ''}
-                        onChange={(e) => setEditingFolder({ ...editingFolder, description: e.target.value })}
-                        className="form-input-enhanced w-full"
-                        placeholder="Describe what types of files should go in this folder (helps AI make better decisions)"
-                        rows="2"
-                        aria-label="Folder description"
-                      />
-                    </div>
-                    <div className="flex gap-fib-5">
-                      <button
-                        onClick={handleSaveEdit}
-                        disabled={isSavingEdit}
-                        className="btn-primary text-sm"
-                      >
-                        {isSavingEdit ? (
-                          <>
-                            <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
-                            Saving...
-                          </>
-                        ) : (
-                          <>💾 Save</>
-                        )}
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        disabled={isSavingEdit}
-                        className="btn-secondary text-sm"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // View mode
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="font-medium text-system-gray-700 mb-fib-2">{folder.name}</div>
-                      <div className="text-small text-muted mb-fib-3">{folder.path}</div>
-                      {folder.description && (
-                        <div className="text-sm text-system-gray-600 bg-stratosort-blue/5 p-fib-8 rounded-lg border-l-4 border-stratosort-blue/30">
-                          <div className="font-medium text-stratosort-blue mb-fib-2">📝 AI Context:</div>
-                          <div className="italic">{folder.description}</div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-fib-8">
-                      <div className="flex items-center gap-fib-5">
-                        <div className="status-dot success"></div>
-                        <span className="text-sm font-medium text-stratosort-success">Active</span>
-                      </div>
-                      {folder.physicallyExists ? (
-                        <div className="flex items-center gap-fib-3 px-fib-8 py-fib-3 bg-green-50 rounded-lg border border-green-200">
-                          <span className="text-xs text-green-600">📁</span>
-                          <span className="text-xs font-medium text-green-700">Directory Ready</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-fib-3 px-fib-8 py-fib-3 bg-amber-50 rounded-lg border border-amber-200">
-                          <span className="text-xs text-amber-600">📂</span>
-                          <span className="text-xs font-medium text-amber-700">Needs Creation</span>
-                        </div>
-                      )}
-                      <div className="flex gap-fib-5">
-                        {!folder.physicallyExists && (
-                          <button
-                            onClick={async () => {
-                              const result = await createSingleFolder(folder.path);
-                              if (result.success) {
-                                addNotification(`✅ Created directory: ${folder.name}`, 'success');
-                                await loadSmartFolders();
-                              } else {
-                                addNotification(`❌ Failed to create directory: ${result.error}`, 'error');
-                              }
-                            }}
-                            className="p-fib-5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                            title="Create this folder directory"
-                            aria-label={`Create directory for ${folder.name}`}
-                          >
-                            <span role="img" aria-label="create folder">📁</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleOpenFolder(folder.path)}
-                          className={`p-fib-5 rounded transition-colors ${
-                            folder.physicallyExists 
-                              ? 'text-green-600 hover:bg-green-100' 
-                              : 'text-gray-400 cursor-not-allowed'
-                          }`}
-                          title={folder.physicallyExists ? 'Open folder in file explorer' : "Folder doesn't exist yet"}
-                          aria-label={`Open folder ${folder.name}`}
-                          disabled={!folder.physicallyExists}
-                        >
-                          <span role="img" aria-label="open folder">📂</span>
-                        </button>
-                        <button
-                          onClick={() => handleEditFolder(folder)}
-                          className="p-fib-5 text-stratosort-blue hover:bg-stratosort-blue/10 rounded transition-colors"
-                          title="Edit folder"
-                          aria-label={`Edit folder ${folder.name}`}
-                        >
-                          <span role="img" aria-label="edit">✏️</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteFolder(folder.id)}
-                          disabled={isDeletingFolder === folder.id}
-                          className="p-fib-5 text-system-red-600 hover:bg-system-red-100 rounded transition-colors disabled:opacity-50"
-                          title={folder.physicallyExists ? 'Remove from config and delete directory' : 'Remove from config only'}
-                          aria-label={`Delete folder ${folder.name}`}
-                        >
-                          {isDeletingFolder === folder.id ? (
-                            <div className="animate-spin w-3 h-3 border-2 border-system-red-600 border-t-transparent rounded-full"></div>
-                          ) : (
-                            <span role="img" aria-label="delete">🗑️</span>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Add New Folder */}
-      <div className="card-enhanced mb-fib-21" role="region" aria-labelledby="add-folder-heading">
-        <h3 id="add-folder-heading" className="text-lg font-semibold mb-fib-13">Add New Smart Folder</h3>
-        <div className="space-y-fib-13">
-          <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-              Folder Name
-            </label>
-            <input
-              type="text"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newFolderName.trim() && !isAddingFolder) {
-                  handleAddFolder();
-                }
-              }}
-              placeholder="e.g., Documents, Photos, Projects"
-              className="form-input-enhanced w-full"
-              aria-describedby="folder-name-help"
-            />
-            <div id="folder-name-help" className="text-xs text-system-gray-500 mt-fib-3">
-              Enter a descriptive name for your smart folder. Press Enter to add the folder.
-            </div>
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Concurrent Files: {settings.concurrentFiles}
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="8"
+            value={settings.concurrentFiles}
+            onChange={(e) => setSettings({...settings, concurrentFiles: parseInt(e.target.value)})}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+          />
+          <div className="flex justify-between text-xs text-readable-light mt-1">
+            <span>Slower</span>
+            <span>Faster</span>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-              Target Path (optional)
-            </label>
-            <div className="flex gap-fib-8">
+        </div>
+
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Naming Convention
+          </label>
+          <select
+            value={settings.namingConvention}
+            onChange={(e) => setSettings({...settings, namingConvention: e.target.value})}
+            className="glass-input w-full"
+          >
+            <option value="keep-original">Keep Original Names</option>
+            <option value="descriptive">AI-Generated Names</option>
+            <option value="date-prefix">Date + Original</option>
+            <option value="category-prefix">Category + Original</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSmartFolders = () => (
+    <div className="glass-card p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-on-glass text-xl font-bold">Smart Folders</h3>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="glass-button text-sm px-4 py-2"
+        >
+          + Add Folder
+        </button>
+      </div>
+      
+      <div className="space-y-3 max-h-64 overflow-y-auto glass-scroll">
+        {smartFolders.map((folder) => (
+          <div key={folder.id} className="glass-card p-4 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">{folder.emoji}</span>
+              <div>
+                <h4 className="text-on-glass font-medium">{folder.name}</h4>
+                <p className="text-readable-light text-sm">{folder.path}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleDeleteFolder(folder.id)}
+              className="text-red-400 hover:text-red-300 text-sm"
+            >
+              Delete
+            </button>
+          </div>
+        ))}
+      </div>
+      
+      {smartFolders.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-readable-light">No smart folders configured yet.</p>
+          <p className="text-readable-light text-sm mt-2">Add your first folder to get started.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPerformanceSettings = () => (
+    <div className="glass-card p-6 space-y-6">
+      <h3 className="text-on-glass text-xl font-bold mb-4">Performance Settings</h3>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Max Concurrent Files: {performanceSettings.maxConcurrentFiles}
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="10"
+            value={performanceSettings.maxConcurrentFiles}
+            onChange={(e) => setPerformanceSettings({...performanceSettings, maxConcurrentFiles: parseInt(e.target.value)})}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Analysis Timeout (seconds): {performanceSettings.analysisTimeout / 1000}
+          </label>
+          <input
+            type="range"
+            min="10000"
+            max="120000"
+            step="5000"
+            value={performanceSettings.analysisTimeout}
+            onChange={(e) => setPerformanceSettings({...performanceSettings, analysisTimeout: parseInt(e.target.value)})}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Cache Size (files): {performanceSettings.cacheSize}
+          </label>
+          <input
+            type="range"
+            min="50"
+            max="500"
+            step="25"
+            value={performanceSettings.cacheSize}
+            onChange={(e) => setPerformanceSettings({...performanceSettings, cacheSize: parseInt(e.target.value)})}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+
+        <div className="space-y-3">
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={performanceSettings.enableGpuAcceleration}
+              onChange={(e) => setPerformanceSettings({...performanceSettings, enableGpuAcceleration: e.target.checked})}
+              className="w-4 h-4 text-blue-600 bg-white/20 border-white/30 rounded focus:ring-blue-500"
+            />
+            <span className="text-readable-light text-sm">Enable GPU Acceleration</span>
+          </label>
+
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={performanceSettings.enablePreloading}
+              onChange={(e) => setPerformanceSettings({...performanceSettings, enablePreloading: e.target.checked})}
+              className="w-4 h-4 text-blue-600 bg-white/20 border-white/30 rounded focus:ring-blue-500"
+            />
+            <span className="text-readable-light text-sm">Enable File Preloading</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAddFolderModal = () => {
+    if (!showAddModal) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="glass-card-strong p-6 max-w-md w-full mx-4">
+          <h3 className="text-on-glass text-lg font-bold mb-4">Add Smart Folder</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">
+                Folder Name
+              </label>
               <input
                 type="text"
-                value={newFolderPath}
-                onChange={(e) => setNewFolderPath(e.target.value)}
-                placeholder="e.g., Documents/Work, Pictures/Family"
-                className="form-input-enhanced flex-1"
+                value={newFolder.name}
+                onChange={(e) => setNewFolder({...newFolder, name: e.target.value})}
+                className="glass-input w-full"
+                placeholder="e.g., Documents, Photos, Projects"
               />
-              <button
-                onClick={handleBrowseFolder}
-                className="btn-secondary"
-                title="Browse for folder"
-              >
-                📁 Browse
-              </button>
             </div>
-            <p className="text-xs text-system-gray-500 mt-fib-3">
-              Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-              Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span>
-            </label>
-            <textarea
-              value={newFolderDescription}
-              onChange={(e) => setNewFolderDescription(e.target.value)}
-              placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'"
-              className="form-input-enhanced w-full"
-              rows="3"
-              aria-describedby="description-help"
-            />
-            <div id="description-help" className="text-xs text-system-gray-500 mt-fib-3">
-              💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.
+            
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">
+                Emoji
+              </label>
+              <input
+                type="text"
+                value={newFolder.emoji}
+                onChange={(e) => setNewFolder({...newFolder, emoji: e.target.value})}
+                className="glass-input w-full"
+                placeholder="📁"
+                maxLength="2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">
+                Path (optional)
+              </label>
+              <input
+                type="text"
+                value={newFolder.path}
+                onChange={(e) => setNewFolder({...newFolder, path: e.target.value})}
+                className="glass-input w-full"
+                placeholder="Leave empty to use default location"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">
+                Description (optional)
+              </label>
+              <textarea
+                value={newFolder.description}
+                onChange={(e) => setNewFolder({...newFolder, description: e.target.value})}
+                className="glass-input w-full h-20 resize-none"
+                placeholder="Describe what files belong in this folder"
+              />
             </div>
           </div>
-          <button 
-            onClick={handleAddFolder}
-            disabled={!newFolderName.trim() || isAddingFolder}
-            className="btn-primary"
-            aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}
-          >
-            {isAddingFolder ? (
-              <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
-                Adding...
-              </>
-            ) : (
-              <>➕ Add Smart Folder</>
-            )}
-          </button>
+          
+          <div className="flex space-x-3 mt-6">
+            <button
+              onClick={handleAddFolder}
+              className="glass-button-primary flex-1"
+            >
+              Add Folder
+            </button>
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="glass-button flex-1"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
+    );
+  };
 
-      {/* Navigation */}
-      <div className="flex justify-between">
-        <button 
-          onClick={() => actions.advancePhase(PHASES.WELCOME)}
-          className="btn-secondary"
-        >
-          ← Back to Welcome
-        </button>
-        <button 
-          onClick={() => {
-            if (smartFolders.length === 0) {
-              showWarning('Please add at least one smart folder before continuing');
-            } else {
-              actions.advancePhase(PHASES.DISCOVER);
-            }
-          }}
-          className="btn-primary"
-        >
-          Continue to File Discovery →
-        </button>
+  if (isLoading) {
+    return (
+      <div className="phase-container">
+        <div className="phase-content">
+          <div className="glass-card p-8">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-white/20 rounded"></div>
+              <div className="h-4 bg-white/20 rounded w-3/4"></div>
+              <div className="h-4 bg-white/20 rounded w-1/2"></div>
+            </div>
+          </div>
+        </div>
       </div>
+    );
+  }
 
-      {/* Confirmation Dialog */}
+  return (
+    <div className="phase-container">
+      <div className="phase-content-compact animate-fade-in-up">
+        {/* Header */}
+        <div className="phase-header">
+          <h1 className="welcome-title">Configuration</h1>
+          <p className="welcome-subtitle">Customize StratoSort to match your workflow</p>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="phase-tabs">
+          <div className="glass-card p-2 inline-flex rounded-2xl">
+            {[
+              { id: 'ai', label: 'AI Settings', icon: '🤖' },
+              { id: 'folders', label: 'Smart Folders', icon: '📁' },
+              { id: 'performance', label: 'Performance', icon: '⚡' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
+                  activeTab === tab.id
+                    ? 'glass-button-primary'
+                    : 'text-readable-light hover:bg-white/10'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content - Scrollable */}
+        <div className="content-compact">
+          {activeTab === 'ai' && renderAISettings()}
+          {activeTab === 'folders' && renderSmartFolders()}
+          {activeTab === 'performance' && renderPerformanceSettings()}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="phase-actions">
+          <div className="action-buttons">
+            <button
+              onClick={handleSaveConfig}
+              className="action-button"
+            >
+              Save Configuration
+            </button>
+            <button
+              onClick={handleProceed}
+              disabled={!canProceed()}
+              className="action-button-primary"
+            >
+              Continue to Discovery
+            </button>
+          </div>
+        </div>
+
+        {/* Modals */}
+        {renderAddFolderModal()}
       <ConfirmDialog />
-      
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
-
-      {isCreatingAllFolders && <LoadingSkeleton message="Creating folders..." />}
-
-
+      </div>
     </div>
   );
 }

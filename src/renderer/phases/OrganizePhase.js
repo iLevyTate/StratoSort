@@ -19,6 +19,7 @@ function OrganizePhase() {
   const [defaultLocation, setDefaultLocation] = useState('Documents');
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
 
   // NEW: File processing states from discover phase
   const [fileStates, setFileStates] = useState({});
@@ -109,7 +110,7 @@ function OrganizePhase() {
     } else if (state === 'error') {
       return { icon: '❌', label: 'Error', color: 'text-red-600', spinning: false };
     } else if (hasAnalysis && state === 'ready') {
-      return { icon: '📂', label: 'Ready', color: 'text-stratosort-blue', spinning: false };
+      return { icon: '📂', label: 'Ready', color: 'text-blue-600', spinning: false };
     } else if (state === 'pending') {
       return { icon: '⏳', label: 'Pending', color: 'text-yellow-600', spinning: false };
     } else {
@@ -759,370 +760,362 @@ function OrganizePhase() {
   };
 
   return (
-    <div className="w-full">
-      <div className="mb-fib-21">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-system-gray-900 mb-fib-8">
-              📂 Review & Organize
-            </h2>
-            <p className="text-system-gray-600">
-              Review AI suggestions and organize your files into smart folders. Unprocessed files remain available for future organization.
-            </p>
-            
-            {/* Analysis Status Banner if still running */}
-            {isAnalysisRunning && (
-              <div className="mt-fib-13 p-fib-13 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-fib-8">
-                  <div className="animate-spin w-fib-13 h-fib-13 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  <div className="text-sm font-medium text-blue-700">
-                    Analysis continuing in background: {analysisProgressFromDiscover.current}/{analysisProgressFromDiscover.total} files
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Undo/Redo Toolbar */}
-          <UndoRedoToolbar className="flex-shrink-0" />
+    <div className="phase-container">
+      <div className="phase-content-compact animate-fade-in-up">
+        <div className="phase-header">
+          <h1 className="welcome-title">Review & Organize</h1>
+          <p className="welcome-subtitle">Review AI suggestions and organize your files into smart folders</p>
         </div>
-      </div>
-
-      {/* Smart Folders Summary */}
-      {smartFolders.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-8">📁 Target Smart Folders</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-8">
-            {smartFolders.map((folder) => (
-              <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg border border-stratosort-blue/20">
-                <div className="font-medium text-system-gray-900 mb-fib-2">{folder.name}</div>
-                <div className="text-sm text-system-gray-600 mb-fib-3">
-                  📂 {folder.path || `${defaultLocation}/${folder.name}`}
-                </div>
-                {folder.description && (
-                  <div className="text-xs text-system-gray-500 bg-stratosort-blue/5 p-fib-5 rounded italic">
-                    "{folder.description}"
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* NEW: File Status Overview */}
-      {(unprocessedFiles.length > 0 || processedFiles.length > 0) && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-8">📊 File Status Overview</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
-            <div className="text-center p-fib-13 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="text-2xl font-bold text-blue-600">{unprocessedFiles.length}</div>
-              <div className="text-sm text-blue-700">Ready to Organize</div>
-            </div>
-            <div className="text-center p-fib-13 bg-green-50 rounded-lg border border-green-200">
-              <div className="text-2xl font-bold text-green-600">{processedFiles.length}</div>
-              <div className="text-sm text-green-700">Already Organized</div>
-            </div>
-            <div className="text-center p-fib-13 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="text-2xl font-bold text-gray-600">{analysisResults.filter((f) => !f.analysis).length}</div>
-              <div className="text-sm text-gray-700">Failed Analysis</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Operations Bar */}
-      {unprocessedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-fib-13">
-              <input
-                type="checkbox"
-                checked={selectedFiles.size === unprocessedFiles.length}
-                onChange={selectAllFiles}
-                className="form-checkbox"
-              />
-              <span className="text-sm font-medium">
-                {selectedFiles.size > 0 ? `${selectedFiles.size} selected` : 'Select all'}
-              </span>
-              
-              {selectedFiles.size > 0 && (
-                <div className="flex items-center gap-fib-8">
-                  <button
-                    onClick={approveSelectedFiles}
-                    className="btn-primary text-sm"
-                  >
-                    ✓ Approve Selected
-                  </button>
-                  <button
-                    onClick={() => setBulkEditMode(!bulkEditMode)}
-                    className="btn-secondary text-sm"
-                  >
-                    ✏️ Bulk Edit
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            {bulkEditMode && (
-              <div className="flex items-center gap-fib-5">
-                <select
-                  value={bulkCategory}
-                  onChange={(e) => setBulkCategory(e.target.value)}
-                  className="form-input-enhanced text-sm"
-                >
-                  <option value="">Select category...</option>
-                  {smartFolders.map((folder) => (
-                    <option key={folder.id} value={folder.name}>{folder.name}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={applyBulkCategoryChange}
-                  className="btn-primary text-sm"
-                  disabled={!bulkCategory}
-                >
-                  Apply
-                </button>
-                <button
-                  onClick={() => {setBulkEditMode(false); setBulkCategory('');}}
-                  className="btn-secondary text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* File Review */}
-      <div className="card-enhanced mb-fib-21">
-        <h3 className="text-lg font-semibold mb-fib-13">Files Ready for Organization</h3>
         
-        {unprocessedFiles.length === 0 ? (
-          <div className="text-center py-fib-21">
-            <div className="text-4xl mb-fib-13">
-              {processedFiles.length > 0 ? '✅' : '📭'}
-            </div>
-            <p className="text-system-gray-500 italic">
-              {processedFiles.length > 0 
-                ? 'All files have been organized! Check the results below.'
-                : 'No files ready for organization yet.'
-              }
-            </p>
-            {processedFiles.length === 0 && (
-              <button
-                onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-                className="btn-primary mt-fib-13"
-              >
-                ← Go Back to Select Files
-              </button>
-            )}
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+          <UndoRedoSystem 
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            className="text-sm"
+          />
+          
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setIsHistoryVisible(true)}
+              className="glass-button text-sm"
+            >
+              📊 View History
+            </button>
           </div>
-        ) : (
-          <div className="space-y-fib-8">
-            {unprocessedFiles.map((file, index) => {
-              const fileWithEdits = getFileWithEdits(file, index);
-              const smartFolder = findSmartFolderForCategory(fileWithEdits.analysis?.category);
-              const isSelected = selectedFiles.has(index);
-              const stateDisplay = getFileStateDisplay(file.path, !!file.analysis);
-              
-              return (
-                <div key={index} className={`border rounded-lg p-fib-13 transition-all duration-200 ${
-                  isSelected ? 'border-stratosort-blue bg-stratosort-blue/5' : 'border-system-gray-200'
-                }`}>
-                  <div className="flex items-start gap-fib-13">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleFileSelection(index)}
-                      className="form-checkbox mt-fib-3"
-                    />
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center gap-fib-8 mb-fib-5">
-                        <div className="text-2xl">📄</div>
-                        <div>
-                          <div className="font-medium text-system-gray-900">{file.name}</div>
-                          <div className="text-sm text-system-gray-500">
-                            {file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'} • {file.source?.replace('_', ' ')}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {fileWithEdits.analysis ? (
-                        <>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-8 mb-fib-8">
-                            <div>
-                              <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">
-                                Suggested Name
-                              </label>
-                              <input
-                                type="text"
-                                value={editingFiles[index]?.suggestedName || fileWithEdits.analysis.suggestedName}
-                                onChange={(e) => handleEditFile(index, 'suggestedName', e.target.value)}
-                                className="form-input-enhanced text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">
-                                Category
-                              </label>
-                              <select
-                                value={editingFiles[index]?.category || fileWithEdits.analysis.category}
-                                onChange={(e) => handleEditFile(index, 'category', e.target.value)}
-                                className="form-input-enhanced text-sm"
-                              >
-                                {smartFolders.map((folder) => (
-                                  <option key={folder.id} value={folder.name}>{folder.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                          
-                          <div className="text-sm text-system-gray-600">
-                            <strong>Destination:</strong>{' '}
-                            <span className="text-stratosort-blue">
-                              {smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : 'No matching folder'}
-                            </span>
-                          </div>
-                          
-                          {file.analysis.keywords && file.analysis.keywords.length > 0 && (
-                            <div className="text-sm text-system-gray-500 mb-fib-3">
-                              <strong>Keywords:</strong> {file.analysis.keywords.join(', ')}
-                            </div>
-                          )}
-                          {file.analysis.ocrText && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>OCR:</strong> {file.analysis.ocrText.slice(0,120)}{file.analysis.ocrText.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.transcript && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>Transcript:</strong> {file.analysis.transcript.slice(0,120)}{file.analysis.transcript.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.confidence && (
-                            <div className="text-xs text-system-gray-400">
-                              <strong>AI Confidence:</strong> {file.analysis.confidence}%
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-sm text-system-red-600 mt-fib-3">
-                          Analysis failed - will be skipped
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className={`text-sm font-medium flex items-center gap-fib-3 ${stateDisplay.color}`}>
-                      <span className={stateDisplay.spinning ? 'animate-spin' : ''}>{stateDisplay.icon}</span>
-                      <span>{stateDisplay.label}</span>
-                    </div>
+        </div>
+
+        {smartFolders.length > 0 && (
+          <div className="status-overview-compact">
+            <div className="glass-card p-4">
+              <h3 className="text-lg font-semibold mb-2">📂 Smart Folders ({smartFolders.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                {smartFolders.map((folder) => (
+                  <div key={folder.id} className="glass-card p-4">
+                    <h4 className="font-medium text-on-glass">{folder.emoji} {folder.name}</h4>
+                    <p className="text-sm text-readable-light mt-1">{folder.path}</p>
+                    {folder.description && (
+                      <p className="text-xs text-readable-light mt-2">{folder.description}</p>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* NEW: Previously Organized Files */}
-      {processedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-13">✅ Previously Organized Files</h3>
-          <div className="space-y-fib-5 max-h-64 overflow-y-auto">
-            {processedFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between p-fib-8 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-fib-8">
-                  <span className="text-green-600">✅</span>
-                  <div>
-                    <div className="text-sm font-medium text-system-gray-900">
-                      {file.originalName} → {file.newName}
-                    </div>
-                    <div className="text-xs text-system-gray-500">
-                      Moved to {file.smartFolder} • {new Date(file.organizedAt).toLocaleDateString()}
-                    </div>
-                  </div>
+        {(unprocessedFiles.length > 0 || processedFiles.length > 0) && (
+          <div className="status-overview-compact">
+            <div className="glass-card p-4">
+              <h3 className="text-lg font-semibold mb-2">📊 File Status Overview</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600">{unprocessedFiles.length}</div>
+                  <div className="text-sm text-readable-light">Ready to Organize</div>
                 </div>
-                <div className="text-xs text-green-600 font-medium">Organized</div>
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600">{processedFiles.length}</div>
+                  <div className="text-sm text-readable-light">Already Organized</div>
+                </div>
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-bold text-gray-600">{analysisResults.filter((f) => !f.analysis).length}</div>
+                  <div className="text-sm text-readable-light">Failed Analysis</div>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Organization Action */}
-      {unprocessedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21 text-center">
-          <h3 className="text-lg font-semibold mb-fib-13">Ready to Organize</h3>
-          <p className="text-system-gray-600 mb-fib-13">
-            StratoSort will move and rename <strong>{unprocessedFiles.filter((f) => f.analysis).length} files</strong> according to AI suggestions.
-          </p>
-          <p className="text-xs text-system-gray-500 mb-fib-13">
-            💡 Don't worry - you can undo this operation if needed
-          </p>
-          
-          {isOrganizing ? (
-            <div className="py-fib-13">
-              <div className="flex items-center justify-center gap-fib-8 text-stratosort-blue mb-fib-8">
-                <div className="animate-spin w-fib-21 h-fib-21 border-3 border-stratosort-blue border-t-transparent rounded-full"></div>
-                <span className="text-lg font-medium">Organizing Files...</span>
-              </div>
-              
-              {/* Batch Progress */}
-              {batchProgress.total > 0 && (
-                <div className="mb-fib-8">
-                  <div className="flex justify-between text-sm text-system-gray-600 mb-fib-3">
-                    <span>Progress: {batchProgress.current} of {batchProgress.total}</span>
-                    <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
-                  </div>
-                  <div className="w-full bg-system-gray-200 rounded-full h-fib-5">
-                    <div 
-                      className="bg-stratosort-blue h-fib-5 rounded-full transition-all duration-300"
-                      style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-                    ></div>
-                  </div>
-                  {batchProgress.currentFile && (
-                    <div className="text-xs text-system-gray-500 mt-fib-3 truncate">
-                      Currently processing: {batchProgress.currentFile}
+        <div className="content-compact">
+          {unprocessedFiles.length > 0 && (
+            <div className="glass-card p-4 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedFiles.size === unprocessedFiles.length}
+                    onChange={selectAllFiles}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-on-glass">
+                    {selectedFiles.size > 0 ? `${selectedFiles.size} selected` : 'Select all'}
+                  </span>
+                  
+                  {selectedFiles.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={approveSelectedFiles}
+                        className="glass-button-primary text-sm px-3 py-1"
+                      >
+                        ✓ Approve Selected
+                      </button>
+                      <button
+                        onClick={() => setBulkEditMode(!bulkEditMode)}
+                        className="glass-button text-sm px-3 py-1"
+                      >
+                        ✏️ Bulk Edit
+                      </button>
                     </div>
                   )}
                 </div>
-              )}
-              
-              <p className="text-sm text-system-gray-600">
-                Please wait while your files are being organized
-              </p>
+                
+                {bulkEditMode && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={bulkCategory}
+                      onChange={(e) => setBulkCategory(e.target.value)}
+                      className="glass-input text-sm"
+                    >
+                      <option value="">Select category...</option>
+                      {smartFolders.map((folder) => (
+                        <option key={folder.id} value={folder.name}>{folder.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={applyBulkCategoryChange}
+                      className="glass-button-primary text-sm px-3 py-1"
+                      disabled={!bulkCategory}
+                    >
+                      Apply
+                    </button>
+                    <button
+                      onClick={() => {setBulkEditMode(false); setBulkCategory('');}}
+                      className="glass-button text-sm px-3 py-1"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
-            <button 
-              onClick={handleOrganizeFiles}
-              className="btn-success text-lg px-fib-21 py-fib-13"
-              disabled={unprocessedFiles.filter((f) => f.analysis).length === 0}
-            >
-              ✨ Organize Files Now
-            </button>
+          )}
+
+          <div className="content-scroll">
+            <h2 className="section-title">Files Ready for Organization</h2>
+            
+            {unprocessedFiles.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  {processedFiles.length > 0 ? '✅' : '📁'}
+                </div>
+                <p className="empty-state-text">
+                  {processedFiles.length > 0 
+                    ? 'All files have been organized! Check the results below.'
+                    : 'No files ready for organization yet.'
+                  }
+                </p>
+                {processedFiles.length === 0 && (
+                  <button
+                    onClick={() => actions.advancePhase(PHASES.DISCOVER)}
+                    className="action-button-primary mt-6"
+                  >
+                    ← Go Back to Select Files
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {unprocessedFiles.map((file, index) => {
+                  const fileWithEdits = getFileWithEdits(file, index);
+                  const smartFolder = findSmartFolderForCategory(fileWithEdits.analysis?.category);
+                  const isSelected = selectedFiles.has(index);
+                  const stateDisplay = getFileStateDisplay(file.path, !!file.analysis);
+                  
+                  return (
+                    <div key={index} className={isSelected ? 'file-card-selected' : 'file-card'}>
+                      <div className="flex items-start gap-4">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleFileSelection(index)}
+                          className="form-checkbox mt-1"
+                        />
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-3 mb-4">
+                            <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <span className="text-xl">📄</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-gray-900 truncate">{file.name}</h4>
+                              <p className="text-sm text-gray-500">
+                                {file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'} • {file.source?.replace('_', ' ')}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {fileWithEdits.analysis ? (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                                <div>
+                                  <label className="form-label text-xs">
+                                    Suggested Name
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingFiles[index]?.suggestedName || fileWithEdits.analysis.suggestedName}
+                                    onChange={(e) => handleEditFile(index, 'suggestedName', e.target.value)}
+                                    className="form-input text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="form-label text-xs">
+                                    Category
+                                  </label>
+                                  <select
+                                    value={editingFiles[index]?.category || fileWithEdits.analysis.category}
+                                    onChange={(e) => handleEditFile(index, 'category', e.target.value)}
+                                    className="form-select text-sm"
+                                  >
+                                    {smartFolders.map((folder) => (
+                                      <option key={folder.id} value={folder.name}>{folder.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                              
+                              <div className="glass-card p-3 mb-3">
+                                <p className="text-sm text-readable">
+                                  <span className="font-medium">Destination:</span>{' '}
+                                  <span className="text-blue-600">
+                                    {smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : 'No matching folder'}
+                                  </span>
+                                </p>
+                              </div>
+                              
+                              {file.analysis.keywords && file.analysis.keywords.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-3">
+                                  {file.analysis.keywords.slice(0, 5).map((keyword, i) => (
+                                    <span key={i} className="status-info text-xs">
+                                      {keyword}
+                                    </span>
+                                  ))}
+                                  {file.analysis.keywords.length > 5 && (
+                                    <span className="text-xs text-gray-500">
+                                      +{file.analysis.keywords.length - 5} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {(file.analysis.ocrText || file.analysis.transcript) && (
+                                <div className="text-xs text-readable-light glass-card p-2">
+                                  {file.analysis.ocrText && (
+                                    <p className="line-clamp-2 mb-1">
+                                      <span className="font-medium">OCR:</span> {file.analysis.ocrText}
+                                    </p>
+                                  )}
+                                  {file.analysis.transcript && (
+                                    <p className="line-clamp-2">
+                                      <span className="font-medium">Transcript:</span> {file.analysis.transcript}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="status-error">
+                              Analysis failed - will be skipped
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-shrink-0">
+                          <span className={`status-badge ${
+                            stateDisplay.color === 'text-blue-600' ? 'status-info' :
+                            stateDisplay.color === 'text-green-600' ? 'status-success' :
+                            stateDisplay.color === 'text-red-600' ? 'status-error' :
+                            'status-warning'
+                          }`}>
+                            <span className={stateDisplay.spinning ? 'animate-spin inline-block mr-1' : 'mr-1'}>
+                              {stateDisplay.icon}
+                            </span>
+                            {stateDisplay.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {unprocessedFiles.length > 0 && (
+            <div className="glass-card p-6 text-center flex-shrink-0">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-4">
+                <span className="text-3xl">✨</span>
+              </div>
+              <h3 className="text-xl font-semibold text-on-glass mb-2">Ready to Organize</h3>
+              <p className="text-readable-light mb-6 max-w-md mx-auto">
+                StratoSort will move and rename <strong className="text-on-glass">{unprocessedFiles.filter((f) => f.analysis).length} files</strong> according to AI suggestions.
+              </p>
+              
+              {isOrganizing ? (
+                <div className="py-4">
+                  <div className="flex items-center justify-center gap-3 text-blue-600 mb-4">
+                    <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    <span className="text-lg font-medium">Organizing Files...</span>
+                  </div>
+                  
+                  {batchProgress.total > 0 && (
+                    <div className="max-w-md mx-auto mb-4">
+                      <div className="flex justify-between text-sm text-readable-light mb-2">
+                        <span>Progress: {batchProgress.current} of {batchProgress.total}</span>
+                        <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
+                      </div>
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill"
+                          style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                        />
+                      </div>
+                      {batchProgress.currentFile && (
+                        <p className="text-xs text-readable-light mt-2 truncate">
+                          Processing: {batchProgress.currentFile}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  <p className="text-sm text-readable-light">
+                    Please wait while your files are being organized
+                  </p>
+                </div>
+              ) : (
+                <button 
+                  onClick={handleOrganizeFiles}
+                  className="action-button-primary text-base px-8 py-3"
+                  disabled={unprocessedFiles.filter((f) => f.analysis).length === 0}
+                >
+                  Organize Files Now
+                </button>
+              )}
+            </div>
           )}
         </div>
-      )}
 
-      {/* Navigation */}
-      <div className="flex justify-between">
-        <button 
-          onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-          className="btn-secondary"
-          disabled={isOrganizing}
-        >
-          ← Back to Discovery
-        </button>
-        <button 
-          onClick={() => actions.advancePhase(PHASES.COMPLETE)}
-          disabled={processedFiles.length === 0 || isOrganizing}
-          className={`btn-primary ${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          View Results →
-        </button>
+        <div className="phase-actions">
+          <div className="action-buttons">
+            <button 
+              onClick={() => actions.advancePhase(PHASES.DISCOVER)}
+              className="action-button"
+              disabled={isOrganizing}
+            >
+              ← Back to Discovery
+            </button>
+            <button 
+              onClick={() => actions.advancePhase(PHASES.COMPLETE)}
+              disabled={processedFiles.length === 0 || isOrganizing}
+              className="action-button-primary"
+            >
+              View Results →
+            </button>
+          </div>
+        </div>
+
+        {isHistoryVisible && <HistoryModal onClose={() => setIsHistoryVisible(false)} />}
       </div>
     </div>
   );

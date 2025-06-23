@@ -14,29 +14,37 @@ function useKeyboardShortcuts() {
       // Ctrl/Cmd + Z for Undo
       if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
-          // executeAction is the function itself, not an object with undo/redo methods
-          // Use the actual undo/redo handlers from the component
+        (async () => {
           try {
-            // This would need to be handled by the component's undo handler
-            addNotification('Use Ctrl+Z in organize phase for undo', 'info', 2000);
-          } catch (error) {
-            console.error('Undo shortcut failed:', error);
+            const result = await window.electronAPI.undoRedo.undo();
+            if (result?.success) {
+              addNotification(result.message || 'Undo successful', 'success', 1500);
+            } else {
+              addNotification(result?.message || 'Nothing to undo', 'warning', 1500);
+            }
+          } catch (err) {
+            console.error('Undo shortcut failed:', err);
+            addNotification('Undo failed', 'error', 2000);
           }
-        }
+        })();
       }
       
       // Ctrl/Cmd + Shift + Z for Redo
       if ((event.ctrlKey || event.metaKey) && event.key === 'z' && event.shiftKey) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
+        (async () => {
           try {
-            // This would need to be handled by the component's redo handler
-            addNotification('Use Ctrl+Shift+Z in organize phase for redo', 'info', 2000);
-          } catch (error) {
-            console.error('Redo shortcut failed:', error);
+            const result = await window.electronAPI.undoRedo.redo();
+            if (result?.success) {
+              addNotification(result.message || 'Redo successful', 'success', 1500);
+            } else {
+              addNotification(result?.message || 'Nothing to redo', 'warning', 1500);
+            }
+          } catch (err) {
+            console.error('Redo shortcut failed:', err);
+            addNotification('Redo failed', 'error', 2000);
           }
-        }
+        })();
       }
       
       // Ctrl/Cmd + , for Settings

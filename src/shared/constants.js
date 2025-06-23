@@ -68,9 +68,7 @@ const IPC_CHANNELS = {
   ANALYSIS: {
     ANALYZE_DOCUMENT: 'analyze-document',
     ANALYZE_IMAGE: 'analyze-image',
-    ANALYZE_AUDIO: 'analyze-audio',
-    EXTRACT_IMAGE_TEXT: 'extract-text-from-image',
-    TRANSCRIBE_AUDIO: 'transcribe-audio'
+    EXTRACT_IMAGE_TEXT: 'extract-text-from-image'
   },
   
   // Settings
@@ -82,7 +80,8 @@ const IPC_CHANNELS = {
   // Ollama
   OLLAMA: {
     GET_MODELS: 'get-ollama-models',
-    TEST_CONNECTION: 'test-ollama-connection'
+    TEST_CONNECTION: 'test-ollama-connection',
+    SET_MODEL: 'set-ollama-model'
   },
   
   // Undo/Redo
@@ -168,6 +167,7 @@ const ACTION_TYPES = {
   FILE_DELETE: 'FILE_DELETE',
   FOLDER_CREATE: 'FOLDER_CREATE',
   FOLDER_DELETE: 'FOLDER_DELETE',
+  SETTINGS_CHANGE: 'SETTINGS_CHANGE',
   BATCH_OPERATION: 'BATCH_OPERATION'
 };
 
@@ -233,8 +233,10 @@ const ALL_SUPPORTED_EXTENSIONS = [
 const DEFAULT_AI_MODELS = {
   TEXT_ANALYSIS: 'gemma3:4b',
   IMAGE_ANALYSIS: 'gemma3:4b',
-  AUDIO_ANALYSIS: 'whisper',
-  FALLBACK_MODELS: ['llama3.2', 'llama3', 'mistral', 'phi3']
+  AUDIO_ANALYSIS: 'gemma3:4b',
+  VISION_ANALYSIS: 'llava:latest',
+  EMBEDDING_ANALYSIS: 'mxbai-embed-large',
+  FALLBACK_MODELS: ['llama3.2:latest', 'llama3.2', 'llama3', 'mistral', 'phi3']
 };
 
 // File size limits

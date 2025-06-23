@@ -12,9 +12,10 @@ const AppConfig = {
     imageAnalysis: {
       defaultModel: 'gemma3:4b', // Multimodal model handles both text and vision
       defaultHost: 'http://127.0.0.1:11434',
-      timeout: 180000, // 3 minutes for multimodal analysis (Gemma 3:4b needs more time)
+      timeout: 300000, // 5 minutes for multimodal analysis (large images need more time)
       temperature: 0.2,
-      maxTokens: 1000
+      maxTokens: 1000,
+      maxImageSize: 20 * 1024 * 1024 // 20MB max image size
     }
   }
 };
@@ -77,6 +78,24 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
     console.log(`[ENHANCED-IMAGE] Starting advanced image analysis for ${originalFileName}`);
     console.log(`[SMART-FOLDERS] Received ${smartFolders?.length || 0} smart folders for image analysis`);
     
+    // Validate image size
+    const imageSize = Buffer.from(imageBase64, 'base64').length;
+    console.log(`Image file size: ${imageSize} bytes`);
+    
+    if (imageSize > AppConfig.ai.imageAnalysis.maxImageSize) {
+      console.warn(`[IMAGE-SIZE] Image too large (${imageSize} bytes), using fallback analysis`);
+      const fallback = getImageFallbackAnalysis(originalFileName, smartFolders);
+      return {
+        ...fallback,
+        enhanced: false,
+        timestamp: new Date().toISOString(),
+        analysisType: 'image',
+        extractedText: '',
+        textConfidence: 0,
+        error: 'Image too large for analysis'
+      };
+    }
+    
     // Determine if this should use enhanced analysis
     // Enable enhanced analysis for smart folders OR when explicitly requested by tests
     const shouldUseEnhanced = (smartFolders && smartFolders.length > 0) || 
@@ -122,13 +141,19 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
     
     console.log(`[LLM-REQUEST] Sending enhanced image analysis request for ${originalFileName}`);
     
-    const response = await ollamaClient.generate({
-      model: AppConfig.ai.imageAnalysis.defaultModel,
-      prompt: advancedPrompt,
-      images: [imageBase64],
-      options: optimizedParameters,
-      format: 'json'
-    });
+    // Add timeout wrapper for the analysis request
+    const response = await Promise.race([
+      ollamaClient.generate({
+        model: AppConfig.ai.imageAnalysis.defaultModel,
+        prompt: advancedPrompt,
+        images: [imageBase64],
+        options: optimizedParameters,
+        format: 'json'
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Image analysis timeout')), AppConfig.ai.imageAnalysis.timeout)
+      )
+    ]);
 
     if (response && response.response) {
       const result = await processEnhancedImageResponse(
@@ -492,8 +517,25 @@ async function processEnhancedImageResponse(responseText, fileName, smartFolders
  * Enhanced validation for image analysis results
  */
 async function validateAndCorrectImageResponse(analysis, smartFolders, fileName) {
+  // Ensure we have a valid analysis object
+  if (!analysis || typeof analysis !== 'object') {
+    analysis = {};
+  }
+  
+  // Ensure category is never undefined or empty
+  if (!analysis.category || typeof analysis.category !== 'string' || analysis.category.trim() === '') {
+    if (smartFolders && smartFolders.length > 0) {
+      analysis.category = smartFolders[0].name;
+      console.log(`[IMAGE-CATEGORY-DEFAULT] Using first smart folder: ${analysis.category}`);
+    } else {
+      analysis.category = 'Images';
+      console.log('[IMAGE-CATEGORY-DEFAULT] Using default category: Images');
+    }
+    analysis.corrected = true;
+  }
+  
   // Validate category against smart folders
-  if (smartFolders && smartFolders.length > 0 && analysis.category) {
+  if (smartFolders && smartFolders.length > 0) {
     const validFolders = smartFolders.filter((f) => f && f.name && typeof f.name === 'string');
     const exactMatch = validFolders.find((f) => 
       f.name.toLowerCase().trim() === analysis.category.toLowerCase().trim()
@@ -517,6 +559,12 @@ async function validateAndCorrectImageResponse(analysis, smartFolders, fileName)
     }
   }
   
+  // Validate and set defaults for required fields
+  analysis.project = analysis.project || path.basename(fileName, path.extname(fileName));
+  analysis.purpose = analysis.purpose || 'Image file analysis';
+  analysis.keywords = Array.isArray(analysis.keywords) ? analysis.keywords : ['image', 'visual'];
+  analysis.suggestedName = analysis.suggestedName || fileName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  
   // Validate image-specific fields
   if (!analysis.content_type || typeof analysis.content_type !== 'string') {
     analysis.content_type = 'object';
@@ -531,7 +579,7 @@ async function validateAndCorrectImageResponse(analysis, smartFolders, fileName)
   }
   
   // Ensure confidence is reasonable for image analysis
-  if (!analysis.confidence || analysis.confidence < 60 || analysis.confidence > 100) {
+  if (!analysis.confidence || typeof analysis.confidence !== 'number' || analysis.confidence < 60 || analysis.confidence > 100) {
     analysis.confidence = Math.floor(Math.random() * 25) + 70; // 70-95%
   }
   
@@ -545,7 +593,9 @@ async function validateAndCorrectImageResponse(analysis, smartFolders, fileName)
   console.log(`[ENHANCED-IMAGE-COMPLETE] Final analysis for ${fileName}:`, {
     category: finalResult.category,
     content_type: finalResult.content_type,
-    confidence: finalResult.confidence
+    confidence: finalResult.confidence,
+    corrected: finalResult.corrected || false,
+    fallback: finalResult.fallback || false
   });
   
   return finalResult;

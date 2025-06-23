@@ -28,8 +28,11 @@ const ACTION_TYPES = {
   FILE_DELETE: 'FILE_DELETE',
   FOLDER_CREATE: 'FOLDER_CREATE',
   FOLDER_DELETE: 'FOLDER_DELETE',
+  FOLDER_RENAME: 'FOLDER_RENAME',
   SETTINGS_CHANGE: 'SETTINGS_CHANGE',
-  BATCH_OPERATION: 'BATCH_OPERATION'
+  ANALYSIS_RESULT: 'ANALYSIS_RESULT',
+  BATCH_OPERATION: 'BATCH_OPERATION',
+  BATCH_ORGANIZE: 'BATCH_ORGANIZE'
 };
 
 // Action metadata for user-friendly descriptions
@@ -77,6 +80,11 @@ const ACTION_METADATA = {
   [ACTION_TYPES.BATCH_OPERATION]: {
     description: 'Batch operation',
     icon: '📦',
+    category: 'Batch Operations'
+  },
+  [ACTION_TYPES.BATCH_ORGANIZE]: {
+    description: 'Batch organize',
+    icon: '📋',
     category: 'Batch Operations'
   }
 };

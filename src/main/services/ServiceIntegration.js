@@ -1,5 +1,6 @@
 const AnalysisHistoryService = require('./AnalysisHistoryService');
 const UndoRedoService = require('./UndoRedoService');
+const { ACTION_TYPES } = require('../shared/constants');
 
 
 class ServiceIntegration {
@@ -65,7 +66,7 @@ class ServiceIntegration {
       await this.performFileOrganization(sourceFile, targetPath, organizationOptions);
       
       // Record the action for undo
-      await this.undoRedoService.recordAction('FILE_MOVE', actionData);
+      await this.undoRedoService.recordAction(ACTION_TYPES.FILE_MOVE, actionData);
       
       return {
         success: true,
@@ -108,7 +109,7 @@ class ServiceIntegration {
       }
       
       // Record the batch operation for undo
-      await this.undoRedoService.recordAction('BATCH_ORGANIZE', {
+      await this.undoRedoService.recordAction(ACTION_TYPES.BATCH_ORGANIZE, {
         operations,
         rules: organizationRules
       });

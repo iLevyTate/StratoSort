@@ -84,16 +84,22 @@ function PerformanceMonitor({
 
     const cleanup = measureRenderTime();
     
-    // Update memory and component metrics periodically
-    intervalRef.current = setInterval(() => {
-      updateMemoryUsage();
-      updateComponentCount();
-    }, 2000);
+    // Only start periodic monitoring if explicitly enabled
+    const enablePeriodicMonitoring = process.env.ENABLE_PERFORMANCE_MONITORING === 'true';
+    
+    if (enablePeriodicMonitoring) {
+      // Much less aggressive monitoring - every 10 seconds instead of 2
+      intervalRef.current = setInterval(() => {
+        updateMemoryUsage();
+        updateComponentCount();
+      }, 10000); // Every 10 seconds instead of 2
+    }
 
     return () => {
       cleanup();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [enabled]);

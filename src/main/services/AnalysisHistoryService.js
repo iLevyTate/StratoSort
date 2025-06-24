@@ -18,7 +18,10 @@ class AnalysisHistoryService {
     
     // Schema version for future migration support
     this.SCHEMA_VERSION = '1.0.0';
-    this.MAX_HISTORY_ENTRIES = 10000; // Configurable limit
+    this.MAX_HISTORY_ENTRIES = 5000; // Reduced from 10000 to prevent memory issues
+    
+    // Add automatic cleanup interval (less aggressive)
+    this.cleanupInterval = null;
   }
 
   async initialize() {

@@ -108,7 +108,7 @@ export function useFileAnalysis() {
           
           // Add timeout to prevent hanging
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Analysis timeout')), 300000); // 5 minute timeout to match backend
+            setTimeout(() => reject(new Error('Analysis timeout')), 60000); // Reduced from 5 minutes to 1 minute
           });
           
           const result = await Promise.race([analysisPromise, timeoutPromise]);

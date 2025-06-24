@@ -33,24 +33,27 @@ class PerformanceOptimizer extends EventEmitter {
       memoryOptimization: { enabled: true },
       concurrentProcessing: { enabled: true },
       
+      // Performance monitoring (disabled by default for energy savings)
+      enableBackgroundMonitoring: false,
+      
       // Caching settings
-      maxCacheSize: 1000,
-      cacheExpiry: 30 * 60 * 1000, // 30 minutes
+      maxCacheSize: 500, // Reduced from 1000
+      cacheExpiry: 15 * 60 * 1000, // Reduced to 15 minutes
       
       // Concurrency settings
-      maxConcurrentAnalyses: 5, // Increased from 3
-      batchSize: 10,
+      maxConcurrentAnalyses: 3, // Reduced from 5
+      batchSize: 5, // Reduced from 10
       
       // Timeout optimizations
-      fastTimeout: 30000, // 30 seconds for simple content
-      standardTimeout: 60000, // 1 minute for medium content
-      complexTimeout: 120000, // 2 minutes for complex content
+      fastTimeout: 20000, // 20 seconds for simple content
+      standardTimeout: 45000, // 45 seconds for medium content
+      complexTimeout: 90000, // 90 seconds for complex content
       
       // Content optimization
       contentTruncation: {
-        simple: 2000,
-        medium: 6000,
-        complex: 12000
+        simple: 1500, // Reduced
+        medium: 4000, // Reduced
+        complex: 8000 // Reduced
       },
       
       // Model selection
@@ -67,9 +70,15 @@ class PerformanceOptimizer extends EventEmitter {
    * Initialize all optimization strategies
    */
   initializeOptimizations() {
-    // Initialize cleanup intervals with proper cleanup
-    this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), 5 * 60 * 1000); // Every 5 minutes
-    this.memoryMonitorInterval = setInterval(() => this.monitorMemoryUsage(), 30000); // Every 30 seconds
+    // Only initialize intervals if explicitly enabled and in development
+    if (this.config.enableBackgroundMonitoring && process.env.NODE_ENV === 'development') {
+      // Much less aggressive intervals
+      this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), 10 * 60 * 1000); // Every 10 minutes
+      this.memoryMonitorInterval = setInterval(() => this.monitorMemoryUsage(), 2 * 60 * 1000); // Every 2 minutes
+    }
+    
+    // Always add manual cleanup trigger
+    this.lastManualCleanup = Date.now();
   }
 
   /**

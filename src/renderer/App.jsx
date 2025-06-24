@@ -410,6 +410,14 @@ function SystemMonitoring() {
   const [isMonitoring, setIsMonitoring] = useState(false);
 
   useEffect(() => {
+    // Disable system monitoring by default to save energy
+    // Only enable in development if explicitly requested
+    const shouldMonitor = process.env.NODE_ENV === 'development' && process.env.ENABLE_SYSTEM_MONITORING === 'true';
+    
+    if (!shouldMonitor) {
+      return;
+    }
+
     let intervalId;
     
     const startMonitoring = async () => {
@@ -419,7 +427,7 @@ function SystemMonitoring() {
         const metrics = await window.electronAPI.system.getMetrics();
         setSystemMetrics(metrics);
         
-        // Set up periodic updates
+        // Much less aggressive updates - every 30 seconds instead of 5
         intervalId = setInterval(async () => {
           try {
             const updatedMetrics = await window.electronAPI.system.getMetrics();
@@ -427,7 +435,7 @@ function SystemMonitoring() {
           } catch (error) {
             // Failed to update system metrics
           }
-        }, 5000); // Update every 5 seconds
+        }, 30000); // Every 30 seconds instead of 5
         
       } catch (error) {
         // Failed to start system monitoring

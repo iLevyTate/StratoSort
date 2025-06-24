@@ -10,9 +10,7 @@ import React from 'react';
 export default function PhaseLayout({ children }) {
   return (
     <div className="phase-container">
-      <div className="phase-content animate-fade-in-up">
-        {children}
-      </div>
+      {children}
     </div>
   );
 } 

@@ -18,6 +18,7 @@ import Toast from './components/Toast';
 import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
 import { NotificationProvider , useNotification } from './contexts/NotificationContext';
 import { PhaseProvider, usePhase } from './contexts/PhaseContext';
+import { ProgressProvider } from './contexts/ProgressContext';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import CompletePhase from './phases/CompletePhase';
 import DiscoverPhase from './phases/DiscoverPhase';
@@ -524,27 +525,34 @@ function App() {
     <PhaseProvider>
       <NotificationProvider>
         <UndoRedoProvider>
-          <PerformanceProvider>
-            <div className="h-screen w-screen overflow-hidden flex flex-col phase-container"
-              style={{ padding: 0 }}>
-              {/* Navigation - Fixed height */}
-              <NavigationBar />
-              
-              {/* Progress Indicator - Fixed height */}
-              <ProgressIndicator />
-              
-              {/* Main Content - Fills remaining space */}
-              <main className="flex-1 overflow-hidden">
-                <PhaseRenderer />
-              </main>
-              
-              {/* Toast notifications */}
-              <Toast />
-              
-              {/* Performance Monitor - Development only */}
-              {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
-            </div>
-          </PerformanceProvider>
+          <ProgressProvider>
+            <PerformanceProvider>
+              <div className="h-screen w-screen overflow-hidden flex flex-col phase-container"
+                style={{ padding: 0 }}>
+                {/* Navigation - Fixed height */}
+                <NavigationBar />
+                
+                {/* Progress Indicator - Fixed height */}
+                <ProgressIndicator />
+                
+                {/* Main Content - Fills remaining space */}
+                <main 
+                  id="main-content" 
+                  className="flex-1 overflow-hidden"
+                  role="main"
+                  aria-label="Main application content"
+                >
+                  <PhaseRenderer />
+                </main>
+                
+                {/* Toast notifications */}
+                <Toast />
+                
+                {/* Performance Monitor - Development only */}
+                {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
+              </div>
+            </PerformanceProvider>
+          </ProgressProvider>
         </UndoRedoProvider>
       </NotificationProvider>
     </PhaseProvider>

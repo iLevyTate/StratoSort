@@ -40,10 +40,16 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
 
     setIsSearching(true);
     try {
-      const results = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 50 });
-      setSearchResults(results);
+      const response = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 50 });
+      if (response && response.success) {
+        setSearchResults(response.results || []);
+      } else {
+        console.error('Search failed:', response?.error || 'Unknown error');
+        setSearchResults([]);
+      }
     } catch (error) {
       console.error('Search failed:', error);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -52,7 +58,13 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
   // Export history
   const exportHistory = async (format) => {
     try {
-      await window.electronAPI.analysisHistory.export(format);
+      const response = await window.electronAPI.analysisHistory.export(format);
+      if (response && response.success) {
+        // Show success message - file automatically opens in file explorer
+        console.log(`Export successful: ${response.exportPath} (${response.recordCount} records)`);
+      } else {
+        console.error('Export failed:', response?.error || 'Unknown error');
+      }
     } catch (error) {
       console.error('Export failed:', error);
     }

@@ -7,14 +7,15 @@ import { usePhase } from '../contexts/PhaseContext';
 import useConfirmDialog from '../hooks/useConfirmDialog';
 import useDragAndDrop from '../hooks/useDragAndDrop';
 import { useFileAnalysis } from '../hooks/useFileAnalysis';
-import { useNamingConvention } from '../hooks/useNamingConvention';
 import PhaseLayout from '../layout/PhaseLayout';
+import { useErrorHandler } from '../utils/ErrorHandling';
 
 const { PHASES } = require('../../shared/constants');
 
 function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
   const { addNotification, showSuccess, showError, showWarning, showInfo } = useNotification();
+  const { handleError, handleWarning } = useErrorHandler();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -24,7 +25,6 @@ function DiscoverPhase() {
   
   // Use extracted hooks
   const fileAnalysis = useFileAnalysis();
-  const namingConvention = useNamingConvention();
   
   // Destructure for cleaner code
   const {
@@ -36,29 +36,21 @@ function DiscoverPhase() {
     getFileStateDisplay,
     loadPersistedAnalysis
   } = fileAnalysis;
-  
-  const {
-    generatePreviewName,
-    loadPersistedNaming,
-    getNamingSettings
-  } = namingConvention;
 
   // Load persisted data from previous sessions
   useEffect(() => {
     const loadPersistedData = () => {
       const persistedResults = phaseData.analysisResults || [];
       const persistedFiles = phaseData.selectedFiles || [];
-      const persistedNaming = phaseData.namingConvention || {};
       
       if (persistedResults.length > 0) {
         setSelectedFiles(persistedFiles);
         loadPersistedAnalysis(phaseData);
-        loadPersistedNaming(persistedNaming);
       }
     };
     
     loadPersistedData();
-  }, [phaseData, loadPersistedAnalysis, loadPersistedNaming]);
+  }, [phaseData, loadPersistedAnalysis]);
 
   // Drag and drop handling
   const { isDragActive, DropZone } = useDragAndDrop({
@@ -86,8 +78,7 @@ function DiscoverPhase() {
         showSuccess('Files added successfully');
       }
     } catch (error) {
-      console.error('Error handling file drop:', error);
-      showError('Error adding files');
+      handleError(error, 'File Drop');
     }
   }
 
@@ -108,7 +99,7 @@ function DiscoverPhase() {
     try {
       const result = await window.electronAPI.files.select();
       
-      if (result && result.files && result.files.length > 0) {
+      if (result && result.success && result.files && result.files.length > 0) {
         const newFiles = result.files.map((filePath) => {
           const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
           return {
@@ -126,10 +117,14 @@ function DiscoverPhase() {
         });
 
         showSuccess(`Added ${newFiles.length} files`);
+      } else if (result && !result.success) {
+        if (result.error) {
+          handleError(new Error(result.error), 'File Selection');
+        }
+        // If no error, user likely cancelled - don't show error
       }
     } catch (error) {
-      console.error('File selection error:', error);
-      showError('Failed to select files');
+      handleError(error, 'File Selection');
     }
   };
 
@@ -163,8 +158,7 @@ function DiscoverPhase() {
         }
       }
     } catch (error) {
-      console.error('Folder selection error:', error);
-      showError('Failed to scan folder');
+      handleError(error, 'Folder Selection');
     } finally {
       setIsScanning(false);
     }
@@ -191,8 +185,7 @@ function DiscoverPhase() {
         showSuccess(`System scan complete: ${newFiles.length} files found`);
       }
     } catch (error) {
-      console.error('System scan error:', error);
-      showError('Failed to scan system');
+      handleError(error, 'System Scan');
     } finally {
       setIsScanning(false);
     }
@@ -201,16 +194,15 @@ function DiscoverPhase() {
   // Start analysis
   const handleStartAnalysis = async () => {
     if (selectedFiles.length === 0) {
-      showWarning('Please add files first');
+      handleWarning('Please add files first', 'Analysis', true);
       return;
     }
 
     try {
       await analyzeFiles(selectedFiles);
-      showSuccess('Analysis complete!');
+      showSuccess('Analysis completed successfully');
     } catch (error) {
-      console.error('Analysis error:', error);
-      showError('Analysis failed');
+      handleError(error, 'Analysis');
     }
   };
 

@@ -12,9 +12,17 @@ const { PHASES } = require('../../shared/constants');
 const DEBUG_ORGANIZE = process.env.NODE_ENV === 'development' && false; // Set to true only when debugging
 
 function debugLog(message, data = {}) {
-  // Debug logging disabled in production
+  // Debug logging disabled in production and by default in development
   if (DEBUG_ORGANIZE && process.env.NODE_ENV === 'development') {
-    console.log(`[ORGANIZE-DEBUG] ${message}`, data);
+    // Use proper logging instead of console.log
+    if (window.electronAPI?.system?.logError) {
+      window.electronAPI.system.logError({
+        message: `[ORGANIZE-DEBUG] ${message}`,
+        context: 'OrganizePhase',
+        level: 'info',
+        metadata: data
+      });
+    }
   }
 }
 
@@ -36,72 +44,105 @@ function OrganizePhase() {
   const [canRedo, setCanRedo] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
 
-  // NEW: File processing states from discover phase
+  // File state tracking
   const [fileStates, setFileStates] = useState({});
   const [processedFileIds, setProcessedFileIds] = useState(new Set()); // Track which files have been processed
 
-  const analysisResults = phaseData.analysisResults || [];
-  const smartFolders = phaseData.smartFolders || [];
-
-  // NEW: Load persisted file states and processed files
+  // Load persisted data from previous phases
   useEffect(() => {
     const loadPersistedData = () => {
-      debugLog('Loading persisted data:', {
-        analysisResultsCount: (phaseData.analysisResults || []).length,
-        fileStatesCount: Object.keys(phaseData.fileStates || {}).length,
-        selectedFilesCount: (phaseData.selectedFiles || []).length,
-        organizedFilesCount: (phaseData.organizedFiles || []).length
-      });
-      
-      // Load file states from discover phase
-      const persistedStates = phaseData.fileStates || {};
-      setFileStates(persistedStates);
-      
-      // If we don't have file states but we have analysis results, reconstruct them
-      if (Object.keys(persistedStates).length === 0 && analysisResults.length > 0) {
-        debugLog('Reconstructing file states from analysis results');
-        const reconstructedStates = {};
-        
-        analysisResults.forEach((file) => {
-          if (file.analysis && !file.error) {
-            reconstructedStates[file.path] = {
-              state: 'ready',
-              timestamp: file.analyzedAt || new Date().toISOString(),
-              analysis: file.analysis,
-              analyzedAt: file.analyzedAt
-            };
-          } else if (file.error) {
-            reconstructedStates[file.path] = {
-              state: 'error',
-              timestamp: file.analyzedAt || new Date().toISOString(),
-              error: file.error,
-              analyzedAt: file.analyzedAt
-            };
-          } else {
-            reconstructedStates[file.path] = {
-              state: 'pending',
-              timestamp: new Date().toISOString()
-            };
-          }
-        });
-        
-        setFileStates(reconstructedStates);
-        // Update phase data with reconstructed states
-        actions.setPhaseData('fileStates', reconstructedStates);
+      if (phaseData.organizedFiles) {
+        setOrganizedFiles(phaseData.organizedFiles);
       }
       
-      // Load previously organized files to avoid re-processing
-      const previouslyOrganized = phaseData.organizedFiles || [];
-      const processedIds = new Set(previouslyOrganized.map((file) => file.originalPath || file.path));
-      setProcessedFileIds(processedIds);
-      
-      if (previouslyOrganized.length > 0) {
-        setOrganizedFiles(previouslyOrganized);
+      if (phaseData.analysisResults) {
+        // Analysis results are passed from DiscoverPhase
+        debugLog('Loaded analysis results', { count: phaseData.analysisResults.length });
       }
     };
     
     loadPersistedData();
-  }, [phaseData, analysisResults, actions]);
+  }, [phaseData]);
+
+  // Get analysis results from phase data
+  const analysisResults = phaseData.analysisResults || [];
+  const smartFolders = phaseData.smartFolders || [];
+
+  // Initialize component
+  useEffect(() => {
+    const loadDocumentsPath = async () => {
+      try {
+        const path = await window.electronAPI.files.getDocumentsPath();
+        setDocumentsPath(path);
+        
+        const settings = await window.electronAPI.settings.get();
+        if (settings && settings.defaultSmartFolderLocation) {
+          setDefaultLocation(settings.defaultSmartFolderLocation);
+        }
+      } catch (error) {
+        handleError(error, 'Documents Path Load', false);
+        setDocumentsPath('Documents'); // Fallback
+      }
+    };
+
+    loadDocumentsPath();
+    
+    // Set up progress monitoring
+    const progressCleanup = window.electronAPI.events.onOperationProgress((progressData) => {
+      if (progressData.type === 'batch_organize' && progressData.current !== undefined) {
+        setBatchProgress({
+          current: progressData.current,
+          total: progressData.total || 0,
+          currentFile: progressData.currentFile || ''
+        });
+      }
+    });
+
+    return () => {
+      if (progressCleanup) {
+        progressCleanup();
+      }
+    };
+  }, [handleError]);
+
+  // Load undo/redo status
+  useEffect(() => {
+    checkUndoRedoStatus();
+  }, []);
+
+  // Check undo/redo availability
+  const checkUndoRedoStatus = async () => {
+    try {
+      const canUndoResult = await window.electronAPI.undoRedo.canUndo();
+      const canRedoResult = await window.electronAPI.undoRedo.canRedo();
+      setCanUndo(!!canUndoResult);
+      setCanRedo(!!canRedoResult);
+    } catch (error) {
+      handleError(error, 'Undo/Redo Status Check', false);
+    }
+  };
+
+  // Handle undo
+  const handleUndo = async () => {
+    try {
+      await window.electronAPI.undoRedo.undo();
+      addNotification('Action undone successfully', 'success');
+      await checkUndoRedoStatus();
+    } catch (error) {
+      handleError(error, 'Undo Operation');
+    }
+  };
+
+  // Handle redo
+  const handleRedo = async () => {
+    try {
+      await window.electronAPI.undoRedo.redo();
+      addNotification('Action redone successfully', 'success');
+      await checkUndoRedoStatus();
+    } catch (error) {
+      handleError(error, 'Redo Operation');
+    }
+  };
 
   // Show analysis status if analysis is still running from discover phase
   const isAnalysisRunning = phaseData.isAnalyzing || false;
@@ -141,88 +182,6 @@ function OrganizePhase() {
   const processedFiles = organizedFiles.filter((file) => 
     processedFileIds.has(file.originalPath || file.path)
   );
-
-  useEffect(() => {
-    // Get the documents path when component mounts
-    const loadDocumentsPath = async () => {
-      try {
-        const path = await window.electronAPI.files.getDocumentsPath();
-        setDocumentsPath(path);
-        
-        // Also load default location from settings
-        const settings = await window.electronAPI.settings.get();
-        if (settings?.defaultSmartFolderLocation) {
-          setDefaultLocation(settings.defaultSmartFolderLocation);
-        }
-      } catch (error) {
-        handleError(error, 'Setup', false); // Don't show user error as it's handled in UI
-      }
-    };
-    loadDocumentsPath();
-    checkUndoRedoStatus();
-
-    // Listen for operation progress events
-    const progressCleanup = window.electronAPI.events.onOperationProgress((progressData) => {
-      debugLog('Operation progress:', progressData);
-      if (progressData.type === 'batch_organize' && progressData.current !== undefined) {
-        setBatchProgress({
-          current: progressData.current,
-          total: progressData.total,
-          currentFile: progressData.currentFile || ''
-        });
-        
-        // Update notification for long operations
-        if (progressData.total > 5 && progressData.current > 0) {
-          addNotification(
-            `Processing file ${progressData.current}/${progressData.total}: ${progressData.currentFile || 'Unknown file'}`,
-            'info',
-            1000 // Short duration since these update frequently
-          );
-        }
-      }
-    });
-
-    return () => {
-      // Cleanup event listeners
-      if (progressCleanup) progressCleanup();
-    };
-  }, [addNotification]);
-
-  // Check undo/redo status
-  const checkUndoRedoStatus = async () => {
-    try {
-      const canUndoResult = await window.electronAPI.undoRedo.canUndo();
-      const canRedoResult = await window.electronAPI.undoRedo.canRedo();
-      setCanUndo(canUndoResult);
-      setCanRedo(canRedoResult);
-    } catch (error) {
-      handleError(error, 'Undo/Redo Status', false);
-    }
-  };
-
-  // Handle undo operation
-  const handleUndo = async () => {
-    try {
-      await window.electronAPI.undoRedo.undo();
-      addNotification('Operation undone successfully', 'success');
-      checkUndoRedoStatus();
-    } catch (error) {
-      console.error('Undo failed:', error);
-      addNotification(`Undo failed: ${error.message}`, 'error');
-    }
-  };
-
-  // Handle redo operation
-  const handleRedo = async () => {
-    try {
-      await window.electronAPI.undoRedo.redo();
-      addNotification('Operation redone successfully', 'success');
-      checkUndoRedoStatus();
-    } catch (error) {
-      console.error('Redo failed:', error);
-      addNotification(`Redo failed: ${error.message}`, 'error');
-    }
-  };
 
   // Toggle file selection
   const toggleFileSelection = (index) => {
@@ -460,22 +419,30 @@ function OrganizePhase() {
     };
   };
 
-  // NEW: Mark files as processed after organization
+  /**
+   * Mark files as processed after successful organization
+   * @param {string[]} filePaths - Array of file paths to mark as processed
+   */
   const markFilesAsProcessed = (filePaths) => {
     setProcessedFileIds((prev) => {
       const newSet = new Set(prev);
       filePaths.forEach((path) => newSet.add(path));
       return newSet;
     });
+    debugLog('Files marked as processed', { count: filePaths.length, files: filePaths });
   };
 
-  // NEW: Remove files from processed list (for undo operations)
+  /**
+   * Unmark files as processed (used during undo operations)
+   * @param {string[]} filePaths - Array of file paths to unmark
+   */
   const unmarkFilesAsProcessed = (filePaths) => {
     setProcessedFileIds((prev) => {
       const newSet = new Set(prev);
       filePaths.forEach((path) => newSet.delete(path));
       return newSet;
     });
+    debugLog('Files unmarked as processed', { count: filePaths.length, files: filePaths });
   };
 
   const handleOrganizeFiles = async () => {
@@ -740,11 +707,12 @@ function OrganizePhase() {
         </div>
         
         <div className="flex justify-between items-center mb-4 flex-shrink-0">
-          <UndoRedoSystem 
+          <UndoRedoToolbar 
             onUndo={handleUndo}
             onRedo={handleRedo}
             canUndo={canUndo}
             canRedo={canRedo}
+            onToggleHistory={() => setIsHistoryVisible(!isHistoryVisible)}
             className="text-sm"
           />
           

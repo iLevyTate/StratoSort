@@ -6,6 +6,7 @@ import { usePhase } from '../contexts/PhaseContext';
 import useConfirmDialog from '../hooks/useConfirmDialog';
 import PhaseLayout from '../layout/PhaseLayout';
 import { useToast } from '../components/Toast';
+import { useErrorHandler } from '../utils/ErrorHandling';
 
 const { PHASES } = require('../../shared/constants');
 
@@ -54,6 +55,7 @@ function SetupPhase() {
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
   const { addNotification, showSuccess, showError, showWarning, showInfo } = useNotification();
   const { addToast } = useToast();
+  const { handleError, handleWarning } = useErrorHandler();
   
   // State management
   const [smartFolders, setSmartFolders] = useState([]);
@@ -64,8 +66,16 @@ function SetupPhase() {
   const [settings, setSettings] = useState({
     selectedModel: 'gemma3:4b',
     concurrentFiles: 3,
-    namingConvention: 'keep-original'
+    namingConvention: 'keep-original',
+    ollamaHost: 'http://127.0.0.1:11434'
   });
+  
+  // Dynamically loaded model list
+  const [availableModels, setAvailableModels] = useState([
+    'gemma3:4b',
+    'llama3.2:latest',
+    'llava:latest'
+  ]);
   
   // Performance settings
   const [performanceSettings, setPerformanceSettings] = useState({
@@ -79,6 +89,7 @@ function SetupPhase() {
   // Folder management
   const [newFolder, setNewFolder] = useState({ name: '', emoji: '📁', path: '', description: '' });
   const [editingFolder, setEditingFolder] = useState(null);
+  const [editFolderData, setEditFolderData] = useState({ name: '', emoji: '📁', path: '', description: '' });
   const [showAddModal, setShowAddModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [isValidating, setIsValidating] = useState(false);
@@ -87,16 +98,18 @@ function SetupPhase() {
     const initializeSetup = async () => {
       setIsLoading(true);
       try {
-        const [loadedSettings, folders] = await Promise.all([
+        const [loadedSettings, folders, modelsResponse] = await Promise.all([
           window.electronAPI.settings.get(),
-          window.electronAPI.smartFolders.get()
+          window.electronAPI.smartFolders.get(),
+          window.electronAPI.ollama.getModels().catch(() => null)
         ]);
         
         if (loadedSettings) {
           setSettings({
             selectedModel: loadedSettings.selectedModel || 'gemma3:4b',
             concurrentFiles: loadedSettings.concurrentFiles || 3,
-            namingConvention: loadedSettings.namingConvention || 'keep-original'
+            namingConvention: loadedSettings.namingConvention || 'keep-original',
+            ollamaHost: loadedSettings.ollamaHost || 'http://127.0.0.1:11434'
           });
           
           // Load performance settings
@@ -109,17 +122,24 @@ function SetupPhase() {
           });
         }
         
-        setSmartFolders(folders || []);
+        if (folders && folders.success) {
+          setSmartFolders(folders.folders || []);
+        } else {
+          setSmartFolders([]);
+        }
+
+        if (modelsResponse && modelsResponse.success && Array.isArray(modelsResponse.models)) {
+          setAvailableModels(modelsResponse.models);
+        }
       } catch (error) {
-        console.error('Failed to initialize setup:', error);
-        showError('Failed to load setup data');
+        handleError(error, 'Setup Initialization', false);
       } finally {
         setIsLoading(false);
       }
     };
     
     initializeSetup();
-  }, []);
+  }, [handleError]);
 
   // Enhanced validation
   const validateForm = async (configToValidate = settings) => {
@@ -168,9 +188,22 @@ function SetupPhase() {
       };
       
       await window.electronAPI.settings.save(configToSave);
+
+      // Attempt to set selected Ollama model
+      try {
+        const setResult = await window.electronAPI.ollama.setModel(settings.selectedModel);
+        if (setResult?.success) {
+          showSuccess(`AI model switched to ${settings.selectedModel}`);
+        } else {
+          showWarning(setResult?.error || 'Model change failed');
+        }
+      } catch (modelError) {
+        handleError(modelError, 'Model Configuration');
+        showWarning('Failed to set AI model – please verify the model exists in Ollama');
+      }
       showSuccess('Configuration saved successfully');
     } catch (error) {
-      console.error('Failed to save configuration:', error);
+      handleError(error, 'Configuration Save');
       showError('Failed to save configuration');
     } finally {
       setIsLoading(false);
@@ -184,23 +217,25 @@ function SetupPhase() {
     }
     
     try {
+      const documentsPath = await window.electronAPI.files.getDocumentsPath();
       const folderToAdd = {
-        id: Date.now().toString(),
         name: newFolder.name.trim(),
         emoji: newFolder.emoji,
-        path: newFolder.path.trim() || `Documents/${newFolder.name.trim()}`,
-        description: newFolder.description.trim(),
-        type: 'smart'
+        path: newFolder.path.trim() || `${documentsPath}/${newFolder.name.trim()}`,
+        description: newFolder.description.trim()
       };
-      
-      const updatedFolders = [...smartFolders, folderToAdd];
-      await window.electronAPI.smartFolders.save(updatedFolders);
-      setSmartFolders(updatedFolders);
+
+      const { success, folder, error } = await window.electronAPI.smartFolders.add(folderToAdd);
+      if (!success) {
+        throw new Error(error || 'Add failed');
+      }
+
+      setSmartFolders((prev) => [...prev, folder]);
       setNewFolder({ name: '', emoji: '📁', path: '', description: '' });
       setShowAddModal(false);
       showSuccess('Smart folder added successfully');
     } catch (error) {
-      console.error('Failed to add folder:', error);
+      handleError(error, 'Add Folder');
       showError('Failed to add smart folder');
     }
   };
@@ -213,14 +248,37 @@ function SetupPhase() {
     
     if (confirmed) {
       try {
-        const updatedFolders = smartFolders.filter((f) => f.id !== folderId);
-        await window.electronAPI.smartFolders.save(updatedFolders);
-        setSmartFolders(updatedFolders);
+        const { success, deletedFolder, error } = await window.electronAPI.smartFolders.delete(folderId);
+        if (!success) {
+          throw new Error(error || 'Delete failed');
+        }
+
+        setSmartFolders((prev) => prev.filter((f) => f.id !== folderId));
         showSuccess('Smart folder deleted successfully');
       } catch (error) {
-        console.error('Failed to delete folder:', error);
+        handleError(error, 'Delete Folder');
         showError('Failed to delete smart folder');
       }
+    }
+  };
+
+  const openEditModal = (folder) => {
+    setEditFolderData({ name: folder.name, emoji: folder.emoji, path: folder.path, description: folder.description, id: folder.id });
+    setEditingFolder(folder.id);
+  };
+
+  const handleSaveEditFolder = async () => {
+    try {
+      const { id, ...updatedData } = editFolderData;
+      const { success, folder, error } = await window.electronAPI.smartFolders.edit(id, updatedData);
+      if (!success) throw new Error(error || 'Edit failed');
+
+      setSmartFolders((prev) => prev.map((f) => (f.id === id ? folder : f)));
+      setEditingFolder(null);
+      showSuccess('Smart folder updated');
+    } catch (err) {
+      handleError(err, 'Edit Folder');
+      showError('Failed to edit smart folder');
     }
   };
 
@@ -230,6 +288,51 @@ function SetupPhase() {
 
   const handleProceed = () => {
     actions.advancePhase(PHASES.DISCOVER);
+  };
+
+  // Helper to test Ollama connection
+  const testOllamaConnection = async () => {
+    try {
+      const res = await window.electronAPI.ollama.testConnection(settings.ollamaHost);
+      if (res?.connected) {
+        showSuccess('Connected to Ollama successfully');
+      } else {
+        showWarning(res?.error || 'Connection failed');
+      }
+    } catch (err) {
+      handleError(err, 'Ollama Connection Test');
+      showError('Connection test failed');
+    }
+  };
+
+  const refreshModels = async () => {
+    try {
+      const modelsRes = await window.electronAPI.ollama.getModels();
+      if (modelsRes?.success) {
+        setAvailableModels(modelsRes.models);
+        showSuccess('Model list refreshed');
+      } else {
+        showWarning(modelsRes?.error || 'Failed to refresh models');
+      }
+    } catch (err) {
+      handleError(err, 'Model Refresh');
+      showError('Failed to refresh models');
+    }
+  };
+
+  const namingPreview = () => {
+    const sample = 'Project Brief.pdf';
+    const date = new Date().toISOString().split('T')[0];
+    switch (settings.namingConvention) {
+      case 'descriptive':
+        return `market_analysis_report.pdf`;
+      case 'date-prefix':
+        return `${date}_${sample}`;
+      case 'category-prefix':
+        return `Research_${sample}`;
+      default:
+        return sample;
+    }
   };
 
   const renderAISettings = () => (
@@ -246,10 +349,27 @@ function SetupPhase() {
             onChange={(e) => setSettings({ ...settings, selectedModel: e.target.value })}
             className="glass-input w-full"
           >
-            <option value="gemma3:4b">Gemma 3 4B (Recommended)</option>
-            <option value="llama3.2:latest">Llama 3.2 Latest</option>
-            <option value="llava:latest">LLaVA (Vision)</option>
+            {availableModels.map((model) => (
+              <option key={model} value={model}>{model}</option>
+            ))}
           </select>
+          <div className="flex space-x-2 mt-2">
+            <button onClick={refreshModels} className="glass-button text-xs px-3 py-1">Refresh</button>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-readable-light text-sm font-medium mb-2">
+            Ollama Host URL
+          </label>
+          <input
+            type="text"
+            value={settings.ollamaHost}
+            onChange={(e)=>setSettings({...settings, ollamaHost:e.target.value})}
+            className="glass-input w-full"
+            placeholder="http://127.0.0.1:11434"
+          />
+          <button onClick={testOllamaConnection} className="glass-button text-xs px-3 py-1 mt-2">Test Connection</button>
         </div>
 
         <div>
@@ -284,6 +404,7 @@ function SetupPhase() {
             <option value="date-prefix">Date + Original</option>
             <option value="category-prefix">Category + Original</option>
           </select>
+          <p className="text-xs text-readable-light mt-1 opacity-75">Preview: <span className="font-mono">{namingPreview()}</span></p>
         </div>
       </div>
     </div>
@@ -311,12 +432,10 @@ function SetupPhase() {
                 <p className="text-readable-light text-xs opacity-75">{folder.path}</p>
               </div>
             </div>
-            <button
-              onClick={() => handleDeleteFolder(folder.id)}
-              className="text-red-400 hover:text-red-300 text-xs"
-            >
-              Delete
-            </button>
+            <div className="space-x-2">
+              <button onClick={()=>openEditModal(folder)} className="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+              <button onClick={() => handleDeleteFolder(folder.id)} className="text-red-400 hover:text-red-300 text-xs">Delete</button>
+            </div>
           </div>
         ))}
       </div>
@@ -444,13 +563,23 @@ function SetupPhase() {
               <label className="block text-readable-light text-sm font-medium mb-2">
                 Path (optional)
               </label>
-              <input
-                type="text"
-                value={newFolder.path}
-                onChange={(e) => setNewFolder({ ...newFolder, path: e.target.value })}
-                className="glass-input w-full"
-                placeholder="Leave empty to use default location"
-              />
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newFolder.path}
+                  onChange={(e) => setNewFolder({ ...newFolder, path: e.target.value })}
+                  className="glass-input flex-1"
+                  placeholder="Leave empty to use default location"
+                />
+                <button
+                  onClick={async ()=>{
+                    const dir = await window.electronAPI.files.selectDirectory();
+                    if (dir) setNewFolder({...newFolder, path: dir});
+                  }}
+                  className="glass-button text-xs px-3 py-1">
+                  Browse
+                </button>
+              </div>
             </div>
             
             <div>
@@ -479,6 +608,45 @@ function SetupPhase() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEditFolderModal = () => {
+    if (!editingFolder) return null;
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="glass-card-strong p-6 max-w-md w-full mx-4">
+          <h3 className="text-on-glass text-lg font-bold mb-4">Edit Smart Folder</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">Folder Name</label>
+              <input className="glass-input w-full" value={editFolderData.name} onChange={(e)=>setEditFolderData({...editFolderData,name:e.target.value})}/>
+            </div>
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">Emoji</label>
+              <input className="glass-input w-full" maxLength="2" value={editFolderData.emoji} onChange={(e)=>setEditFolderData({...editFolderData,emoji:e.target.value})}/>
+            </div>
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">Path</label>
+              <div className="flex space-x-2">
+                <input className="glass-input flex-1" value={editFolderData.path} onChange={(e)=>setEditFolderData({...editFolderData,path:e.target.value})}/>
+                <button className="glass-button text-xs px-3 py-1" onClick={async ()=>{
+                  const dir = await window.electronAPI.files.selectDirectory();
+                  if (dir) setEditFolderData({...editFolderData, path: dir});
+                }}>Browse</button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-readable-light text-sm font-medium mb-2">Description</label>
+              <textarea className="glass-input w-full h-20" value={editFolderData.description} onChange={(e)=>setEditFolderData({...editFolderData,description:e.target.value})}/>
+            </div>
+          </div>
+          <div className="flex space-x-3 mt-6">
+            <button className="glass-button flex-1" onClick={handleSaveEditFolder}>Save</button>
+            <button className="glass-button subtle flex-1" onClick={()=>setEditingFolder(null)}>Cancel</button>
           </div>
         </div>
       </div>
@@ -561,6 +729,7 @@ function SetupPhase() {
         {/* Modals */}
         {renderAddFolderModal()}
         <ConfirmDialog />
+        {renderEditFolderModal()}
       </div>
     </PhaseLayout>
   );

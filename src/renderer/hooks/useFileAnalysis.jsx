@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
+import { useErrorHandler } from '../utils/ErrorHandling';
 
 /**
  * Custom hook for managing file analysis state and operations
  * Extracted from DiscoverPhase to reduce component complexity
  */
 export function useFileAnalysis() {
+  const { handleError, handleWarning } = useErrorHandler();
   const [analysisResults, setAnalysisResults] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentAnalysisFile, setCurrentAnalysisFile] = useState('');
@@ -17,7 +19,7 @@ export function useFileAnalysis() {
       setFileStates((prev) => {
         // Validate previous state
         if (!prev || typeof prev !== 'object') {
-          console.warn('Invalid fileStates detected, resetting...');
+          handleWarning('Invalid fileStates detected, resetting...', 'File State Update', false);
           prev = {};
         }
         
@@ -42,7 +44,7 @@ export function useFileAnalysis() {
         return newStates;
       });
     } catch (error) {
-      console.error('Error updating file state:', error);
+      handleError(error, 'File State Update', false);
       // Reset file states if corrupted
       setFileStates({
         [filePath]: {
@@ -52,7 +54,7 @@ export function useFileAnalysis() {
         }
       });
     }
-  }, []);
+  }, [handleError, handleWarning]);
 
   // Get current file state
   const getFileState = useCallback((filePath) => {
@@ -79,7 +81,7 @@ export function useFileAnalysis() {
   // Analyze files function
   const analyzeFiles = useCallback(async (files) => {
     if (!files || files.length === 0) {
-      console.warn('No files provided for analysis');
+      handleWarning('No files provided for analysis', 'File Analysis', false);
       return;
     }
 
@@ -111,10 +113,19 @@ export function useFileAnalysis() {
           
           const result = await Promise.race([analysisPromise, timeoutPromise]);
           
-          if (result && result.analysis) {
+          if (result && !result.error) {
+            // Format the analysis result to match expected structure
+            const analysisResult = {
+              suggestedName: result.subject || file.name,
+              suggestedCategory: result.category || 'Documents',
+              confidence: Math.round((result.confidence || 0) * 100),
+              keywords: result.tags || [],
+              summary: result.summary || 'File analyzed successfully'
+            };
+            
             newResults.push({
               file,
-              analysis: result.analysis,
+              analysis: analysisResult,
               timestamp: new Date().toISOString()
             });
             
@@ -123,15 +134,15 @@ export function useFileAnalysis() {
             
             // Update file state to ready
             updateFileState(file.path, 'ready', { 
-              analysis: result.analysis,
+              analysis: analysisResult,
               processingTime
             });
           } else {
-            console.warn(`No analysis result for file: ${file.path}`);
-            updateFileState(file.path, 'error', { error: 'No analysis result' });
+            handleWarning(`No analysis result for file: ${file.path}`, 'File Analysis', false);
+            updateFileState(file.path, 'error', { error: result?.error || 'No analysis result' });
           }
         } catch (error) {
-          console.error(`Analysis failed for file ${file.path}:`, error);
+          handleError(error, `Analysis for file ${file.path}`, false);
           updateFileState(file.path, 'error', { error: error.message });
         }
       }
@@ -145,13 +156,13 @@ export function useFileAnalysis() {
       });
       
     } catch (error) {
-      console.error('Batch analysis failed:', error);
+      handleError(error, 'Batch Analysis');
     } finally {
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');
       setAnalysisProgress({ current: 0, total: 0 });
     }
-  }, [updateFileState, fileStates]);
+  }, [updateFileState, handleError, handleWarning]);
 
   // Reset analysis state
   const resetAnalysis = useCallback(() => {

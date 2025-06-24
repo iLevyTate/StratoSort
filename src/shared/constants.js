@@ -18,7 +18,7 @@ const PHASES = {
 const PHASE_TRANSITIONS = {
   [PHASES.WELCOME]: [PHASES.SETUP, PHASES.DISCOVER],
   [PHASES.SETUP]: [PHASES.DISCOVER, PHASES.WELCOME],
-  [PHASES.DISCOVER]: [PHASES.ORGANIZE, PHASES.SETUP],
+  [PHASES.DISCOVER]: [PHASES.ORGANIZE, PHASES.SETUP, PHASES.WELCOME],
   [PHASES.ORGANIZE]: [PHASES.COMPLETE, PHASES.DISCOVER],
   [PHASES.COMPLETE]: [PHASES.WELCOME, PHASES.ORGANIZE, PHASES.DISCOVER] // Allow going back without losing data
 };
@@ -66,9 +66,11 @@ const IPC_CHANNELS = {
   
   // Analysis
   ANALYSIS: {
-    ANALYZE_DOCUMENT: 'analyze-document',
-    ANALYZE_IMAGE: 'analyze-image',
-    EXTRACT_IMAGE_TEXT: 'extract-text-from-image'
+    FILE_ANALYZE: 'file-analyze',
+    COMPLETE: 'analysis-complete',
+    ERROR: 'analysis-error',
+    GET_HISTORY: 'analysis-get-history',
+    PROGRESS: 'analysis-progress'
   },
   
   // Settings
@@ -103,8 +105,6 @@ const IPC_CHANNELS = {
     CLEAR: 'clear-analysis-history',
     EXPORT: 'export-analysis-history'
   },
-  
-
   
   // System Monitoring
   SYSTEM: {
@@ -258,6 +258,13 @@ const PROCESSING_LIMITS = {
   ANALYSIS_TIMEOUT: 180000, // 3 minutes
   RETRY_ATTEMPTS: 3
 };
+
+// Provide backward-compatibility aliases
+IPC_CHANNELS.FILE_ANALYZE = IPC_CHANNELS.ANALYSIS.FILE_ANALYZE;
+IPC_CHANNELS.ANALYSIS_COMPLETE = IPC_CHANNELS.ANALYSIS.COMPLETE;
+IPC_CHANNELS.ANALYSIS_ERROR = IPC_CHANNELS.ANALYSIS.ERROR;
+IPC_CHANNELS.ANALYSIS_GET_HISTORY = IPC_CHANNELS.ANALYSIS.GET_HISTORY;
+IPC_CHANNELS.ANALYSIS_PROGRESS = IPC_CHANNELS.ANALYSIS.PROGRESS;
 
 // CommonJS exports for Node.js compatibility (main process)
 module.exports = {

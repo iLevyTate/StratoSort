@@ -31,6 +31,7 @@ const ALLOWED_CHANNELS = {
 const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
   'analysis-progress',
+  'analysis-complete',
   'analysis-error',
   'operation-progress'
 ];
@@ -294,8 +295,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT_DIRECTORY),
     getDocumentsPath: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH),
     createFolder: (fullPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, fullPath),
-    getStats: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILE_STATS, filePath),
-    getDirectoryContents: (dirPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
     organize: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch_organize', operations }),
     performOperation: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, operations),
     executeBatchOperations: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch', operations }),
@@ -307,40 +306,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FOLDER, folderPath),
     openFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FOLDER, folderPath),
     // Add file analysis method that routes to appropriate analyzer
-    analyze: (filePath) => {
-      // Determine file type and route to appropriate analyzer
-      const ext = filePath.split('.').pop()?.toLowerCase();
-      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
-      // const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a']; // REMOVED - audio analysis disabled
-      
-      if (imageExts.includes(ext)) {
-        return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath);
-      } else {
-        // Audio analysis removed - all non-image files go to document analysis
-        return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath);
-      }
+    analyze: (filePath, options = {}) => {
+      return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.FILE_ANALYZE, { filePath, options });
     }
   },
 
   // Smart Folders
   smartFolders: {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET),
-    save: (folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SAVE, folders),
-    updateCustom: (folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, folders),
-    getCustom: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM),
     scanStructure: (rootPath) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, rootPath),
     add: (folder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.ADD, folder),
     edit: (folderId, updatedFolder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.EDIT, folderId, updatedFolder),
     delete: (folderId) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.DELETE, folderId)
-  },
-
-  // Analysis
-  analysis: {
-    document: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
-    image: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
-    // audio: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath), // REMOVED - audio analysis disabled
-    extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath)
-    // transcribe: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, filePath) // REMOVED - audio analysis disabled
   },
 
   // Analysis History
@@ -348,8 +325,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: (options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET, options),
     search: (query, options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, query, options),
     getStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS),
-    getFileHistory: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, filePath),
-    clear: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR),
     export: (format) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, format)
   },
 
@@ -367,7 +342,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
     getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS),
-    scanCommonDirectories: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES)
+    scanCommonDirectories: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES),
+    // Add missing system methods that ErrorHandling.jsx is calling
+    logError: (errorInfo) => secureIPC.safeInvoke('log-error', errorInfo)
   },
 
   // Ollama (only implemented endpoints)
@@ -380,6 +357,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Event Listeners (with automatic cleanup)
   events: {
     onAnalysisProgress: (callback) => secureIPC.safeOn('analysis-progress', callback),
+    onAnalysisComplete: (callback) => secureIPC.safeOn('analysis-complete', callback),
     onAnalysisError: (callback) => secureIPC.safeOn('analysis-error', callback),
     onOperationProgress: (callback) => secureIPC.safeOn('operation-progress', callback)
   },
@@ -388,6 +366,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settings: {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.GET),
     save: (settings) => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.SAVE, settings)
+  },
+
+  // Add missing notification API that ErrorHandling.jsx is calling
+  notification: {
+    showError: (message) => secureIPC.safeInvoke('show-notification', { type: 'error', message }),
+    showWarning: (message) => secureIPC.safeInvoke('show-notification', { type: 'warning', message }),
+    showInfo: (message) => secureIPC.safeInvoke('show-notification', { type: 'info', message }),
+    showSuccess: (message) => secureIPC.safeInvoke('show-notification', { type: 'success', message })
   }
 });
 

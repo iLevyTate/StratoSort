@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const { Ollama } = require('ollama');
+const { logger } = require('../../shared/logger');
 
 // App configuration for audio analysis
 const AppConfig = {
@@ -23,7 +24,10 @@ const ollamaClient = new Ollama({ host: ollamaHost });
 
 async function transcribeAudioWithWhisper(filePath) {
   try {
-    console.log(`Transcribing audio file with Whisper: ${filePath}`);
+    logger.info('Starting audio transcription with Whisper', { 
+      component: 'audio-analysis',
+      filePath: path.basename(filePath) 
+    });
     
     // Read audio file as base64
     const audioBuffer = await fs.readFile(filePath);
@@ -46,7 +50,11 @@ async function transcribeAudioWithWhisper(filePath) {
     
     return null;
   } catch (error) {
-    console.error('Error transcribing audio with Whisper:', error.message);
+    logger.error('Error transcribing audio with Whisper', { 
+      component: 'audio-analysis',
+      error: error.message,
+      filePath: path.basename(filePath)
+    });
     // Fallback: attempt to use system whisper if available
     return await attemptSystemWhisper(filePath);
   }
@@ -77,7 +85,10 @@ async function attemptSystemWhisper(filePath) {
         if (code === 0 && output) {
           resolve(output.trim());
         } else {
-          console.log('System Whisper not available or failed');
+          logger.warn('System Whisper not available or failed', { 
+            component: 'audio-analysis',
+            exitCode: code 
+          });
           resolve(null);
         }
       });
@@ -89,14 +100,21 @@ async function attemptSystemWhisper(filePath) {
       }, 180000);
     });
   } catch (error) {
-    console.log('System Whisper not available');
+    logger.debug('System Whisper not available', { 
+      component: 'audio-analysis',
+      error: error.message 
+    });
     return null;
   }
 }
 
 async function analyzeTranscriptionWithOllama(transcription, originalFileName, smartFolders = []) {
   try {
-    console.log(`Analyzing transcription content with Ollama model: ${AppConfig.ai.audioAnalysis.textModel}`);
+    logger.info('Analyzing transcription content with Ollama', { 
+      component: 'audio-analysis',
+      model: AppConfig.ai.audioAnalysis.textModel,
+      fileName: originalFileName
+    });
     
     // Build folder categories string for the prompt
     let folderCategoriesStr = '';
@@ -155,7 +173,10 @@ ${transcription.substring(0, 8000)}`;
             parsedJson.date = new Date(parsedJson.date).toISOString().split('T')[0];
           } catch (e) {
             delete parsedJson.date;
-            console.warn('Ollama returned an invalid date for audio, omitting.');
+            logger.warn('Ollama returned an invalid date for audio, omitting', { 
+              component: 'audio-analysis',
+              invalidDate: parsedJson.date 
+            });
           }
         }
         
@@ -173,7 +194,11 @@ ${transcription.substring(0, 8000)}`;
           keywords: finalKeywords
         };
       } catch (e) {
-        console.error('Error parsing Ollama JSON response for audio:', e.message);
+        logger.error('Error parsing Ollama JSON response for audio', { 
+          component: 'audio-analysis',
+          error: e.message,
+          responsePreview: response.response?.substring(0, 200)
+        });
         return { 
           error: 'Failed to parse audio analysis from Ollama.', 
           keywords: [],
@@ -190,7 +215,11 @@ ${transcription.substring(0, 8000)}`;
       transcription: transcription.substring(0, 500)
     };
   } catch (error) {
-    console.error('Error calling Ollama API for audio:', error.message);
+    logger.error('Error calling Ollama API for audio', { 
+      component: 'audio-analysis',
+      error: error.message,
+      model: AppConfig.ai.audioAnalysis.textModel
+    });
     return { 
       error: `Ollama API error for audio: ${error.message}`, 
       keywords: [],
@@ -201,7 +230,11 @@ ${transcription.substring(0, 8000)}`;
 }
 
 async function analyzeAudioFile(filePath, smartFolders = []) {
-  console.log(`Analyzing audio file: ${filePath}`);
+  logger.info('Starting audio file analysis', { 
+    component: 'audio-analysis',
+    filePath: path.basename(filePath),
+    smartFoldersCount: smartFolders?.length || 0
+  });
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
 
@@ -253,7 +286,10 @@ async function analyzeAudioFile(filePath, smartFolders = []) {
     }
     
     // No transcription available - use intelligent fallback
-    console.log(`No transcription available for ${fileName}, using intelligent fallback.`);
+    logger.warn('No transcription available, using intelligent fallback', { 
+      component: 'audio-analysis',
+      fileName: fileName
+    });
     
     const intelligentCategory = getIntelligentAudioCategory(fileName, fileExtension);
     const intelligentKeywords = getIntelligentAudioKeywords(fileName, fileExtension);
@@ -270,7 +306,11 @@ async function analyzeAudioFile(filePath, smartFolders = []) {
     };
 
   } catch (error) {
-    console.error(`Error processing audio ${filePath}:`, error.message);
+    logger.error('Error processing audio file', { 
+      component: 'audio-analysis',
+      error: error.message,
+      filePath: path.basename(filePath)
+    });
     return {
       error: `Failed to process audio: ${error.message}`,
       category: 'error',

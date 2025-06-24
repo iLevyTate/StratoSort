@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const { app } = require('electron');
-const { ACTION_TYPES } = require('../shared/constants');
+const { ACTION_TYPES } = require('../../shared/constants');
 
 class UndoRedoService {
   constructor() {

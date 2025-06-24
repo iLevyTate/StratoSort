@@ -29,6 +29,41 @@ let customFolders = []; // Initialize customFolders at module level
 // Initialize service integration
 let serviceIntegration;
 
+// Ollama model management
+let currentOllamaModel = 'gemma3:4b'; // Default model
+
+function getOllamaModel() {
+  return currentOllamaModel;
+}
+
+async function setOllamaModel(modelName) {
+  try {
+    if (!modelName || typeof modelName !== 'string') {
+      throw new Error('Invalid model name provided');
+    }
+    
+    currentOllamaModel = modelName;
+    logger.info('Ollama model updated', { 
+      component: 'ollama',
+      newModel: modelName 
+    });
+    
+    // Optionally persist to settings
+    const { default: Store } = await import('electron-store');
+    const store = new Store();
+    store.set('currentOllamaModel', modelName);
+    
+    return true;
+  } catch (error) {
+    logger.error('Failed to set Ollama model', { 
+      component: 'ollama',
+      error: error.message,
+      modelName 
+    });
+    return false;
+  }
+}
+
 // Persistent storage path for custom folders
 const getCustomFoldersPath = () => {
   const userDataPath = app.getPath('userData');
@@ -1812,12 +1847,31 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
 });
 
 // Initialize the application
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   logger.info('Electron app ready, creating window', { component: 'startup' });
   createWindow();
       
   // Initialize service integration
   serviceIntegration = new ServiceIntegration();
+  
+  // Load saved Ollama model if available
+  try {
+    const { default: Store } = await import('electron-store');
+    const store = new Store();
+    const savedModel = store.get('currentOllamaModel');
+    if (savedModel) {
+      currentOllamaModel = savedModel;
+      logger.info('Loaded saved Ollama model', { 
+        component: 'startup',
+        model: savedModel 
+      });
+    }
+  } catch (error) {
+    logger.warn('Could not load saved Ollama model', { 
+      component: 'startup',
+      error: error.message 
+    });
+  }
   
   logger.info('Application initialization complete', { component: 'startup' });
 });

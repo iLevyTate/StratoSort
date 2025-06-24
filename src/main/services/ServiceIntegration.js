@@ -1,6 +1,6 @@
 const AnalysisHistoryService = require('./AnalysisHistoryService');
 const UndoRedoService = require('./UndoRedoService');
-const { ACTION_TYPES } = require('../shared/constants');
+const { ACTION_TYPES } = require('../../shared/constants');
 
 
 class ServiceIntegration {

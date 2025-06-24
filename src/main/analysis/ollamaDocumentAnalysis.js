@@ -89,9 +89,7 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
     if (textContent.length > 1000 || (smartFolders && smartFolders.length > 0)) {
       console.log('[ENHANCED-ANALYSIS] Using performance-optimized multi-step enhanced analysis');
       
-      /* eslint-disable no-unused-vars */
-      const _startTime = Date.now();
-      /* eslint-enable no-unused-vars */
+      const startTime = Date.now();
       const result = await enhancedLLM.analyzeDocumentEnhanced(
         textContent, 
         originalFileName, 
@@ -115,7 +113,8 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
         return {
           ...result,
           enhanced: true,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          actualProcessingTime: Date.now() - startTime
         };
       }
     }

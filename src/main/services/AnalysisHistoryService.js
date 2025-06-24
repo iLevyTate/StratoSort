@@ -474,6 +474,74 @@ class AnalysisHistoryService {
     this.analysisIndex.updatedAt = new Date().toISOString();
     await fs.writeFile(this.indexPath, JSON.stringify(this.analysisIndex, null, 2));
   }
+
+  // Add missing getHistory method that IPC handlers expect
+  async getHistory(options = {}) {
+    await this.initialize();
+    const limit = options.limit || 50;
+    return this.getRecentAnalysis(limit);
+  }
+
+  // Add missing export functionality
+  async exportHistory(format = 'json') {
+    await this.initialize();
+    
+    const entries = Object.values(this.analysisHistory.entries);
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: this.SCHEMA_VERSION,
+      totalEntries: entries.length,
+      entries
+    };
+
+    try {
+      const { app } = require('electron');
+      const exportDir = path.join(app.getPath('downloads'), 'StratoSort-Exports');
+      
+      // Ensure export directory exists
+      await fs.mkdir(exportDir, { recursive: true });
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      let exportPath;
+      let exportContent;
+
+      if (format === 'csv') {
+        exportPath = path.join(exportDir, `analysis-history-${timestamp}.csv`);
+        
+        // Convert to CSV format
+        const csvHeaders = 'FileName,FilePath,Category,Confidence,ProcessingTime,Timestamp,Keywords';
+        const csvRows = entries.map(entry => {
+          const keywords = (entry.analysis.keywords || []).join(';');
+          return `"${entry.fileName}","${entry.originalPath}","${entry.analysis.category || ''}","${entry.analysis.confidence || 0}","${entry.processing.processingTimeMs || 0}","${entry.timestamp}","${keywords}"`;
+        });
+        
+        exportContent = [csvHeaders, ...csvRows].join('\n');
+      } else {
+        // Default to JSON
+        exportPath = path.join(exportDir, `analysis-history-${timestamp}.json`);
+        exportContent = JSON.stringify(exportData, null, 2);
+      }
+
+      await fs.writeFile(exportPath, exportContent, 'utf8');
+      
+      // Open the export directory
+      const { shell } = require('electron');
+      await shell.openPath(exportDir);
+
+      return {
+        success: true,
+        exportPath,
+        recordCount: entries.length,
+        format
+      };
+    } catch (error) {
+      console.error('Failed to export analysis history:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 module.exports = AnalysisHistoryService; 

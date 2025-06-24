@@ -1,10 +1,10 @@
 /**
- * Jest configuration for StratoSort tests (unit + integration).
- * Updated to Jest 29 syntax—removed deprecated options that triggered warnings.
+ * Jest configuration for StratoSort tests - Optimized
+ * Updated to Jest 29 syntax with optimized settings for current test structure
  */
 
 module.exports = {
-  displayName: 'Stratosort Tests',
+  displayName: 'StratoSort Tests',
   testEnvironment: 'node',
   roots: ['<rootDir>'],
   testMatch: [
@@ -18,13 +18,18 @@ module.exports = {
   collectCoverageFrom: [
     '../src/**/*.{js,ts}',
     '!../src/**/*.d.ts',
-    '!../src/**/node_modules/**'
+    '!../src/**/node_modules/**',
+    '!../src/main/simple-main.js', // Exclude main entry point from coverage
+    '!../src/shared/logger.js' // Exclude logger utility
   ],
   coverageDirectory: '../coverage',
   setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
-  // Sequential execution keeps Ollama mocks deterministic
-  maxWorkers: 1,
-
+  setupFiles: ['<rootDir>/test-globals.js'],
+  
+  // Optimized for current test structure
+  maxWorkers: 2, // Increased from 1 for better performance
+  
+  // Module mocking for external dependencies
   moduleNameMapper: {
     '^electron$': '<rootDir>/mocks/electron.js',
     '^ollama$': '<rootDir>/mocks/ollama.js',
@@ -34,6 +39,25 @@ module.exports = {
     '^xlsx-populate$': '<rootDir>/mocks/xlsx.js'
   },
   
-  // Global setup for DOM-dependent packages
-  setupFiles: ['<rootDir>/test-globals.js']
+  // Coverage thresholds for quality assurance
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70
+    }
+  },
+  
+  // Ignore patterns for performance
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/release/',
+    '/coverage/'
+  ],
+  
+  // Clear mocks between tests for reliability
+  clearMocks: true,
+  restoreMocks: true
 }; 

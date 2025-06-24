@@ -1,225 +1,229 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { useNotification } from '../contexts/NotificationContext';
 
 /**
- * Custom hook for managing file organization operations
- * Extracted from OrganizePhase to reduce component complexity
+ * Hook for managing file organization operations
+ * @returns {Object} File organization state and methods
  */
 export function useFileOrganization() {
   const [organizedFiles, setOrganizedFiles] = useState([]);
   const [isOrganizing, setIsOrganizing] = useState(false);
-  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentFile: '' });
-  const [processedFileIds, setProcessedFileIds] = useState(new Set());
-  const [selectedFiles, setSelectedFiles] = useState(new Set());
-  const [editingFiles, setEditingFiles] = useState({});
+  const [organizationProgress, setOrganizationProgress] = useState({
+    current: 0,
+    total: 0,
+    currentFile: ''
+  });
+  
+  const { addNotification } = useNotification();
+  const abortControllerRef = useRef(null);
 
-  // Mark files as processed
-  const markFilesAsProcessed = useCallback((filePaths) => {
-    const pathArray = Array.isArray(filePaths) ? filePaths : [filePaths];
-    setProcessedFileIds((prev) => new Set([...prev, ...pathArray]));
-  }, []);
-
-  // Unmark files as processed
-  const unmarkFilesAsProcessed = useCallback((filePaths) => {
-    const pathArray = Array.isArray(filePaths) ? filePaths : [filePaths];
-    setProcessedFileIds((prev) => {
-      const newSet = new Set(prev);
-      pathArray.forEach((path) => newSet.delete(path));
-      return newSet;
-    });
-  }, []);
-
-  // Toggle file selection
-  const toggleFileSelection = useCallback((index) => {
-    setSelectedFiles((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  }, []);
-
-  // Select all files
-  const selectAllFiles = useCallback((fileCount) => {
-    setSelectedFiles(new Set(Array.from({ length: fileCount }, (_, i) => i)));
-  }, []);
-
-  // Clear selection
-  const clearSelection = useCallback(() => {
-    setSelectedFiles(new Set());
-  }, []);
-
-  // Handle file editing
-  const handleEditFile = useCallback((fileIndex, field, value) => {
-    setEditingFiles((prev) => ({
-      ...prev,
-      [fileIndex]: {
-        ...prev[fileIndex],
-        [field]: value
-      }
-    }));
-  }, []);
-
-  // Get file with edits applied
-  const getFileWithEdits = useCallback((file, index) => {
-    const edits = editingFiles[index];
-    if (!edits) return file;
-
-    return {
-      ...file,
-      analysis: {
-        ...file.analysis,
-        suggestedName: edits.name || file.analysis.suggestedName,
-        suggestedCategory: edits.category || file.analysis.suggestedCategory
-      }
-    };
-  }, [editingFiles]);
-
-  // Find smart folder for category
-  const findSmartFolderForCategory = useCallback((category, smartFolders) => {
-    if (!category || !smartFolders) return null;
-    
-    const categoryLower = category.toLowerCase();
-    
-    // First, try exact match
-    let matchingFolder = smartFolders.find((folder) => 
-      folder.name.toLowerCase() === categoryLower
-    );
-    
-    if (matchingFolder) return matchingFolder;
-    
-    // Then try partial match
-    matchingFolder = smartFolders.find((folder) => 
-      folder.name.toLowerCase().includes(categoryLower) ||
-      categoryLower.includes(folder.name.toLowerCase())
-    );
-    
-    if (matchingFolder) return matchingFolder;
-    
-    // Finally, try keywords match
-    matchingFolder = smartFolders.find((folder) => {
-      if (!folder.keywords) return false;
-      return folder.keywords.some((keyword) => 
-        keyword.toLowerCase().includes(categoryLower) ||
-        categoryLower.includes(keyword.toLowerCase())
-      );
-    });
-    
-    return matchingFolder;
-  }, []);
-
-  // Organize files function
-  const organizeFiles = useCallback(async (filesToOrganize, smartFolders, documentsPath) => {
-    if (!filesToOrganize || filesToOrganize.length === 0) {
-      throw new Error('No files to organize');
+  /**
+   * Organize files according to analysis results and smart folders
+   * @param {Array} files - Array of files to organize
+   * @param {Array} smartFolders - Array of smart folder configurations
+   * @param {Object} options - Organization options
+   */
+  const organizeFiles = useCallback(async (files, smartFolders = [], options = {}) => {
+    if (isOrganizing) {
+      addNotification('Organization already in progress', 'warning');
+      return { success: false, error: 'Organization in progress' };
     }
 
     setIsOrganizing(true);
-    setBatchProgress({ current: 0, total: filesToOrganize.length, currentFile: '' });
-
+    setOrganizationProgress({ current: 0, total: files.length, currentFile: '' });
+    
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
+    
     try {
       const operations = [];
+      const results = [];
       
-      for (let i = 0; i < filesToOrganize.length; i++) {
-        const file = filesToOrganize[i];
-        const fileWithEdits = getFileWithEdits(file, i);
+      for (let i = 0; i < files.length; i++) {
+        if (abortControllerRef.current?.signal.aborted) {
+          throw new Error('Organization cancelled by user');
+        }
         
-        setBatchProgress({ 
-          current: i + 1, 
-          total: filesToOrganize.length, 
-          currentFile: file.name 
+        const file = files[i];
+        setOrganizationProgress({
+          current: i + 1,
+          total: files.length,
+          currentFile: file.name || file.path
         });
-
-        const category = fileWithEdits.analysis?.suggestedCategory || 'Uncategorized';
-        const suggestedName = fileWithEdits.analysis?.suggestedName || file.name;
         
-        // Find matching smart folder
-        const matchingFolder = findSmartFolderForCategory(category, smartFolders);
-        const targetDirectory = matchingFolder ? matchingFolder.path : `${documentsPath}/Uncategorized`;
+        // Determine target folder based on analysis and smart folders
+        const targetFolder = determineTargetFolder(file, smartFolders, options);
         
-        // Ensure file extension is preserved
-        const originalExtension = file.name.split('.').pop();
-        const finalName = suggestedName.includes('.') ? suggestedName : `${suggestedName}.${originalExtension}`;
-        const targetPath = `${targetDirectory}/${finalName}`;
+        if (targetFolder && targetFolder !== file.directory) {
+          const operation = {
+            type: 'move',
+            source: file.path,
+            destination: `${targetFolder}/${file.name}`,
+            file: file
+          };
+          
+          operations.push(operation);
+          
+          // Perform the actual file operation via IPC
+          try {
+            const result = await window.electronAPI.files.performOperation(operation);
+            results.push({
+              file: file.path,
+              success: true,
+              newPath: operation.destination,
+              operation: 'move'
+            });
+          } catch (error) {
+            results.push({
+              file: file.path,
+              success: false,
+              error: error.message,
+              operation: 'move'
+            });
+          }
+        } else {
+          results.push({
+            file: file.path,
+            success: true,
+            newPath: file.path,
+            operation: 'skip',
+            reason: 'Already in correct location'
+          });
+        }
+      }
+      
+      setOrganizedFiles(prev => [...prev, ...results.filter(r => r.success)]);
+      
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      
+      addNotification(
+        `Organization complete: ${successCount} files organized${failCount > 0 ? `, ${failCount} failed` : ''}`,
+        failCount > 0 ? 'warning' : 'success'
+      );
+      
+      return {
+        success: true,
+        operations: results.length,
+        successCount,
+        failCount,
+        results
+      };
+      
+    } catch (error) {
+      addNotification(`Organization failed: ${error.message}`, 'error');
+      return {
+        success: false,
+        error: error.message
+      };
+    } finally {
+      setIsOrganizing(false);
+      setOrganizationProgress({ current: 0, total: 0, currentFile: '' });
+      abortControllerRef.current = null;
+    }
+  }, [isOrganizing, addNotification]);
 
-        operations.push({
-          type: 'move',
-          source: file.path,
-          target: targetPath,
-          metadata: {
-            originalName: file.name,
-            suggestedName: finalName,
-            category,
-            smartFolder: matchingFolder?.name || 'Uncategorized',
-            analysis: fileWithEdits.analysis
+  /**
+   * Cancel ongoing organization operation
+   */
+  const cancelOrganization = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      addNotification('Organization cancelled', 'info');
+    }
+  }, [addNotification]);
+
+  /**
+   * Clear organized files history
+   */
+  const clearOrganizedFiles = useCallback(() => {
+    setOrganizedFiles([]);
+  }, []);
+
+  /**
+   * Get organization statistics
+   */
+  const getOrganizationStats = useCallback(() => {
+    return {
+      totalOrganized: organizedFiles.length,
+      isOrganizing,
+      progress: organizationProgress
+    };
+  }, [organizedFiles.length, isOrganizing, organizationProgress]);
+
+  return {
+    organizedFiles,
+    isOrganizing,
+    organizationProgress,
+    organizeFiles,
+    cancelOrganization,
+    clearOrganizedFiles,
+    getOrganizationStats
+  };
+}
+
+/**
+ * Determine target folder for a file based on analysis and smart folders
+ * @param {Object} file - File object with analysis results
+ * @param {Array} smartFolders - Array of smart folder configurations
+ * @param {Object} options - Organization options
+ * @returns {string|null} Target folder path or null if no move needed
+ */
+function determineTargetFolder(file, smartFolders, options = {}) {
+  // If file has analysis results, use them for smart folder matching
+  if (file.analysis) {
+    const { category, contentType, confidence } = file.analysis;
+    
+    // Find matching smart folder
+    const matchingFolder = smartFolders.find(folder => {
+      if (folder.rules) {
+        return folder.rules.some(rule => {
+          switch (rule.type) {
+            case 'category':
+              return rule.value.toLowerCase() === category?.toLowerCase();
+            case 'content_type':
+              return rule.value.toLowerCase() === contentType?.toLowerCase();
+            case 'confidence':
+              return confidence >= rule.value;
+            case 'file_type':
+              return file.extension?.toLowerCase() === rule.value.toLowerCase();
+            default:
+              return false;
           }
         });
       }
-
-      // Execute batch operations
-      const result = await window.electronAPI.files.executeBatchOperations(operations);
-      
-      if (result.success) {
-        const successfulOperations = result.results.filter((r) => r.success);
-        const failedOperations = result.results.filter((r) => !r.success);
-        
-        // Update organized files
-        const newOrganizedFiles = successfulOperations.map((op) => ({
-          originalPath: op.operation.source,
-          newPath: op.operation.target,
-          name: op.operation.metadata.suggestedName,
-          category: op.operation.metadata.category,
-          smartFolder: op.operation.metadata.smartFolder,
-          organizedAt: new Date().toISOString(),
-          analysis: op.operation.metadata.analysis
-        }));
-
-        setOrganizedFiles((prev) => [...prev, ...newOrganizedFiles]);
-        markFilesAsProcessed(successfulOperations.map((op) => op.operation.source));
-
-        return {
-          success: true,
-          organized: successfulOperations.length,
-          failed: failedOperations.length,
-          organizedFiles: newOrganizedFiles,
-          errors: failedOperations.map((op) => op.error)
-        };
-      } else {
-        throw new Error(result.error || 'Batch operation failed');
-      }
-    } catch (error) {
-      console.error('Organization failed:', error);
-      throw error;
-    } finally {
-      setIsOrganizing(false);
-      setBatchProgress({ current: 0, total: 0, currentFile: '' });
+      return false;
+    });
+    
+    if (matchingFolder) {
+      return matchingFolder.path;
     }
-  }, [getFileWithEdits, findSmartFolderForCategory, markFilesAsProcessed]);
+  }
+  
+  // Fallback to basic file type organization
+  if (options.useBasicOrganization) {
+    const extension = file.extension?.toLowerCase();
+    const basicFolders = {
+      'pdf': 'Documents/PDFs',
+      'doc': 'Documents',
+      'docx': 'Documents',
+      'txt': 'Documents/Text',
+      'jpg': 'Pictures',
+      'jpeg': 'Pictures',
+      'png': 'Pictures',
+      'gif': 'Pictures',
+      'mp4': 'Videos',
+      'avi': 'Videos',
+      'mov': 'Videos',
+      'mp3': 'Music',
+      'wav': 'Music',
+      'flac': 'Music'
+    };
+    
+    return basicFolders[extension] || null;
+  }
+  
+  return null;
+}
 
-  return {
-    // State
-    organizedFiles,
-    isOrganizing,
-    batchProgress,
-    processedFileIds,
-    selectedFiles,
-    editingFiles,
-    
-    // Actions
-    markFilesAsProcessed,
-    unmarkFilesAsProcessed,
-    toggleFileSelection,
-    selectAllFiles,
-    clearSelection,
-    handleEditFile,
-    getFileWithEdits,
-    findSmartFolderForCategory,
-    organizeFiles,
-    
-    // Setters for loading persisted data
-    setOrganizedFiles,
-    setProcessedFileIds
-  };
-} 
+export default useFileOrganization; 

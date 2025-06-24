@@ -247,9 +247,7 @@ Respond with JSON:
 /**
  * Perform enhanced multi-step image analysis
  */
-/* eslint-disable no-unused-vars */
-async function _performEnhancedImageAnalysis(imageBase64, fileName, smartFolders, userContext) {
-/* eslint-enable no-unused-vars */
+async function performEnhancedImageAnalysis(imageBase64, fileName, smartFolders, userContext) {
   try {
     // Step 1: Visual content analysis
     const visualAnalysis = await analyzeVisualContent(imageBase64, fileName);

@@ -70,11 +70,6 @@ class PerformanceOptimizer extends EventEmitter {
     // Initialize cleanup intervals with proper cleanup
     this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), 5 * 60 * 1000); // Every 5 minutes
     this.memoryMonitorInterval = setInterval(() => this.monitorMemoryUsage(), 30000); // Every 30 seconds
-    
-    logger.info('Performance optimizer initialized', {
-      component: 'performance-optimizer',
-      features: ['caching', 'concurrency-control']
-    });
   }
 
   /**
@@ -139,7 +134,11 @@ class PerformanceOptimizer extends EventEmitter {
       this.updatePerformanceMetrics(result.processingTime);
     }
     
-    console.log(`[PERF-CACHE] Cached ${analysisType} analysis result`);
+    logger.debug('Cached analysis result', { 
+      component: 'performance-optimizer',
+      analysisType,
+      cacheKey: this.generateCacheKey(contentHash, analysisType, smartFolders)
+    });
   }
 
   /**
@@ -161,7 +160,12 @@ class PerformanceOptimizer extends EventEmitter {
         selectedModel = this.config.standardModels[0] || 'gemma3:4b';
     }
     
-    console.log(`[PERF-MODEL] Selected ${selectedModel} for ${complexity} content`);
+    logger.debug('Selected optimal model for content complexity', { 
+      component: 'performance-optimizer',
+      selectedModel,
+      complexity,
+      analysisType
+    });
     return selectedModel;
   }
 
@@ -189,7 +193,12 @@ class PerformanceOptimizer extends EventEmitter {
       timeout *= 1.5;
     }
     
-    console.log(`[PERF-TIMEOUT] Set ${timeout}ms timeout for ${complexity} content`);
+    logger.debug('Set optimal timeout for content complexity', { 
+      component: 'performance-optimizer',
+      timeout,
+      complexity,
+      analysisType
+    });
     return timeout;
   }
 
@@ -221,7 +230,13 @@ class PerformanceOptimizer extends EventEmitter {
     
     const optimizedContent = `${beginning}\n\n[CONTENT SUMMARY: ${summary}]\n\n${end}`;
     
-    console.log(`[PERF-TRUNCATE] Optimized content from ${content.length} to ${optimizedContent.length} chars`);
+    logger.debug('Optimized content for analysis', { 
+      component: 'performance-optimizer',
+      originalLength: content.length,
+      optimizedLength: optimizedContent.length,
+      contentType,
+      complexity
+    });
     return optimizedContent;
   }
 
@@ -233,7 +248,11 @@ class PerformanceOptimizer extends EventEmitter {
     const maxConcurrent = this.config.maxConcurrentAnalyses;
     const results = [];
     
-    console.log(`[PERF-CONCURRENT] Processing ${analysisRequests.length} analyses with max ${maxConcurrent} concurrent`);
+    logger.info('Starting concurrent analysis processing', { 
+      component: 'performance-optimizer',
+      totalRequests: analysisRequests.length,
+      maxConcurrent
+    });
     
     for (let i = 0; i < analysisRequests.length; i += maxConcurrent) {
       const batch = analysisRequests.slice(i, i + maxConcurrent);
@@ -259,7 +278,11 @@ class PerformanceOptimizer extends EventEmitter {
             batchIndex: i + index
           };
         } catch (error) {
-          console.error('[PERF-CONCURRENT] Batch analysis failed:', error.message);
+          logger.error('Batch analysis failed', { 
+            component: 'performance-optimizer',
+            error: error.message,
+            batchIndex: i + index
+          });
           return {
             error: error.message,
             batchIndex: i + index,
@@ -328,7 +351,10 @@ class PerformanceOptimizer extends EventEmitter {
       const memoryDelta = finalMemory.heapUsed - initialMemory.heapUsed;
       
       if (memoryDelta > 50 * 1024 * 1024) { // 50MB threshold
-        console.log(`[PERF-MEMORY] High memory usage detected: ${Math.round(memoryDelta / 1024 / 1024)}MB`);
+        logger.warn('High memory usage detected during processing', { 
+          component: 'performance-optimizer',
+          memoryUsageMB: Math.round(memoryDelta / 1024 / 1024)
+        });
         
         // Trigger cleanup if memory usage is high
         this.performMemoryCleanup();
@@ -583,6 +609,14 @@ class PerformanceOptimizer extends EventEmitter {
    */
   isConcurrentProcessingEnabled() {
     return this.config.concurrentProcessing.enabled;
+  }
+
+  /**
+   * Compatibility initializer (called by ServiceIntegration).
+   * The optimizer already sets itself up in the constructor, so this is a no-op.
+   */
+  async initialize() {
+    return Promise.resolve();
   }
 }
 

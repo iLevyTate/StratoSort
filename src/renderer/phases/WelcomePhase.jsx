@@ -48,7 +48,7 @@ function WelcomePhase() {
 
   return (
     <PhaseLayout>
-      <div className="phase-content animate-fade-in-up">
+      <div className="phase-content-compact animate-fade-in-up">
         {/* Hero Section - Compact */}
         <div className="welcome-hero">
           <div className="text-4xl mb-3">🚀</div>
@@ -74,7 +74,7 @@ function WelcomePhase() {
         </div>
 
         {/* Privacy & Security Note - Compact */}
-        <div className="glass-card text-center max-w-lg">
+        <div className="glass-card text-center max-w-lg mx-auto">
           <div className="text-lg mb-1">🔒</div>
           <h3 className="text-on-glass text-sm font-bold mb-1">Privacy First</h3>
           <p className="text-readable-light text-xs">
@@ -82,9 +82,9 @@ function WelcomePhase() {
           </p>
         </div>
 
-        {/* Action Buttons - Fixed bottom */}
-        <div className="phase-actions fixed bottom-8 left-1/2 -translate-x-1/2 z-20">
-          <div className="action-buttons flex flex-col sm:flex-row justify-center gap-3">
+        {/* Action Buttons - Proper layout */}
+        <div className="phase-actions">
+          <div className="action-buttons">
             <Button 
               variant="secondary"
               size="sm"

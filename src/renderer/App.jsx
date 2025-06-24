@@ -15,15 +15,17 @@ import NavigationBar from './components/NavigationBar';
 import PerformanceMonitor, { PerformanceProvider } from './components/PerformanceMonitor';
 import ProgressIndicator from './components/ProgressIndicator';
 import Toast from './components/Toast';
-import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
+import { UndoRedoProvider } from './components/UndoRedoSystem';
 import { NotificationProvider , useNotification } from './contexts/NotificationContext';
 import { PhaseProvider, usePhase } from './contexts/PhaseContext';
+import { ProgressProvider } from './contexts/ProgressContext';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import CompletePhase from './phases/CompletePhase';
 import DiscoverPhase from './phases/DiscoverPhase';
 import OrganizePhase from './phases/OrganizePhase';
 import SetupPhase from './phases/SetupPhase';
 import WelcomePhase from './phases/WelcomePhase';
+import { useErrorHandler } from './utils/ErrorHandling';
 
 // Import enhanced UI components
 // LoadingSkeleton components
@@ -105,6 +107,7 @@ function useConfirmDialog() {
 function SettingsPanel() {
   const { actions } = usePhase();
   const { addNotification } = useNotification();
+  const { handleError } = useErrorHandler();
   const [settings, setSettings] = useState({
     ollamaModel: 'gemma3:4b', // Multimodal model for both text and vision analysis
     ollamaHost: 'http://localhost:11434',
@@ -144,7 +147,7 @@ function SettingsPanel() {
         setSettings((prev) => ({ ...prev, ...savedSettings }));
       }
     } catch (error) {
-      // Failed to load settings
+      handleError(error, 'Settings Load', false);
     }
   };
 
@@ -154,7 +157,7 @@ function SettingsPanel() {
       // Handle the response structure: { models: [], selectedModel: '', ollamaHealth: {} }
       setOllamaModels(response?.models || []);
     } catch (error) {
-      console.error('Failed to load Ollama models:', error);
+      handleError(error, 'Ollama Models Load', false);
       setOllamaModels([]); // Ensure it's always an array
     }
   };
@@ -164,8 +167,7 @@ function SettingsPanel() {
       await window.electronAPI.settings.save(settings);
       addNotification('Settings saved successfully!', 'success');
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      addNotification('Failed to save settings', 'error');
+      handleError(error, 'Settings Save');
     }
   };
 
@@ -524,27 +526,34 @@ function App() {
     <PhaseProvider>
       <NotificationProvider>
         <UndoRedoProvider>
-          <PerformanceProvider>
-            <div className="h-screen w-screen overflow-hidden flex flex-col phase-container"
-              style={{ padding: 0 }}>
-              {/* Navigation - Fixed height */}
-              <NavigationBar />
-              
-              {/* Progress Indicator - Fixed height */}
-              <ProgressIndicator />
-              
-              {/* Main Content - Fills remaining space */}
-              <main className="flex-1 overflow-hidden">
-                <PhaseRenderer />
-              </main>
-              
-              {/* Toast notifications */}
-              <Toast />
-              
-              {/* Performance Monitor - Development only */}
-              {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
-            </div>
-          </PerformanceProvider>
+          <ProgressProvider>
+            <PerformanceProvider>
+              <div className="h-screen w-screen overflow-hidden flex flex-col phase-container"
+                style={{ padding: 0 }}>
+                {/* Navigation - Fixed height */}
+                <NavigationBar />
+                
+                {/* Progress Indicator - Fixed height */}
+                <ProgressIndicator />
+                
+                {/* Main Content - Fills remaining space */}
+                <main 
+                  id="main-content" 
+                  className="flex-1 overflow-hidden"
+                  role="main"
+                  aria-label="Main application content"
+                >
+                  <PhaseRenderer />
+                </main>
+                
+                {/* Toast notifications */}
+                <Toast />
+                
+                {/* Performance Monitor - Development only */}
+                {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
+              </div>
+            </PerformanceProvider>
+          </ProgressProvider>
         </UndoRedoProvider>
       </NotificationProvider>
     </PhaseProvider>

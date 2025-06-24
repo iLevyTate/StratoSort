@@ -5,9 +5,17 @@
   "asarUnpack": "**\\*.{node,dll}",
   "files": [
     "dist/**/*",
-    "src/main/**/*",
-    "src/preload/**/*", 
+    "src/main/simple-main.js",
+    "src/main/index.js",
+    "src/main/services/**/*",
+    "src/main/analysis/**/*",
+    "src/main/errors/**/*",
+    "src/main/ipcHandlers/**/*",
+    "src/main/managers/**/*",
+    "src/preload/preload.js",
+    "src/preload/index.js",
     "src/shared/**/*",
+    "node_modules/**/*",
     "package.json"
   ],
   "extraMetadata": {
@@ -16,7 +24,7 @@
   },
   "directories": {
     "buildResources": "assets",
-    "output": "release/build"
+    "output": "release"
   },
   "win": {
     "icon": "assets/icons/icons/win/icon.ico",

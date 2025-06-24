@@ -15,7 +15,7 @@ module.exports = (env, argv) => {
       filename: 'renderer.js',
       clean: false // Don't clean when building multiple targets
     },
-    target: 'electron-renderer',
+    target: 'web',
     module: {
       rules: [
         {
@@ -51,13 +51,14 @@ module.exports = (env, argv) => {
         'url': require.resolve('url'),
         'querystring': require.resolve('querystring-es3'),
         'assert': require.resolve('assert'),
+        'events': require.resolve('events/'),
         'fs': false,
         'child_process': false,
         'worker_threads': false
       }
     },
     externals: {
-      electron: 'require("electron")'
+      // Remove externals for web target
     },
     plugins: [
       new HtmlWebpackPlugin({
@@ -67,13 +68,15 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
-        'global': 'globalThis'
+        'process.env.MODEL_PATH': JSON.stringify(process.env.MODEL_PATH || ''),
+        'global': JSON.stringify('globalThis')
       }),
       new webpack.ProvidePlugin({
         process: 'process/browser',
         Buffer: ['buffer', 'Buffer'],
         React: 'react',
-        ReactDOM: 'react-dom'
+        ReactDOM: 'react-dom',
+        global: 'globalThis'
       })
     ],
     devtool: isProduction ? false : 'source-map',
@@ -85,7 +88,7 @@ module.exports = (env, argv) => {
       port: 3000,
       hot: true,
       headers: {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
       }
     },
     optimization: {

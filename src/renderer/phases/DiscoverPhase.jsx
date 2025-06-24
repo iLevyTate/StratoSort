@@ -61,9 +61,9 @@ function DiscoverPhase() {
   }, [phaseData, loadPersistedAnalysis, loadPersistedNaming]);
 
   // Drag and drop handling
-  const { isDragging, dragHandlers } = useDragAndDrop({
-    onDrop: handleFileDrop,
-    accept: ['.pdf', '.doc', '.docx', '.txt', '.md', '.jpg', '.png', '.gif']
+  const { isDragActive, DropZone } = useDragAndDrop({
+    onFilesDropped: handleFileDrop,
+    acceptedTypes: ['.pdf', '.doc', '.docx', '.txt', '.md', '.jpg', '.png', '.gif']
   });
 
   // Handle file drop
@@ -238,20 +238,20 @@ function DiscoverPhase() {
     switch (discoveryMethod) {
       case 'drag':
         return (
-          <div 
-            className={`glass-card p-6 text-center transition-all ${
-              isDragging ? 'glass-card-strong scale-105' : ''
+          <DropZone 
+            className={`glass-card transition-all ${
+              isDragActive ? 'glass-card-strong scale-105' : ''
             }`}
-            {...dragHandlers}
+            showInstructions={false}
           >
             <div className="text-4xl mb-2">📁</div>
             <h3 className="text-on-glass text-lg font-bold mb-1">
-              {isDragging ? 'Drop files here' : 'Drag & Drop Files'}
+              {isDragActive ? 'Drop files here' : 'Drag & Drop Files'}
             </h3>
             <p className="text-readable-light text-sm">
               Drag files or folders directly into this area
             </p>
-          </div>
+          </DropZone>
         );
 
       case 'files':

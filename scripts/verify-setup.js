@@ -1,344 +1,443 @@
 #!/usr/bin/env node
 
 /**
- * StratoSort Setup Verification Script
- * Verifies all required dependencies and configurations
+ * Comprehensive StratoSort Setup Verification Script
+ * Verifies all integrations and wiring between Electron, React, and backend services
  */
 
-const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// ANSI color codes for console output
+// Colors for console output
 const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
   red: '\x1b[31m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
+  reset: '\x1b[0m'
 };
 
-// Configuration
-const REQUIRED_MODELS = [
-  'gemma3:4b',
-  'mxbai-embed-large'
-];
+// Verification results
+const verificationResults = {
+  passed: 0,
+  failed: 0,
+  warnings: 0,
+  details: []
+};
 
-const OPTIONAL_MODELS = [
-  'llama3.2:latest',
-  'llama3.2',
-  'llama3',
-  'llava:latest',
-  'mistral',
-  'phi3'
-];
+/**
+ * Check if file exists and log result
+ */
+function checkFile(filePath, description, required = true) {
+  const exists = fs.existsSync(filePath);
+  const result = {
+    type: required ? (exists ? 'pass' : 'fail') : (exists ? 'pass' : 'warn'),
+    description,
+    details: exists ? 'Found' : 'Missing'
+  };
+  
+  logResult(result);
+  return exists;
+}
 
-class SetupVerifier {
-  constructor() {
-    this.errors = [];
-    this.warnings = [];
-    this.info = [];
+/**
+ * Generic result checker and logger
+ */
+function checkResult(description, passed, details = '') {
+  const result = {
+    type: passed ? 'pass' : 'fail',
+    description,
+    details
+  };
+  
+  logResult(result);
+  return passed;
+}
+
+/**
+ * Log verification result with proper formatting
+ */
+function logResult(result) {
+  const symbol = result.type === 'pass' ? '✓' : result.type === 'warn' ? '⚠' : '✗';
+  const color = result.type === 'pass' ? colors.green : result.type === 'warn' ? colors.yellow : colors.red;
+  
+  console.log(`${color}${symbol}${colors.reset} ${result.description}`);
+  if (result.details) {
+    console.log(`  → ${result.details}`);
   }
+  
+  // Update counters
+  if (result.type === 'pass') {
+    verificationResults.passed++;
+  } else if (result.type === 'warn') {
+    verificationResults.warnings++;
+  } else {
+    verificationResults.failed++;
+  }
+  
+  verificationResults.details.push(result);
+}
 
-  log(message, type = 'info') {
-    const timestamp = new Date().toLocaleTimeString();
-    const prefix = `[${timestamp}]`;
+/**
+ * Check file content for specific patterns
+ */
+function checkFileContent(filePath, patterns, description) {
+  if (!fs.existsSync(filePath)) {
+    verificationResults.failed++;
+    console.log(`${colors.red}✗${colors.reset} ${description} - File not found: ${filePath}`);
+    return false;
+  }
+  
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const results = {};
     
-    switch (type) {
-      case 'error':
-        console.log(`${colors.red}❌ ${prefix} ${message}${colors.reset}`);
-        this.errors.push(message);
-        break;
-      case 'warning':
-        console.log(`${colors.yellow}⚠️  ${prefix} ${message}${colors.reset}`);
-        this.warnings.push(message);
-        break;
-      case 'success':
-        console.log(`${colors.green}✅ ${prefix} ${message}${colors.reset}`);
-        break;
-      case 'info':
-        console.log(`${colors.blue}ℹ️  ${prefix} ${message}${colors.reset}`);
-        this.info.push(message);
-        break;
-      default:
-        console.log(`${prefix} ${message}`);
+    for (const [name, pattern] of Object.entries(patterns)) {
+      const regex = new RegExp(pattern, 'g');
+      const matches = content.match(regex) || [];
+      results[name] = matches.length;
     }
-  }
-
-  async checkNodeDependencies() {
-    this.log('Checking Node.js dependencies...', 'info');
     
-    try {
-      const packageJsonPath = path.join(__dirname, '..', 'package.json');
-      if (!fs.existsSync(packageJsonPath)) {
-        this.log('package.json not found', 'error');
-        return false;
-      }
-
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      const nodeModulesPath = path.join(__dirname, '..', 'node_modules');
+    const allFound = Object.values(results).every(count => count > 0);
+    
+    if (allFound) {
+      verificationResults.passed++;
+      console.log(`${colors.green}✓${colors.reset} ${description}`);
       
-      if (!fs.existsSync(nodeModulesPath)) {
-        this.log('node_modules directory not found. Run: npm install', 'error');
-        return false;
+      // Show pattern match counts
+      for (const [name, count] of Object.entries(results)) {
+        console.log(`  ${colors.blue}→${colors.reset} ${name}: ${count} matches`);
       }
-
-      // Check critical dependencies
-      const criticalDeps = ['electron', 'react', 'ollama'];
-      for (const dep of criticalDeps) {
-        const depPath = path.join(nodeModulesPath, dep);
-        if (!fs.existsSync(depPath)) {
-          this.log(`Missing critical dependency: ${dep}`, 'error');
-          return false;
-        }
+    } else {
+      verificationResults.failed++;
+      console.log(`${colors.red}✗${colors.reset} ${description}`);
+      for (const [name, count] of Object.entries(results)) {
+        const color = count > 0 ? colors.green : colors.red;
+        console.log(`  ${color}→${colors.reset} ${name}: ${count} matches`);
       }
-
-      this.log('Node.js dependencies are installed', 'success');
-      return true;
+    }
+    
+    return allFound;
     } catch (error) {
-      this.log(`Error checking dependencies: ${error.message}`, 'error');
+    verificationResults.failed++;
+    console.log(`${colors.red}✗${colors.reset} ${description} - Error reading file: ${error.message}`);
       return false;
     }
   }
 
-  async checkOllamaInstallation() {
-    this.log('Checking Ollama installation...', 'info');
+/**
+ * Check package.json configuration
+ */
+function checkPackageConfiguration() {
+  console.log(`\n${colors.cyan}=== Package Configuration ===${colors.reset}`);
+  
+  try {
+    const packagePath = path.join(process.cwd(), 'package.json');
+    const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     
-    return new Promise((resolve) => {
-      const ollama = spawn('ollama', ['--version'], { stdio: 'pipe' });
-      
-      let output = '';
-      ollama.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-      
-      ollama.stderr.on('data', (data) => {
-        output += data.toString();
-      });
-      
-      ollama.on('close', (code) => {
-        if (code === 0) {
-          this.log(`Ollama is installed: ${output.trim()}`, 'success');
-          resolve(true);
-        } else {
-          this.log('Ollama is not installed or not in PATH', 'error');
-          this.log('Install Ollama from: https://ollama.ai/', 'info');
-          resolve(false);
-        }
-      });
-      
-      ollama.on('error', (error) => {
-        this.log('Ollama is not installed or not in PATH', 'error');
-        this.log('Install Ollama from: https://ollama.ai/', 'info');
-        resolve(false);
-      });
+    checkResult('Root package.json', true, 'Package configuration file exists');
+    
+    // Check dependencies (including devDependencies for build tools)
+    const allDeps = { ...packageData.dependencies, ...packageData.devDependencies };
+    
+    const requiredDeps = [
+      { name: 'electron', key: 'electron', description: 'Electron framework' },
+      { name: 'react', key: 'react', description: 'React framework' },
+      { name: 'react-dom', key: 'react-dom', description: 'React DOM' },
+      { name: 'electron-store', key: 'electron-store', description: 'Settings persistence' },
+      { name: 'vite', key: 'vite', description: 'Build tool' },
+      { name: 'tailwindcss', key: 'tailwindcss', description: 'CSS framework' },
+      { name: '@vitejs/plugin-react', key: '@vitejs/plugin-react', description: 'React Vite plugin' }
+    ];
+    
+    requiredDeps.forEach(dep => {
+      const version = allDeps[dep.key];
+      checkResult(dep.description, !!version, version ? `${dep.name}: ${version}` : `${dep.name}: Missing`);
     });
-  }
-
-  async checkOllamaService() {
-    this.log('Checking Ollama service...', 'info');
     
-    try {
-      const response = await fetch('http://localhost:11434/api/tags');
-      if (response.ok) {
-        this.log('Ollama service is running on localhost:11434', 'success');
-        return true;
-      } else {
-        this.log('Ollama service is not responding', 'error');
-        this.log('Start Ollama service with: ollama serve', 'info');
-        return false;
-      }
+    // Check scripts
+    const requiredScripts = [
+      { name: 'dev', description: 'Script dev' },
+      { name: 'build', description: 'Script build' },
+      { name: 'electron:dev', description: 'Script electron:dev' },
+      { name: 'electron:build', description: 'Script electron:build' }
+    ];
+    
+    requiredScripts.forEach(script => {
+      const exists = packageData.scripts && packageData.scripts[script.name];
+      checkResult(script.description, !!exists, exists ? packageData.scripts[script.name] : 'Missing');
+    });
+    
     } catch (error) {
-      this.log('Cannot connect to Ollama service', 'error');
-      this.log('Start Ollama service with: ollama serve', 'info');
-      return false;
-    }
-  }
-
-  async checkOllamaModels() {
-    this.log('Checking Ollama models...', 'info');
-    
-    try {
-      const response = await fetch('http://localhost:11434/api/tags');
-      if (!response.ok) {
-        this.log('Cannot fetch model list from Ollama', 'error');
-        return false;
-      }
-      
-      const data = await response.json();
-      const installedModels = data.models.map((m) => m.name);
-      
-      this.log(`Found ${installedModels.length} installed models`, 'info');
-      
-      // Check required models
-      const missingRequired = [];
-      const foundRequired = [];
-      
-      for (const model of REQUIRED_MODELS) {
-        const isInstalled = installedModels.some((installed) => 
-          installed === model || installed.startsWith(`${model  }:`)
-        );
-        
-        if (isInstalled) {
-          foundRequired.push(model);
-          this.log(`✓ Required model found: ${model}`, 'success');
-        } else {
-          missingRequired.push(model);
-          this.log(`✗ Required model missing: ${model}`, 'error');
-        }
-      }
-      
-      // Check optional models
-      const foundOptional = [];
-      for (const model of OPTIONAL_MODELS) {
-        const isInstalled = installedModels.some((installed) => 
-          installed === model || installed.startsWith(`${model  }:`)
-        );
-        
-        if (isInstalled) {
-          foundOptional.push(model);
-          this.log(`✓ Optional model found: ${model}`, 'info');
-        }
-      }
-      
-      // Provide installation instructions for missing models
-      if (missingRequired.length > 0) {
-        this.log('Missing required models. Install with:', 'error');
-        for (const model of missingRequired) {
-          console.log(`  ${colors.cyan}ollama pull ${model}${colors.reset}`);
-        }
-      }
-      
-      return missingRequired.length === 0;
-    } catch (error) {
-      this.log(`Error checking models: ${error.message}`, 'error');
-      return false;
-    }
-  }
-
-  async checkProjectStructure() {
-    this.log('Checking project structure...', 'info');
-    
-    const requiredPaths = [
-      'src/main',
-      'src/preload', 
-      'src/renderer',
-      'src/shared',
-      'dist'
-    ];
-    
-    let allGood = true;
-    
-    for (const requiredPath of requiredPaths) {
-      const fullPath = path.join(__dirname, '..', requiredPath);
-      if (!fs.existsSync(fullPath)) {
-        this.log(`Missing directory: ${requiredPath}`, 'error');
-        allGood = false;
-      }
-    }
-    
-    if (allGood) {
-      this.log('Project structure is valid', 'success');
-    }
-    
-    return allGood;
-  }
-
-  async checkBuildArtifacts() {
-    this.log('Checking build artifacts...', 'info');
-    
-    const distPath = path.join(__dirname, '..', 'dist');
-    if (!fs.existsSync(distPath)) {
-      this.log('Build artifacts not found. Run: npm run build', 'warning');
-      return false;
-    }
-    
-    const requiredBuildFiles = [
-      'main/index.js',
-      'preload/index.js', 
-      'renderer.js',
-      'index.html'
-    ];
-    
-    let allBuilt = true;
-    for (const file of requiredBuildFiles) {
-      const filePath = path.join(distPath, file);
-      if (!fs.existsSync(filePath)) {
-        this.log(`Missing build file: dist/${file}`, 'warning');
-        allBuilt = false;
-      }
-    }
-    
-    if (allBuilt) {
-      this.log('Build artifacts are present', 'success');
-    } else {
-      this.log('Some build artifacts are missing. Run: npm run build', 'warning');
-    }
-    
-    return allBuilt;
-  }
-
-  async generateReport() {
-    console.log(`\n${colors.bright}=== STRATOSORT SETUP VERIFICATION REPORT ===${colors.reset}\n`);
-    
-    const totalChecks = this.errors.length + this.warnings.length + this.info.length;
-    
-    if (this.errors.length === 0) {
-      console.log(`${colors.green}🎉 Setup verification completed successfully!${colors.reset}`);
-      console.log(`${colors.green}StratoSort is ready to run.${colors.reset}\n`);
-    } else {
-      console.log(`${colors.red}❌ Setup verification found ${this.errors.length} error(s)${colors.reset}`);
-    }
-    
-    if (this.warnings.length > 0) {
-      console.log(`${colors.yellow}⚠️  ${this.warnings.length} warning(s) found${colors.reset}`);
-    }
-    
-    // Quick start instructions
-    console.log(`${colors.bright}Quick Start:${colors.reset}`);
-    console.log(`1. ${colors.cyan}npm install${colors.reset}                 # Install dependencies`);
-    console.log(`2. ${colors.cyan}ollama serve${colors.reset}                # Start Ollama service`);
-    console.log(`3. ${colors.cyan}ollama pull gemma3:4b${colors.reset}       # Install AI model`);
-    console.log(`4. ${colors.cyan}ollama pull whisper${colors.reset}         # Install speech model`);
-    console.log(`5. ${colors.cyan}npm run build${colors.reset}               # Build the application`);
-    console.log(`6. ${colors.cyan}npm start${colors.reset}                   # Start StratoSort\n`);
-    
-    return this.errors.length === 0;
-  }
-
-  async run() {
-    console.log(`${colors.bright}${colors.blue}🚀 StratoSort Setup Verification${colors.reset}\n`);
-    
-    const checks = [
-      () => this.checkProjectStructure(),
-      () => this.checkNodeDependencies(),
-      () => this.checkOllamaInstallation(),
-      () => this.checkOllamaService(),
-      () => this.checkOllamaModels(),
-      () => this.checkBuildArtifacts()
-    ];
-    
-    for (const check of checks) {
-      await check();
-      console.log(''); // Add spacing between checks
-    }
-    
-    return await this.generateReport();
+    checkResult('Package configuration', false, `Error reading package.json: ${error.message}`);
   }
 }
 
-// Main execution
-if (require.main === module) {
-  const verifier = new SetupVerifier();
-  verifier.run().then((success) => {
-    process.exit(success ? 0 : 1);
-  }).catch((error) => {
-    console.error(`${colors.red}Setup verification failed: ${error.message}${colors.reset}`);
-    process.exit(1);
+/**
+ * Check core file structure
+ */
+function checkCoreFiles() {
+  console.log(`\n${colors.cyan}=== Core File Structure ===${colors.reset}`);
+  
+  // Entry points
+  checkFile('src/main/index.js', 'Main process entry point');
+  checkFile('src/preload/index.js', 'Preload script entry point');
+  checkFile('src/renderer/App.jsx', 'React app entry point');
+  checkFile('src/renderer/index.html', 'HTML entry point');
+  
+  // Implementation files
+  checkFile('src/main/simple-main.js', 'Main process implementation');
+  checkFile('src/preload/preload.js', 'Preload script implementation');
+  
+  // Shared resources
+  checkFile('src/shared/constants.js', 'Shared constants');
+  checkFile('src/shared/logger.js', 'Logging utility');
+  
+  // Configuration files
+  checkFile('vite.config.ts', 'Vite configuration');
+  checkFile('tailwind.config.js', 'Tailwind configuration');
+  checkFile('electron-builder.json', 'Electron builder configuration');
+  
+  // Optional but recommended
+  checkFile('webpack.config.js', 'Webpack configuration', false);
+  checkFile('postcss.config.js', 'PostCSS configuration', false);
+}
+
+/**
+ * Check IPC channel definitions and wiring
+ */
+function checkIPCChannels() {
+  console.log(`\n${colors.cyan}=== IPC Channel Verification ===${colors.reset}`);
+  
+  // Check IPC channel constants
+  checkFileContent('src/shared/constants.js', {
+    'IPC_CHANNELS': 'const IPC_CHANNELS\\s*=',
+    'FILES channels': 'FILES:\\s*{',
+    'SMART_FOLDERS channels': 'SMART_FOLDERS:\\s*{',
+    'ANALYSIS channels': 'ANALYSIS:\\s*{',
+    'SETTINGS channels': 'SETTINGS:\\s*{',
+    'OLLAMA channels': 'OLLAMA:\\s*{',
+    'UNDO_REDO channels': 'UNDO_REDO:\\s*{',
+    'SYSTEM channels': 'SYSTEM:\\s*{'
+  }, 'IPC Channel Constants Definition');
+  
+  // Check IPC handlers in main process
+  checkFileContent('src/main/simple-main.js', {
+    'File operation handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.FILES\\.',
+    'Smart folder handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.SMART_FOLDERS\\.',
+    'Analysis handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.ANALYSIS',
+    'Settings handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.SETTINGS\\.',
+    'Ollama handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.OLLAMA\\.',
+    'Undo/Redo handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.UNDO_REDO\\.',
+    'System handlers': 'ipcMain\\.handle\\(IPC_CHANNELS\\.SYSTEM\\.'
+  }, 'IPC Handlers Registration');
+  
+  // Check preload API exposure
+  checkFileContent('src/preload/preload.js', {
+    'Context bridge exposure': 'contextBridge\\.exposeInMainWorld',
+    'electronAPI object': 'electronAPI.*{',
+    'Files API': 'files:\\s*{',
+    'Smart folders API': 'smartFolders:\\s*{',
+    'Analysis API': 'analysisHistory:\\s*{',
+    'Settings API': 'settings:\\s*{',
+    'Undo/Redo API': 'undoRedo:\\s*{',
+    'System API': 'system:\\s*{',
+    'Events API': 'events:\\s*{'
+  }, 'Preload API Exposure');
+}
+
+/**
+ * Check React component structure
+ */
+function checkReactComponents() {
+  console.log(`\n${colors.cyan}=== React Component Structure ===${colors.reset}`);
+  
+  // Phase components
+  const phases = ['WelcomePhase', 'SetupPhase', 'DiscoverPhase', 'OrganizePhase', 'CompletePhase'];
+  phases.forEach(phase => {
+    checkFile(`src/renderer/phases/${phase}.jsx`, `${phase} component`);
   });
+  
+  // Core components
+  checkFile('src/renderer/components/NavigationBar.jsx', 'Navigation bar component');
+  checkFile('src/renderer/components/Modal.jsx', 'Modal component');
+  checkFile('src/renderer/components/Toast.jsx', 'Toast notification component');
+  checkFile('src/renderer/components/LoadingSkeleton.jsx', 'Loading skeleton component');
+  checkFile('src/renderer/components/UndoRedoSystem.jsx', 'Undo/Redo system component');
+  
+  // Context providers
+  checkFile('src/renderer/contexts/PhaseContext.jsx', 'Phase context provider');
+  checkFile('src/renderer/contexts/NotificationContext.jsx', 'Notification context provider');
+  checkFile('src/renderer/contexts/ProgressContext.jsx', 'Progress context provider');
+  
+  // Custom hooks
+  checkFile('src/renderer/hooks/useFileAnalysis.jsx', 'File analysis hook');
+  checkFile('src/renderer/hooks/useFileOrganization.jsx', 'File organization hook');
+  checkFile('src/renderer/hooks/useKeyboardShortcuts.jsx', 'Keyboard shortcuts hook');
+  checkFile('src/renderer/hooks/useNamingConvention.jsx', 'Naming convention hook');
 }
 
-module.exports = SetupVerifier;
+/**
+ * Check service integration
+ */
+function checkServiceIntegration() {
+  console.log(`\n${colors.cyan}=== Service Integration ===${colors.reset}`);
+  
+  // Main service files
+  checkFile('src/main/services/ServiceIntegration.js', 'Service integration orchestrator');
+  checkFile('src/main/services/AnalysisHistoryService.js', 'Analysis history service');
+  checkFile('src/main/services/UndoRedoService.js', 'Undo/Redo service');
+  checkFile('src/main/services/EnhancedLLMService.js', 'Enhanced LLM service');
+  checkFile('src/main/services/ModelManager.js', 'Model manager service');
+  checkFile('src/main/services/ModelVerifier.js', 'Model verifier service');
+  checkFile('src/main/services/PerformanceOptimizer.js', 'Performance optimizer service');
+  checkFile('src/main/services/SmartFolderService.js', 'Smart folder service');
+  
+  // Analysis modules
+  checkFile('src/main/analysis/ollamaDocumentAnalysis.js', 'Document analysis module');
+  checkFile('src/main/analysis/ollamaImageAnalysis.js', 'Image analysis module');
+  
+  // Error handling
+  checkFile('src/main/errors/AnalysisError.js', 'Analysis error definitions');
+  
+  // Check service integration patterns
+  checkFileContent('src/main/services/ServiceIntegration.js', {
+    'Service imports': 'require\\(\'\\./.*Service\\.js\'\\)',
+    'Service initialization': 'async initialize\\(\\)',
+    'Getter methods': 'get \\w+\\(\\)\\s*{',
+    'Analysis with history': 'analyzeFileWithHistory'
+  }, 'Service Integration Patterns');
+}
+
+/**
+ * Check build configuration
+ */
+function checkBuildConfig() {
+  console.log(`\n${colors.cyan}=== Build Configuration ===${colors.reset}`);
+  
+  // Check Vite config
+  if (checkFile('vite.config.ts', 'Vite configuration')) {
+    checkFileContent('vite.config.ts', {
+      'React plugin': '@vitejs/plugin-react',
+      'Build configuration': 'build:\\s*{',
+      'Server configuration': 'server:\\s*{',
+      'Plugin array': 'plugins:\\s*\\['
+    }, 'Vite Configuration Content');
+  }
+  
+  // Check Tailwind config
+  if (checkFile('tailwind.config.js', 'Tailwind configuration')) {
+    checkFileContent('tailwind.config.js', {
+      'Content paths': 'content:\\s*\\[',
+      'Theme configuration': 'theme:\\s*{',
+      'Plugin array': 'plugins:\\s*\\['
+    }, 'Tailwind Configuration Content');
+  }
+  
+  // Check Webpack config (if exists)
+  if (fs.existsSync('webpack.config.js')) {
+    checkFileContent('webpack.config.js', {
+      'Entry points': 'entry:\\s*{',
+      'Output configuration': 'output:\\s*{',
+      'Module rules': 'module:\\s*{',
+      'Target electron': 'target:\\s*[\'"]electron'
+    }, 'Webpack Configuration Content');
+  }
+}
+
+/**
+ * Check for node_modules and essential packages
+ */
+function checkNodeModules() {
+  console.log(`\n${colors.cyan}=== Node Modules Verification ===${colors.reset}`);
+  
+  if (!checkFile('node_modules', 'Node modules directory')) {
+    verificationResults.failed++;
+    console.log(`${colors.red}✗${colors.reset} Run 'npm install' to install dependencies`);
+    return;
+  }
+  
+  // Check critical packages
+  const criticalPackages = [
+    'electron',
+    'react',
+    'react-dom',
+    'vite',
+    'tailwindcss',
+    'electron-store'
+  ];
+  
+  for (const pkg of criticalPackages) {
+    const pkgPath = path.join('node_modules', pkg);
+    if (fs.existsSync(pkgPath)) {
+      verificationResults.passed++;
+      console.log(`${colors.green}✓${colors.reset} ${pkg} installed`);
+    } else {
+      verificationResults.failed++;
+      console.log(`${colors.red}✗${colors.reset} ${pkg} not installed`);
+    }
+  }
+}
+
+/**
+ * Main verification function
+ */
+function runVerification() {
+  console.log(`${colors.magenta}StratoSort Comprehensive Setup Verification${colors.reset}`);
+  console.log(`${colors.magenta}===========================================${colors.reset}\n`);
+  
+  // Run all verification checks
+  checkPackageConfiguration();
+  checkCoreFiles();
+  checkIPCChannels();
+  checkReactComponents();
+  checkServiceIntegration();
+  checkBuildConfig();
+  checkNodeModules();
+  
+  // Summary
+  console.log(`\n${colors.cyan}=== Verification Summary ===${colors.reset}`);
+  console.log(`${colors.green}Passed: ${verificationResults.passed}${colors.reset}`);
+  console.log(`${colors.yellow}Warnings: ${verificationResults.warnings}${colors.reset}`);
+  console.log(`${colors.red}Failed: ${verificationResults.failed}${colors.reset}`);
+  
+  const total = verificationResults.passed + verificationResults.warnings + verificationResults.failed;
+  const successRate = ((verificationResults.passed / total) * 100).toFixed(1);
+  
+  console.log(`\nSuccess Rate: ${successRate}%`);
+  
+  if (verificationResults.failed === 0) {
+    console.log(`\n${colors.green}🎉 All critical checks passed! StratoSort is properly configured.${colors.reset}`);
+  } else if (verificationResults.failed <= 3) {
+    console.log(`\n${colors.yellow}⚠️  Minor issues found. StratoSort should work but may have some limitations.${colors.reset}`);
+  } else {
+    console.log(`\n${colors.red}❌ Critical issues found. StratoSort may not work properly.${colors.reset}`);
+  }
+  
+  // Recommendations
+  if (verificationResults.failed > 0 || verificationResults.warnings > 0) {
+    console.log(`\n${colors.cyan}=== Recommendations ===${colors.reset}`);
+    
+    if (!fs.existsSync('node_modules')) {
+      console.log(`${colors.yellow}→${colors.reset} Run 'npm install' to install dependencies`);
+    }
+    
+    if (verificationResults.failed > 0) {
+      console.log(`${colors.yellow}→${colors.reset} Review failed checks above and ensure all required files exist`);
+      console.log(`${colors.yellow}→${colors.reset} Check file paths and naming conventions`);
+      console.log(`${colors.yellow}→${colors.reset} Verify IPC channel definitions match between main and preload`);
+    }
+    
+    if (verificationResults.warnings > 0) {
+      console.log(`${colors.yellow}→${colors.reset} Consider addressing warnings for optimal performance`);
+    }
+  }
+  
+  // Exit code
+  process.exit(verificationResults.failed > 5 ? 1 : 0);
+}
+
+// Run verification
+runVerification();

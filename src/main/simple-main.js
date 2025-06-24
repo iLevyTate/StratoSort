@@ -3,6 +3,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron')
 const path = require('path');
 const fs = require('fs').promises;
 const { existsSync } = require('fs');
+const { performance } = require('perf_hooks');
 
 // Load environment variables
 require('dotenv-flow').config();
@@ -10,7 +11,7 @@ require('dotenv-flow').config();
 // Environment detection
 const isDev = process.env.NODE_ENV === 'development';
 
-const { IPC_CHANNELS } = require('../shared/constants');
+const { IPC_CHANNELS, ALL_SUPPORTED_EXTENSIONS } = require('../shared/constants');
 const { logger } = require('../shared/logger');
 
 const { analyzeDocumentFile } = require('./analysis/ollamaDocumentAnalysis');
@@ -24,105 +25,20 @@ const {
 const ServiceIntegration = require('./services/ServiceIntegration');
 
 let mainWindow;
-let customFolders = []; // Initialize customFolders at module level
 
 // Initialize service integration
 let serviceIntegration;
 
 // Ollama model management
-let currentOllamaModel = 'gemma3:4b'; // Default model
-
-function getOllamaModel() {
-  return currentOllamaModel;
+async function getOllamaModel() {
+  return serviceIntegration.modelManager.getCurrentModel();
 }
 
 async function setOllamaModel(modelName) {
-  try {
-    if (!modelName || typeof modelName !== 'string') {
-      throw new Error('Invalid model name provided');
-    }
-    
-    currentOllamaModel = modelName;
-    logger.info('Ollama model updated', { 
-      component: 'ollama',
-      newModel: modelName 
-    });
-    
-    // Optionally persist to settings
-    const { default: Store } = await import('electron-store');
-    const store = new Store();
-    store.set('currentOllamaModel', modelName);
-    
-    return true;
-  } catch (error) {
-    logger.error('Failed to set Ollama model', { 
-      component: 'ollama',
-      error: error.message,
-      modelName 
-    });
-    return false;
-  }
+  return serviceIntegration.modelManager.setAndVerifyModel(modelName);
 }
 
-// Persistent storage path for custom folders
-const getCustomFoldersPath = () => {
-  const userDataPath = app.getPath('userData');
-  return path.join(userDataPath, 'custom-folders.json');
-};
-
-// Load custom folders from persistent storage
-async function loadCustomFolders() {
-  try {
-    const filePath = getCustomFoldersPath();
-    const data = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    logger.info('No saved custom folders found, using defaults', { 
-      component: 'startup',
-      configPath: getCustomFoldersPath() 
-    });
-    
-    // Get the Documents path for default folders
-    const documentsPath = app.getPath('documents');
-    
-    // Return default smart folders with proper paths
-    return [
-      {
-        id: 'financial',
-        name: 'Financial Documents',
-        description: 'Invoices, receipts, tax documents, financial statements, bank records',
-        path: path.join(documentsPath, 'Financial Documents'),
-        isDefault: true
-      },
-      {
-        id: 'projects',
-        name: 'Project Files',
-        description: 'Project documentation, proposals, specifications, project plans',
-        path: path.join(documentsPath, 'Project Files'),
-        isDefault: true
-      }
-    ];
-  }
-}
-
-// Save custom folders to persistent storage
-async function saveCustomFolders(folders) {
-  try {
-    const filePath = getCustomFoldersPath();
-    await fs.writeFile(filePath, JSON.stringify(folders, null, 2));
-    logger.info('Custom folders saved successfully', { 
-      component: 'storage',
-      filePath,
-      folderCount: folders.length 
-    });
-  } catch (error) {
-    logger.error('Failed to save custom folders', { 
-      component: 'storage',
-      error: error.message,
-      filePath 
-    });
-  }
-}
+// Legacy folder management functions removed - now handled by SmartFolderService
 
 // System monitoring and analytics
 const systemAnalytics = {
@@ -220,6 +136,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    x: 100,
+    y: 100,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -287,7 +205,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
         ]
       }
     });
@@ -296,6 +214,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus(); // Ensure window is focused
+    mainWindow.moveTop(); // Bring window to front
     logger.info('StratoSort window ready and focused', { 
       component: 'window-manager',
       isVisible: mainWindow.isVisible(),
@@ -327,8 +246,6 @@ function createWindow() {
 
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
-
-
 
 ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, folderPath) => {
   try {
@@ -955,463 +872,134 @@ ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
   }
 });
 
-// Enhanced Smart Folders with comprehensive validation and atomic operations
+// Add missing smart folder handlers
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
-  logger.info('Getting Smart Folders for UI', { customFoldersCount: customFolders.length });
-  
-  // Check physical existence of each folder
-  const foldersWithStatus = await Promise.all(
-    customFolders.map(async (folder) => {
-      try {
-        const stats = await fs.stat(folder.path);
-        return {
-          ...folder,
-          physicallyExists: stats.isDirectory()
-        };
-      } catch (error) {
-        return {
-          ...folder,
-          physicallyExists: false
-        };
-      }
-    })
-  );
-  
-  return foldersWithStatus;
-});
-
-ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, async () => {
-  logger.info('Getting Custom Folders for UI', { customFoldersCount: customFolders.length });
-  return customFolders;
-});
-
-ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
   try {
-    // Validate input
-    if (!Array.isArray(folders)) {
-      return { success: false, error: 'Folders must be an array', errorCode: 'INVALID_INPUT' };
-    }
-
-    // Backup current state for rollback
-    const originalFolders = [...customFolders];
-    
-    try {
-      customFolders = folders;
-      await saveCustomFolders(folders);
-      logger.info('Saved Smart Folders', { foldersCount: folders.length });
-      return { success: true, folders: customFolders };
-    } catch (saveError) {
-      // Rollback on failure
-      customFolders = originalFolders;
-      throw saveError;
-    }
+    const folders = await serviceIntegration.smartFolder.getAll();
+    logger.info(`Retrieved ${folders.length} smart folders`, { component: 'smart-folders' });
+    return { success: true, folders };
   } catch (error) {
-    logger.error('Failed to save smart folders', { 
-      component: 'smart-folders',
-      error: error.message 
-    });
-    return { success: false, error: error.message, errorCode: 'SAVE_FAILED' };
+    logger.error('Failed to get smart folders', { component: 'smart-folders', error: error.message });
+    return { success: false, error: error.message, folders: [] };
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) => {
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folderData) => {
   try {
-    // Validate input
-    if (!Array.isArray(folders)) {
-      return { success: false, error: 'Folders must be an array', errorCode: 'INVALID_INPUT' };
-    }
-
-    // Backup current state for rollback
-    const originalFolders = [...customFolders];
-    
-    try {
-      customFolders = folders;
-      await saveCustomFolders(folders);
-      logger.info('Updated Custom Folders', { foldersCount: folders.length });
-      return { success: true, folders: customFolders };
-    } catch (saveError) {
-      // Rollback on failure
-      customFolders = originalFolders;
-      throw saveError;
-    }
+    const result = await serviceIntegration.smartFolder.add(folderData);
+    logger.info(`Added smart folder: ${folderData.name}`, { component: 'smart-folders' });
+    return { success: true, folder: result };
   } catch (error) {
-    logger.error('Failed to update custom folders', { 
-      component: 'smart-folders',
+    logger.error('Failed to add smart folder', { 
+      component: 'smart-folders', 
+      folderName: folderData?.name,
       error: error.message 
     });
-    return { success: false, error: error.message, errorCode: 'UPDATE_FAILED' };
+    return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedFolder) => {
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedData) => {
   try {
-    // Enhanced validation
-    if (!folderId || typeof folderId !== 'string') {
-      return { success: false, error: 'Valid folder ID is required', errorCode: 'INVALID_FOLDER_ID' };
-    }
-
-    if (!updatedFolder || typeof updatedFolder !== 'object') {
-      return { success: false, error: 'Valid folder data is required', errorCode: 'INVALID_FOLDER_DATA' };
-    }
-
-    const folderIndex = customFolders.findIndex((f) => f.id === folderId);
-    if (folderIndex === -1) {
-      return { success: false, error: 'Folder not found', errorCode: 'FOLDER_NOT_FOUND' };
-    }
-
-    // Validate folder name if provided
-    if (updatedFolder.name) {
-      const illegalChars = /[<>:"|?*\x00-\x1f]/g;
-      if (illegalChars.test(updatedFolder.name)) {
-        return { 
-          success: false, 
-          error: 'Folder name contains invalid characters. Please avoid: < > : " | ? *',
-          errorCode: 'INVALID_FOLDER_NAME_CHARS'
-        };
-      }
-
-      // Check for duplicate names (excluding current folder)
-      const existingFolder = customFolders.find((f) => 
-        f.id !== folderId && f.name.toLowerCase() === updatedFolder.name.trim().toLowerCase()
-      );
-
-      if (existingFolder) {
-        return { 
-          success: false, 
-          error: `A smart folder with name "${updatedFolder.name}" already exists`,
-          errorCode: 'FOLDER_NAME_EXISTS'
-        };
-      }
-    }
-
-    // Validate path if provided
-    if (updatedFolder.path) {
-      try {
-        const normalizedPath = path.resolve(updatedFolder.path.trim());
-        const parentDir = path.dirname(normalizedPath);
-        
-        // Check parent directory exists
-        const parentStats = await fs.stat(parentDir);
-        if (!parentStats.isDirectory()) {
-          return { 
-            success: false, 
-            error: `Parent directory "${parentDir}" is not a directory`,
-            errorCode: 'PARENT_NOT_DIRECTORY'
-          };
-        }
-        
-        updatedFolder.path = normalizedPath;
-      } catch (pathError) {
-        return { 
-          success: false, 
-          error: `Invalid path: ${pathError.message}`,
-          errorCode: 'INVALID_PATH'
-        };
-      }
-    }
-    
-    // Backup current state for rollback
-    const originalFolder = { ...customFolders[folderIndex] };
-    
-    // If the path has changed, attempt to rename the directory on disk
-    if (updatedFolder.path && updatedFolder.path !== originalFolder.path) {
-      try {
-        const oldPath = originalFolder.path;
-        const newPath = updatedFolder.path;
-
-        // Ensure old directory exists
-        const oldStats = await fs.stat(oldPath);
-        if (!oldStats.isDirectory()) {
-          return { success: false, error: 'Original path is not a directory', errorCode: 'ORIGINAL_NOT_DIRECTORY' };
-        }
-
-        // Attempt rename
-        await fs.rename(oldPath, newPath);
-        logger.info('Renamed directory', {
-          component: 'smart-folders',
-          oldPath,
-          newPath
-        });
-      } catch (renameErr) {
-        logger.error('Directory rename failed', {
-          component: 'smart-folders',
-          error: renameErr.message
-        });
-        return { success: false, error: 'Failed to rename directory', errorCode: 'RENAME_FAILED', details: renameErr.message };
-      }
-    }
-    
-    try {
-      // Update folder with validation
-      customFolders[folderIndex] = { 
-        ...customFolders[folderIndex], 
-        ...updatedFolder,
-        updatedAt: new Date().toISOString()
-      };
-      
-      await saveCustomFolders(customFolders);
-      logger.info('Edited Smart Folder', { folderId });
-      
-      return { 
-        success: true, 
-        folder: customFolders[folderIndex],
-        message: 'Smart folder updated successfully'
-      };
-    } catch (saveError) {
-      // Rollback on failure
-      customFolders[folderIndex] = originalFolder;
-      throw saveError;
-    }
+    const result = await serviceIntegration.smartFolder.edit(folderId, updatedData);
+    logger.info(`Edited smart folder: ${folderId}`, { component: 'smart-folders' });
+    return { success: true, folder: result };
   } catch (error) {
     logger.error('Failed to edit smart folder', { 
-      component: 'smart-folders',
+      component: 'smart-folders', 
+      folderId,
       error: error.message 
     });
-    return { 
-      success: false, 
-      error: error.message,
-      errorCode: 'EDIT_FAILED'
-    };
+    return { success: false, error: error.message };
   }
 });
 
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
   try {
-    // Enhanced validation
-    if (!folderId || typeof folderId !== 'string') {
-      return { success: false, error: 'Valid folder ID is required', errorCode: 'INVALID_FOLDER_ID' };
-    }
-
-    const folderIndex = customFolders.findIndex((f) => f.id === folderId);
-    if (folderIndex === -1) {
-      return { success: false, error: 'Folder not found', errorCode: 'FOLDER_NOT_FOUND' };
-    }
-
-    // Backup current state for rollback
-    const originalFolders = [...customFolders];
-    const deletedFolder = customFolders[folderIndex];
-    
-    try {
-      customFolders = customFolders.filter((f) => f.id !== folderId);
-      await saveCustomFolders(customFolders);
-      logger.info('Deleted Smart Folder', { folderId });
-      
-      let directoryRemoved = false;
-      let removalError = null;
-      try {
-        const stats = await fs.stat(deletedFolder.path);
-        if (stats.isDirectory()) {
-          // Attempt to remove only if empty to avoid accidental data loss
-          const contents = await fs.readdir(deletedFolder.path);
-          if (contents.length === 0) {
-            await fs.rmdir(deletedFolder.path);
-            directoryRemoved = true;
-          }
-        }
-      } catch (dirErr) {
-        // If directory missing, that's fine; otherwise record error
-        if (dirErr.code !== 'ENOENT') {
-          logger.warn('Directory removal failed', { 
-            component: 'smart-folders',
-            error: dirErr.message 
-          });
-          removalError = dirErr.message;
-        }
-      }
-
-      return { 
-        success: true, 
-        folders: customFolders,
-        deletedFolder,
-        directoryRemoved,
-        removalError,
-        message: `Smart folder "${deletedFolder.name}" deleted successfully${  directoryRemoved ? ' and its empty directory was removed.' : ''}`
-      };
-    } catch (saveError) {
-      // Rollback on failure
-      customFolders = originalFolders;
-      logger.error('Failed to save smart folder changes', { 
-        component: 'smart-folders',
-        error: saveError.message 
-      });
-      throw saveError;
-    }
+    await serviceIntegration.smartFolder.delete(folderId);
+    logger.info(`Deleted smart folder: ${folderId}`, { component: 'smart-folders' });
+    return { success: true };
   } catch (error) {
     logger.error('Failed to delete smart folder', { 
-      component: 'smart-folders',
+      component: 'smart-folders', 
+      folderId,
       error: error.message 
     });
-    return { 
-      success: false, 
-      error: error.message,
-      errorCode: 'DELETE_FAILED'
-    };
+    return { success: false, error: error.message };
   }
 });
 
-
-
-// Folder scanning
 ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath) => {
   try {
-    logger.info('Scanning folder structure', { 
-      component: 'folder-scan',
-      rootPath 
-    });
-    
-    const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
-      if (depth > maxDepth) return [];
-      
-      try {
-        const items = await fs.readdir(folderPath, { withFileTypes: true });
-        const files = [];
-        
-        for (const item of items) {
-          const itemPath = path.join(folderPath, item.name);
-          
-          if (item.isFile()) {
-            const ext = path.extname(item.name).toLowerCase();
-            const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.wav', '.m4a'];
-            
-            if (supportedExts.includes(ext)) {
-              files.push({
-                name: item.name,
-                path: itemPath,
-                type: 'file',
-                extension: ext,
-                size: (await fs.stat(itemPath)).size
-              });
-            }
-          } else if (item.isDirectory() && !item.name.startsWith('.')) {
-            const subFiles = await scanFolder(itemPath, depth + 1, maxDepth);
-            files.push(...subFiles);
-          }
-        }
-        
-        return files;
-      } catch (error) {
-        logger.warn('Error scanning folder', { 
-          component: 'folder-scan',
-          folderPath,
-          error: error.message 
-        });
-        return [];
-      }
-    };
-    
-    const files = await scanFolder(rootPath);
-    logger.info('Folder scan completed', { 
-      component: 'folder-scan',
+    // Use the existing scanDirectory function for folder scanning
+    const files = await scanDirectory(rootPath, { maxDepth: 3, includeSystemFiles: false });
+    logger.info(`Scanned folder structure: ${rootPath} (${files.length} files)`, { 
+      component: 'smart-folders',
       rootPath,
       fileCount: files.length 
     });
-    return files;
-    
+    return { success: true, files: files.map(f => f.path) };
   } catch (error) {
-    logger.error('Error scanning folder structure', { 
-      component: 'folder-scan',
-      error: error.message,
-      rootPath 
+    logger.error('Failed to scan folder structure', { 
+      component: 'smart-folders', 
+      rootPath,
+      error: error.message 
     });
-    return { error: error.message };
+    return { success: false, error: error.message, files: [] };
   }
 });
 
-
-
-// Helper function for semantic folder matching using Ollama
-async function calculateFolderSimilarities(suggestedCategory, folderCategories) {
-  try {
-    const similarities = [];
-    
-    for (const folder of folderCategories) {
-      // Create semantic comparison prompt
-      const prompt = `Compare these two categories for semantic similarity:
-Category 1: "${suggestedCategory}"
-Category 2: "${folder.name}" (Description: "${folder.description}")
-
-Rate similarity from 0.0 to 1.0 where:
-- 1.0 = identical meaning
-- 0.8+ = very similar concepts
-- 0.6+ = related concepts
-- 0.4+ = somewhat related
-- 0.2+ = loosely related
-- 0.0 = unrelated
-
-Respond with only a number between 0.0 and 1.0:`;
-
-      try {
-        const response = await fetch('http://localhost:11434/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: getOllamaModel(),
-            prompt,
-            stream: false,
-            options: { temperature: 0.1, num_predict: 10 }
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const similarity = parseFloat(data.response.trim());
-          
-          if (!isNaN(similarity) && similarity >= 0 && similarity <= 1) {
-            similarities.push({
-              name: folder.name,
-              id: folder.id,
-              confidence: similarity,
-              description: folder.description
-            });
-          }
-        }
-      } catch (folderError) {
-        logger.warn('Failed to analyze folder similarity', { 
-          component: 'semantic-analysis',
-          folderName: folder.name,
-          error: folderError.message 
-        });
-        // Fallback to basic string similarity
-        const basicSimilarity = calculateBasicSimilarity(suggestedCategory, folder.name);
-        similarities.push({
-          name: folder.name,
-          id: folder.id,
-          confidence: basicSimilarity,
-          description: folder.description,
-          fallback: true
-        });
-      }
-    }
-    
-    // Sort by confidence descending
-    return similarities.sort((a, b) => b.confidence - a.confidence);
-  } catch (error) {
-    logger.error('Folder similarity calculation failed', { 
-      component: 'semantic-analysis',
-      error: error.message 
-    });
-    return [];
+// Analyze a single file (legacy handler - using correct service call)
+ipcMain.handle(IPC_CHANNELS.FILE_ANALYZE, async (event, payload) => {
+  const { filePath, options = {} } = payload || {};
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.ANALYSIS_PROGRESS, { filePath, status: 'started' });
   }
-}
+  try {
+    // Get file stats for proper analysis
+    const fs = require('fs').promises;
+    const stats = await fs.stat(filePath);
+    const fileInfo = {
+      path: filePath,
+      size: stats.size,
+      lastModified: stats.mtime.getTime()
+    };
+    
+    const analysis = await serviceIntegration.analyzeFileWithHistory(filePath, fileInfo, options);
 
-// Fallback basic string similarity
-function calculateBasicSimilarity(str1, str2) {
-  const s1 = str1.toLowerCase();
-  const s2 = str2.toLowerCase();
-  
-  if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
-  
-  // Simple word overlap scoring
-  const words1 = s1.split(/\s+/);
-  const words2 = s2.split(/\s+/);
-  const overlap = words1.filter((w) => words2.includes(w)).length;
-  const total = Math.max(words1.length, words2.length);
-  
-  return overlap / total;
-}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.ANALYSIS_PROGRESS, { filePath, status: 'completed' });
+      mainWindow.webContents.send(IPC_CHANNELS.ANALYSIS_COMPLETE, { filePath, analysis });
+    }
 
+    return { success: true, analysis };
+  } catch (error) {
+    logger.error('File analysis IPC handler error', { filePath, error: error.message, stack: error.stack });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.ANALYSIS_PROGRESS, { filePath, status: 'error' });
+      mainWindow.webContents.send(IPC_CHANNELS.ANALYSIS_ERROR, { 
+        filePath, 
+        error: {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        } 
+      });
+    }
+    return { success: false, error: error.message };
+  }
+});
 
+// Get analysis history
+ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async () => {
+  try {
+    const history = await serviceIntegration.analysisHistory.getHistory();
+    return { success: true, history };
+  } catch (error) {
+    logger.error('Failed to get analysis history', { component: 'analysis-history', error: error.message });
+    return { success: false, error: error.message };
+  }
+});
 
 // Ollama management
 ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
@@ -1594,10 +1182,8 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
       performanceMode: 'balanced'
     };
     
-      // Try to load settings from storage
-  const { default: Store } = await import('electron-store');
-  const store = new Store();
-  const settings = store.get('settings', defaultSettings);
+    const store = await getSettingsStore();
+    const settings = store.get('settings', defaultSettings);
     
     logger.info('Settings loaded successfully', { 
       component: 'settings',
@@ -1625,9 +1211,7 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
       throw new Error('Invalid settings data provided');
     }
     
-    // Save settings to storage
-    const { default: Store } = await import('electron-store');
-    const store = new Store();
+    const store = await getSettingsStore();
     store.set('settings', settings);
     
     logger.info('Settings saved successfully', { 
@@ -1708,13 +1292,144 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.CAN_REDO, async () => {
 // Analysis History handlers
 ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
   try {
-    return await serviceIntegration?.analysisHistory?.getStatistics() || {};
+    return await serviceIntegration.analysisHistory.getStatistics();
   } catch (error) {
-    logger.error('Failed to get analysis statistics', { 
+    logger.error('Failed to get analysis statistics', { component: 'analysis-history', error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Add missing ANALYSIS_HISTORY.SEARCH handler
+ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, async (event, query, options = {}) => {
+  try {
+    const results = await serviceIntegration.analysisHistory.searchAnalysis(query);
+    logger.info(`Analysis history search completed: ${results.length} results`, { 
       component: 'analysis-history',
+      query,
+      resultCount: results.length 
+    });
+    return { success: true, results };
+  } catch (error) {
+    logger.error('Failed to search analysis history', { 
+      component: 'analysis-history', 
+      query,
       error: error.message 
     });
-    return {};
+    return { success: false, error: error.message, results: [] };
+  }
+});
+
+// New IPC handler for GET_APPLICATION_STATISTICS
+ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
+  try {
+    return await serviceIntegration.getApplicationStatistics();
+  } catch (error) {
+    logger.error('Failed to get application statistics', { component: 'system-monitoring', error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle file selection dialog (FILES.SELECT)
+ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
+  try {
+    console.log('FILES.SELECT handler called'); // Debug log
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'All Supported Files', extensions: ALL_SUPPORTED_EXTENSIONS.map(ext => ext.replace('.', '')) },
+        { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md'] },
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] },
+        { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (canceled) {
+      return { success: true, files: [] };
+    }
+    
+    logger.info('Files selected via dialog', { 
+      component: 'file-selection',
+      fileCount: filePaths.length 
+    });
+    
+    return { success: true, files: filePaths };
+  } catch (error) {
+    logger.error('Failed to select files', { 
+      component: 'file-selection',
+      error: error.message 
+    });
+    return { success: false, error: error.message, files: [] };
+  }
+});
+
+// Enhanced export handler with proper CSV and JSON generation
+ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, async (event, format) => {
+  try {
+    const exportFormat = format || 'csv';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `analysis-history-${timestamp}.${exportFormat}`;
+    const exportPath = path.join(app.getPath('downloads'), fileName);
+    
+    // Get full analysis history
+    const history = await serviceIntegration.analysisHistory.getHistory();
+    
+    let exportData = '';
+    
+    if (exportFormat === 'json') {
+      exportData = JSON.stringify({
+        exportDate: new Date().toISOString(),
+        totalRecords: history.length,
+        records: history
+      }, null, 2);
+    } else {
+      // CSV format
+      const csvHeaders = 'File Path,Timestamp,Category,Confidence,Keywords,Suggested Name';
+      const csvRows = [csvHeaders];
+      
+      for (const entry of history) {
+        const row = [
+          `"${entry.filePath || ''}"`,
+          `"${entry.timestamp || ''}"`,
+          `"${entry.analysis?.suggestedCategory || entry.analysis?.category || ''}"`,
+          `"${entry.analysis?.confidence || ''}"`,
+          `"${(entry.analysis?.keywords || []).join(';')}"`,
+          `"${entry.analysis?.suggestedName || ''}"`
+        ];
+        csvRows.push(row.join(','));
+      }
+      exportData = csvRows.join('\n');
+    }
+    
+    // Write export file
+    await fs.writeFile(exportPath, exportData, 'utf8');
+    
+    // Open the export location in file explorer
+    shell.showItemInFolder(exportPath);
+    
+    logger.info('Analysis history exported successfully', { 
+      component: 'analysis-history',
+      format: exportFormat,
+      recordCount: history.length,
+      exportPath 
+    });
+    
+    return {
+      success: true,
+      exportPath,
+      recordCount: history.length,
+      format: exportFormat
+    };
+  } catch (error) {
+    logger.error('Failed to export analysis history', { 
+      component: 'analysis-history',
+      format,
+      error: error.message 
+    });
+    return { 
+      success: false, 
+      error: error.message 
+    };
   }
 });
 
@@ -1728,6 +1443,55 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
       error: error.message
     });
     return {};
+  }
+});
+
+// Add missing system scan handler
+ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
+  try {
+    const { app } = require('electron');
+    const commonPaths = [
+      app.getPath('documents'),
+      app.getPath('downloads'),
+      app.getPath('desktop'),
+      app.getPath('pictures')
+    ];
+
+    const results = [];
+    for (const dirPath of commonPaths) {
+      try {
+        const scanResult = await scanDirectory(dirPath, { 
+          maxDepth: 2, 
+          includeFileTypes: true,
+          maxFiles: 100 
+        });
+        
+        results.push({
+          path: dirPath,
+          name: path.basename(dirPath),
+          success: true,
+          fileCount: scanResult.files?.length || 0,
+          folderCount: scanResult.folders?.length || 0,
+          files: scanResult.files || [],
+          folders: scanResult.folders || []
+        });
+      } catch (error) {
+        results.push({
+          path: dirPath,
+          name: path.basename(dirPath),
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    return { success: true, directories: results };
+  } catch (error) {
+    logger.error('Failed to scan common directories', { 
+      component: 'system-scan',
+      error: error.message
+    });
+    return { success: false, error: error.message, directories: [] };
   }
 });
 
@@ -1800,78 +1564,15 @@ async function scanDirectory(dirPath, options = {}) {
   return await scanFolder(dirPath);
 }
 
-// System scan handler for common directories
-ipcMain.handle(IPC_CHANNELS.SYSTEM.SCAN_COMMON_DIRECTORIES, async () => {
-  try {
-    logger.info('Starting system scan of common directories', { component: 'system-scan' });
-    
-    const commonDirs = [
-      app.getPath('documents'),
-      app.getPath('downloads'),
-      app.getPath('desktop'),
-      app.getPath('pictures'),
-      app.getPath('music'),
-      app.getPath('videos')
-    ];
-
-    const files = [];
-
-    for (const dir of commonDirs) {
-      try {
-        const dirFiles = await scanDirectory(dir, { maxDepth: 2, includeSystemFiles: false });
-        if (dirFiles && Array.isArray(dirFiles)) {
-          files.push(...dirFiles);
-        }
-      } catch (error) {
-        logger.warn(`Failed to scan directory ${dir}`, { 
-          component: 'system-scan',
-          directory: dir,
-          error: error.message 
-        });
-      }
-    }
-
-    logger.info(`System scan completed: ${files.length} files found`, { 
-      component: 'system-scan',
-      fileCount: files.length 
-    });
-
-    return { success: true, files, totalDirectories: commonDirs.length };
-  } catch (error) {
-    logger.error('System scan failed', { 
-      component: 'system-scan',
-      error: error.message 
-    });
-    return { success: false, error: error.message, files: [] };
-  }
-});
-
 // Initialize the application
 app.whenReady().then(async () => {
-  logger.info('Electron app ready, creating window', { component: 'startup' });
-  createWindow();
-      
-  // Initialize service integration
-  serviceIntegration = new ServiceIntegration();
+  logger.info('Electron app ready, initializing services', { component: 'startup' });
   
-  // Load saved Ollama model if available
-  try {
-    const { default: Store } = await import('electron-store');
-    const store = new Store();
-    const savedModel = store.get('currentOllamaModel');
-    if (savedModel) {
-      currentOllamaModel = savedModel;
-      logger.info('Loaded saved Ollama model', { 
-        component: 'startup',
-        model: savedModel 
-      });
-    }
-  } catch (error) {
-    logger.warn('Could not load saved Ollama model', { 
-      component: 'startup',
-      error: error.message 
-    });
-  }
+  // Initialize service integration first
+  serviceIntegration = new ServiceIntegration();
+  await serviceIntegration.initialize();
+  
+  createWindow();
   
   logger.info('Application initialization complete', { component: 'startup' });
 });
@@ -1898,3 +1599,72 @@ app.on('before-quit', () => {
     systemAnalytics.destroy();
   }
 });
+
+ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, async () => {
+  try {
+    return app.getPath('documents');
+  } catch (error) {
+    logger.error('Failed to get documents path', { component: 'ipc', error: error.message });
+    return null;
+  }
+});
+
+// Singleton settings store
+let settingsStore;
+async function getSettingsStore() {
+  if (!settingsStore) {
+    const { default: Store } = await import('electron-store');
+    settingsStore = new Store();
+  }
+  return settingsStore;
+}
+
+// Note: GET_APPLICATION_STATISTICS handler registered above at line 1319
+// Note: FILES.SELECT handler registered above at line 1329
+// Note: Other file operation handlers registered earlier in the file
+
+// Add missing system error logging handler
+ipcMain.handle('log-error', async (event, errorInfo) => {
+  try {
+    logger.error('Renderer error', { 
+      component: 'renderer',
+      context: errorInfo.context,
+      level: errorInfo.level,
+      message: errorInfo.message,
+      stack: errorInfo.stack,
+      timestamp: errorInfo.timestamp,
+      metadata: errorInfo.metadata
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to log renderer error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Add notification handler for renderer notifications
+ipcMain.handle('show-notification', async (event, { type, message }) => {
+  try {
+    // Send notification to main window if it exists
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('notification', { type, message });
+    }
+    
+    // Log the notification
+    logger.info('Notification sent', { 
+      component: 'notifications',
+      type,
+      message 
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to show notification', { 
+      component: 'notifications',
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
+

@@ -70,11 +70,6 @@ class PerformanceOptimizer extends EventEmitter {
     // Initialize cleanup intervals with proper cleanup
     this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), 5 * 60 * 1000); // Every 5 minutes
     this.memoryMonitorInterval = setInterval(() => this.monitorMemoryUsage(), 30000); // Every 30 seconds
-    
-    logger.info('Performance optimizer initialized', {
-      component: 'performance-optimizer',
-      features: ['caching', 'concurrency-control']
-    });
   }
 
   /**
@@ -614,6 +609,14 @@ class PerformanceOptimizer extends EventEmitter {
    */
   isConcurrentProcessingEnabled() {
     return this.config.concurrentProcessing.enabled;
+  }
+
+  /**
+   * Compatibility initializer (called by ServiceIntegration).
+   * The optimizer already sets itself up in the constructor, so this is a no-op.
+   */
+  async initialize() {
+    return Promise.resolve();
   }
 }
 

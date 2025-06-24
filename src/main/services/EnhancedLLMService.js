@@ -32,11 +32,6 @@ class EnhancedLLMService {
     // Initialize domain-specific templates
     this.initializeDomainTemplates();
     
-    logger.info('Enhanced LLM service initialized', {
-      component: 'enhanced-llm',
-      optimization: true
-    });
-    
     // Advanced parameter configurations
     this.parameterProfiles = {
       creative: { temperature: 0.8, top_p: 0.9, top_k: 40 },
@@ -44,6 +39,25 @@ class EnhancedLLMService {
       factual: { temperature: 0.1, top_p: 0.7, top_k: 20 },
       precise: { temperature: 0.05, top_p: 0.6, top_k: 10 }
     };
+
+    // No heavy async work is required at construction time, but
+    // ServiceIntegration expects every service to expose an async
+    // initialize() method.  We create a resolved promise here so that
+    // awaiting it does not fail and maintains consistent startup flow.
+    this._initialized = false;
+  }
+
+  /**
+   * Compatibility initializer (called by ServiceIntegration).
+   * Currently the EnhancedLLMService performs all setup synchronously
+   * in the constructor, so this method is a lightweight no-op that
+   * guarantees a resolved promise.  In the future, any async tasks
+   * such as warm-up requests or model pre-loading can be added here.
+   */
+  async initialize() {
+    if (this._initialized) return { success: true };
+    this._initialized = true;
+    return { success: true };
   }
 
   /**

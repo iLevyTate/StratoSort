@@ -395,6 +395,37 @@ class ModelVerifier {
       }
     };
   }
+
+  /**
+   * Initialize the ModelVerifier service.
+   * This is a lightweight wrapper that performs the essential
+   * verification checks required at application start-up so that
+   * ServiceIntegration.initialize() can await it safely.
+   *
+   * If all essential models are available, the promise resolves to
+   * { success: true }. When verification fails it resolves to
+   * { success: false, error: string, details?: any } instead of throwing
+   * so that the caller can decide how to proceed.  Any unexpected
+   * exceptions are caught and logged to avoid crashing the main process.
+   */
+  async initialize() {
+    try {
+      const result = await this.verifyEssentialModels();
+
+      // We purposely do **not** throw on missing models; the caller may
+      // choose to continue running in a degraded state and inform the
+      // renderer.  We simply return the structured result so upstream
+      // code can decide what to do.
+      if (result?.success === false || result?.allAvailable === false) {
+        return { success: false, details: result };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[ModelVerifier] initialize() failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = ModelVerifier; 

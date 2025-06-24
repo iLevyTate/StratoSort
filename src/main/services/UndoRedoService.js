@@ -309,9 +309,16 @@ class UndoRedoService {
   }
 
   async clearHistory() {
+    await this.initialize();
     this.actions = [];
     this.currentIndex = -1;
     await this.saveActions();
+    return { success: true, message: 'Action history cleared' };
+  }
+
+  // Add missing getHistory method that IPC handlers expect
+  getHistory(limit = 10) {
+    return this.getActionHistory(limit);
   }
 }
 

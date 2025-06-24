@@ -109,12 +109,15 @@ function DiscoverPhase() {
       const result = await window.electronAPI.files.select();
       
       if (result && result.files && result.files.length > 0) {
-        const newFiles = result.files.map((filePath) => ({
-          name: filePath.split(/[/\\]/).pop(),
-          path: filePath,
-          size: 0,
-          type: getFileType(filePath.split('.').pop()?.toLowerCase())
-        }));
+        const newFiles = result.files.map((filePath) => {
+          const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
+          return {
+            name: pathString.split(/[/\\]/).pop(),
+            path: pathString,
+            size: 0,
+            type: getFileType(pathString.split('.').pop()?.toLowerCase())
+          };
+        });
 
         setSelectedFiles((prev) => {
           const existingPaths = new Set(prev.map((f) => f.path));
@@ -140,12 +143,15 @@ function DiscoverPhase() {
         const scanResult = await window.electronAPI.smartFolders.scanStructure(result.folder);
         
         if (scanResult && scanResult.files) {
-          const newFiles = scanResult.files.map((filePath) => ({
-            name: filePath.split(/[/\\]/).pop(),
-            path: filePath,
-            size: 0,
-            type: getFileType(filePath.split('.').pop()?.toLowerCase())
-          }));
+          const newFiles = scanResult.files.map((filePath) => {
+            const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
+            return {
+              name: pathString.split(/[/\\]/).pop(),
+              path: pathString,
+              size: 0,
+              type: getFileType(pathString.split('.').pop()?.toLowerCase())
+            };
+          });
 
           setSelectedFiles((prev) => {
             const existingPaths = new Set(prev.map((f) => f.path));
@@ -171,12 +177,15 @@ function DiscoverPhase() {
       const result = await window.electronAPI.system.scanCommonDirectories();
       
       if (result && result.files) {
-        const newFiles = result.files.map((filePath) => ({
-          name: filePath.split(/[/\\]/).pop(),
-          path: filePath,
-          size: 0,
-          type: getFileType(filePath.split('.').pop()?.toLowerCase())
-        }));
+        const newFiles = result.files.map((filePath) => {
+          const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
+          return {
+            name: pathString.split(/[/\\]/).pop(),
+            path: pathString,
+            size: 0,
+            type: getFileType(pathString.split('.').pop()?.toLowerCase())
+          };
+        });
 
         setSelectedFiles(newFiles);
         showSuccess(`System scan complete: ${newFiles.length} files found`);

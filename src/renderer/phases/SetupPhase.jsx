@@ -5,13 +5,55 @@ import { useNotification } from '../contexts/NotificationContext';
 import { usePhase } from '../contexts/PhaseContext';
 import useConfirmDialog from '../hooks/useConfirmDialog';
 import PhaseLayout from '../layout/PhaseLayout';
+import { useToast } from '../components/Toast';
 
 const { PHASES } = require('../../shared/constants');
+
+// Form validation utilities
+const validateConfig = (config) => {
+  const errors = {};
+  
+  // AI Model validation
+  if (!config.aiModel || config.aiModel.trim().length === 0) {
+    errors.aiModel = 'AI model is required';
+  } else if (config.aiModel.length > 50) {
+    errors.aiModel = 'AI model name must be less than 50 characters';
+  }
+  
+  // Host validation
+  if (!config.host || config.host.trim().length === 0) {
+    errors.host = 'Host URL is required';
+  } else {
+    try {
+      new URL(config.host);
+    } catch {
+      errors.host = 'Please enter a valid URL (e.g., http://localhost:11434)';
+    }
+  }
+  
+  // Smart folders validation
+  if (config.smartFolders && config.smartFolders.length > 0) {
+    config.smartFolders.forEach((folder, index) => {
+      if (!folder.name || folder.name.trim().length === 0) {
+        errors[`smartFolder_${index}_name`] = 'Folder name is required';
+      } else if (folder.name.length > 100) {
+        errors[`smartFolder_${index}_name`] = 'Folder name must be less than 100 characters';
+      }
+      
+      if (folder.path && folder.path.length > 500) {
+        errors[`smartFolder_${index}_path`] = 'Folder path is too long';
+      }
+    });
+  }
+  
+  return errors;
+};
 
 function SetupPhase() {
   const { actions, phaseData } = usePhase();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
   const { addNotification, showSuccess, showError, showWarning, showInfo } = useNotification();
+  const { addToast } = useToast();
   
   // State management
   const [smartFolders, setSmartFolders] = useState([]);
@@ -38,6 +80,8 @@ function SetupPhase() {
   const [newFolder, setNewFolder] = useState({ name: '', emoji: '📁', path: '', description: '' });
   const [editingFolder, setEditingFolder] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
     const initializeSetup = async () => {
@@ -77,8 +121,47 @@ function SetupPhase() {
     initializeSetup();
   }, []);
 
+  // Enhanced validation
+  const validateForm = async (configToValidate = settings) => {
+    setIsValidating(true);
+    const errors = validateConfig(configToValidate);
+    setValidationErrors(errors);
+    setIsValidating(false);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Real-time validation on field change
+  const handleFieldChange = async (field, value) => {
+    const updatedConfig = { ...settings, [field]: value };
+    setSettings(updatedConfig);
+    
+    // Clear specific field error
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+    
+    // Debounced validation for better UX
+    clearTimeout(window.validationTimeout);
+    window.validationTimeout = setTimeout(() => {
+      validateForm(updatedConfig);
+    }, 500);
+  };
+
   const handleSaveConfig = async () => {
     try {
+      setIsLoading(true);
+      
+      // Validate before saving
+      const isValid = await validateForm();
+      if (!isValid) {
+        addToast('Please fix the validation errors before saving', 'error');
+        return;
+      }
+
       const configToSave = {
         ...settings,
         ...performanceSettings
@@ -89,6 +172,8 @@ function SetupPhase() {
     } catch (error) {
       console.error('Failed to save configuration:', error);
       showError('Failed to save configuration');
+    } finally {
+      setIsLoading(false);
     }
   };
 

@@ -519,7 +519,7 @@ function OrganizePhase() {
         
         // If no exact match found, try fallback strategies
         if (!smartFolder) {
-          console.log(`[FOLDER-FALLBACK] No match for category "${file.analysis.category}", trying fallbacks...`);
+          debugLog(`No match for category "${file.analysis.category}", trying fallbacks...`);
           
           // Try to find a general/default folder
           smartFolder = smartFolders.find((f) => 
@@ -533,7 +533,7 @@ function OrganizePhase() {
           // If still no match, use the first available folder
           if (!smartFolder && smartFolders.length > 0) {
             smartFolder = smartFolders[0];
-            console.log(`[FOLDER-FALLBACK] Using first available folder: ${smartFolder.name}`);
+            debugLog(`Using first available folder: ${smartFolder.name}`);
           }
           
           if (!smartFolder) {
@@ -551,21 +551,21 @@ function OrganizePhase() {
           if (smartFolder.path && (smartFolder.path.startsWith('/') || smartFolder.path.includes(':'))) {
             // Absolute path
             destinationFolder = smartFolder.path;
-            console.log(`[PATH-CONSTRUCTION] Using absolute path: ${destinationFolder}`);
+            debugLog(`Using absolute path: ${destinationFolder}`);
           } else if (smartFolder.path) {
             // Relative path from Documents
             destinationFolder = `${documentsPath}/${smartFolder.path}`.replace(/\\/g, '/').replace(/\/+/g, '/');
-            console.log(`[PATH-CONSTRUCTION] Using relative path: ${smartFolder.path} → ${destinationFolder}`);
+            debugLog(`Using relative path: ${smartFolder.path} → ${destinationFolder}`);
           } else {
             // Default to Documents/FolderName
             destinationFolder = `${documentsPath}/${smartFolder.name}`.replace(/\\/g, '/').replace(/\/+/g, '/');
-            console.log(`[PATH-CONSTRUCTION] Using default path: ${smartFolder.name} → ${destinationFolder}`);
+            debugLog(`Using default path: ${smartFolder.name} → ${destinationFolder}`);
           }
           
-          console.log(`[PATH-CONSTRUCTION] Final destination folder: ${destinationFolder}`);
+          debugLog(`Final destination folder: ${destinationFolder}`);
           
         } catch (pathError) {
-          console.error('[PATH-CONSTRUCTION] Path construction error:', pathError);
+          debugLog('Path construction error', { error: pathError.message, file: file.name });
           skippedFiles.push({ name: file.name, reason: 'Invalid destination path' });
           continue;
         }
@@ -584,11 +584,12 @@ function OrganizePhase() {
         
         const destination = `${destinationFolder}/${fileName}`.replace(/\\/g, '/');
         
-        console.log(`[FILE-OPERATION] Preparing to move:
-          Source: ${file.path}
-          Destination: ${destination}
-          Smart Folder: ${smartFolder.name}
-          Category: ${file.analysis.category}`);
+        debugLog('Preparing file operation', {
+          source: file.path,
+          destination,
+          smartFolder: smartFolder.name,
+          category: file.analysis.category
+        });
         
         operations.push({
           type: 'move',
@@ -613,11 +614,11 @@ function OrganizePhase() {
       }
 
       // Execute with undo capability and progress tracking
-      console.log('[ORGANIZE-FILES] Starting file organization with operations:', operations);
+      debugLog('Starting file organization', { operationsCount: operations.length });
       
-      const results = await executeAction({
-        type: 'BATCH_OPERATION',
-        description: `Organize ${operations.length} files`,
+              const results = await executeAction({
+          type: 'BATCH_ORGANIZE',
+          description: `Organize ${operations.length} files`,
         execute: async () => {
           setBatchProgress({
             current: 0,
@@ -625,15 +626,9 @@ function OrganizePhase() {
             currentFile: 'Starting...'
           });
 
-          console.log('[ORGANIZE-FILES] About to call performOperation with:', {
+          debugLog('About to call performOperation', {
             type: 'batch_organize',
-            operationsCount: operations.length,
-            operations: operations.map((op) => ({
-              type: op.type,
-              source: op.source,
-              destination: op.destination,
-              smartFolder: op.metadata?.smartFolder
-            }))
+            operationsCount: operations.length
           });
 
           try {
@@ -642,19 +637,11 @@ function OrganizePhase() {
               operations
             });
             
-            console.log('[ORGANIZE-FILES] File operation result:', result);
-            console.log('[ORGANIZE-FILES] Success count:', result?.successCount);
-            console.log('[ORGANIZE-FILES] Fail count:', result?.failCount);
-            
-            if (result?.results) {
-              result.results.forEach((res, index) => {
-                if (res.success) {
-                  console.log(`[ORGANIZE-FILES] ✅ Operation ${index + 1}: ${res.source} → ${res.destination}`);
-                } else {
-                  console.log(`[ORGANIZE-FILES] ❌ Operation ${index + 1} failed: ${res.error}`);
-                }
-              });
-            }
+            debugLog('File operation result', {
+              successCount: result?.successCount,
+              failCount: result?.failCount,
+              totalResults: result?.results?.length
+            });
             
             setBatchProgress({
               current: operations.length,
@@ -663,7 +650,7 @@ function OrganizePhase() {
             });
             return result;
           } catch (error) {
-            console.error('[ORGANIZE-FILES] File operation failed:', error);
+            debugLog('File operation failed', { error: error.message });
             setBatchProgress({
               current: 0,
               total: operations.length,

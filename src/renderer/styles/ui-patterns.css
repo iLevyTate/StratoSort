@@ -709,42 +709,42 @@ html, body {
   font-weight: 600;
 }
 
-/* Enhanced Welcome Phase Styles */
+/* Enhanced Welcome Phase Styles - Compact Layout System */
 .welcome-hero {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   animation: fadeInUp 0.8s ease-out;
 }
 
 .welcome-title {
-  font-size: 3rem;
+  font-size: 2rem;
   font-weight: 900;
   color: white;
   text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
 
 .welcome-subtitle {
-  font-size: 1.125rem;
+  font-size: 0.875rem;
   color: rgba(255, 255, 255, 0.95);
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   font-weight: 500;
   line-height: 1.4;
-  max-width: 600px;
+  max-width: 500px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
   width: 100%;
-  max-width: 1000px;
+  max-width: 900px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -753,12 +753,12 @@ html, body {
   background: var(--glass-white);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: var(--radius-2xl);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
-  padding: 2rem;
+  padding: 1.5rem;
   text-align: center;
   transition: all var(--transition-slow);
-  min-height: 240px;
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -768,42 +768,42 @@ html, body {
 
 .feature-card:hover {
   background: var(--glass-white-strong);
-  transform: translateY(-8px) scale(1.02);
+  transform: translateY(-4px) scale(1.01);
   box-shadow: 
     var(--shadow-glass-hover),
     0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
 .feature-icon {
-  font-size: 3rem;
-  margin-bottom: 1.5rem;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
   display: block;
   transition: transform var(--transition-slow);
 }
 
 .feature-title {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--text-on-glass);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   text-shadow: 0 2px 4px rgba(255, 255, 255, 0.4);
   transition: color var(--transition-normal);
 }
 
 .feature-description {
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   color: var(--text-on-glass-light);
-  line-height: 1.5;
+  line-height: 1.4;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
   font-weight: 500;
 }
 
-/* Enhanced Glass Card Variants */
+/* Enhanced Glass Card Variants - Compact */
 .glass-card-strong {
   background: var(--glass-white-strong);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-radius: var(--radius-2xl);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
   box-shadow: 
     var(--shadow-glass-strong),
@@ -819,23 +819,23 @@ html, body {
     0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
-/* Enhanced Action Buttons Styling */
+/* Enhanced Action Buttons Styling - Compact */
 .action-buttons {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
-  margin-top: 2rem;
+  margin-top: 1rem;
   animation: fadeInUp 1s ease-out 0.4s both;
 }
 
 .action-buttons .btn-primary,
 .action-buttons .btn-secondary {
-  min-width: 200px;
-  padding: 0.875rem 2rem;
-  font-size: 1rem;
+  min-width: 160px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
@@ -870,12 +870,12 @@ html, body {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
-/* Stats Section Styling */
+/* Stats Section Styling - Compact */
 .stats-row {
   display: flex;
   justify-content: center;
-  gap: 2rem;
-  margin-bottom: 3rem;
+  gap: 1rem;
+  margin-bottom: 2rem;
   flex-wrap: wrap;
 }
 
@@ -883,23 +883,23 @@ html, body {
   background: var(--glass-white);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--glass-border);
-  padding: 1.5rem;
+  padding: 1rem;
   text-align: center;
-  min-width: 120px;
+  min-width: 80px;
   transition: all var(--transition-normal);
   animation: fadeInUp 0.6s ease-out both;
 }
 
 .stat-card:hover {
   background: var(--glass-white-strong);
-  transform: translateY(-4px) scale(1.05);
+  transform: translateY(-2px) scale(1.03);
   box-shadow: var(--shadow-glass-hover);
 }
 
 .stat-number {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 900;
   color: var(--text-on-glass);
   margin-bottom: 0.25rem;
@@ -907,7 +907,7 @@ html, body {
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--text-readable-light);
   font-weight: 600;
   text-transform: uppercase;
@@ -923,12 +923,12 @@ html, body {
   font-weight: 900;
 }
 
-/* Privacy Section Enhancements */
+/* Privacy Section Enhancements - Compact */
 .privacy-features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .privacy-feature {
@@ -936,7 +936,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--text-readable-light);
   font-weight: 500;
 }
@@ -944,53 +944,27 @@ html, body {
 .privacy-checkmark {
   color: #10b981;
   font-weight: bold;
-  font-size: 1rem;
+  font-size: 0.875rem;
 }
 
-/* Responsive Design Improvements */
-@media (max-width: 1024px) {
+/* Responsive Design Improvements - Mobile First */
+@media (min-width: 640px) {
   .welcome-title {
     font-size: 2.5rem;
   }
   
   .welcome-subtitle {
     font-size: 1rem;
-    max-width: 500px;
+    max-width: 600px;
   }
   
   .features-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1.25rem;
   }
   
   .feature-card {
-    padding: 1.5rem;
-    min-height: 200px;
-  }
-  
-  .stats-row {
-    gap: 1.5rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .welcome-title {
-    font-size: 2rem;
-    margin-bottom: 0.75rem;
-  }
-  
-  .welcome-subtitle {
-    font-size: 0.95rem;
-    margin-bottom: 1.25rem;
-  }
-  
-  .features-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-  
-  .feature-card {
-    padding: 1.25rem;
+    padding: 1.75rem;
     min-height: 180px;
   }
   
@@ -1002,63 +976,92 @@ html, body {
     font-size: 0.875rem;
   }
   
-  .action-buttons {
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-  }
-  
-  .action-buttons .btn-primary,
-  .action-buttons .btn-secondary {
-    width: 100%;
-    max-width: 300px;
-  }
-  
   .stats-row {
-    gap: 1rem;
+    gap: 1.5rem;
   }
   
   .stat-card {
     min-width: 100px;
-    padding: 1rem;
-  }
-  
-  .privacy-features {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .welcome-hero {
-    margin-bottom: 1.5rem;
-  }
-  
-  .welcome-title {
-    font-size: 1.75rem;
-  }
-  
-  .welcome-subtitle {
-    font-size: 0.875rem;
-  }
-  
-  .feature-card {
-    padding: 1rem;
-    min-height: 160px;
-  }
-  
-  .stat-card {
-    padding: 0.75rem;
+    padding: 1.25rem;
   }
   
   .stat-number {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
+  }
+  
+  .stat-label {
+    font-size: 0.875rem;
   }
   
   .action-buttons .btn-primary,
   .action-buttons .btn-secondary {
-    padding: 0.75rem 1.5rem;
+    min-width: 180px;
+    padding: 0.875rem 1.75rem;
     font-size: 0.9rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .welcome-title {
+    font-size: 3rem;
+  }
+  
+  .welcome-subtitle {
+    font-size: 1.125rem;
+  }
+  
+  .features-grid {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 800px;
+  }
+  
+  .feature-card {
+    padding: 2rem;
+    min-height: 200px;
+  }
+  
+  .stats-row {
+    gap: 2rem;
+  }
+  
+  .action-buttons {
+    flex-direction: row;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .welcome-title {
+    font-size: 3.5rem;
+  }
+  
+  .welcome-subtitle {
+    font-size: 1.25rem;
+    max-width: 700px;
+  }
+  
+  .features-grid {
+    max-width: 900px;
+  }
+  
+  .feature-card {
+    padding: 2.25rem;
+    min-height: 220px;
+  }
+  
+  .feature-title {
+    font-size: 1.25rem;
+  }
+  
+  .feature-description {
+    font-size: 0.95rem;
+  }
+  
+  .action-buttons .btn-primary,
+  .action-buttons .btn-secondary {
+    min-width: 200px;
+    padding: 1rem 2rem;
+    font-size: 1rem;
   }
 }
 
@@ -1066,7 +1069,7 @@ html, body {
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(40px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -1077,7 +1080,7 @@ html, body {
 @keyframes slideInScale {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(10px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -1086,7 +1089,7 @@ html, body {
 }
 
 .animate-slide-in-scale {
-  animation: slideInScale 0.6s ease-out both;
+  animation: slideInScale 0.5s ease-out both;
 }
 
 /* Stagger animation delays for sequential elements */

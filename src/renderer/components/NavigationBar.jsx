@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import { usePhase } from '../contexts/PhaseContext';
 
@@ -9,18 +9,39 @@ function NavigationBar() {
   const phases = Object.values(PHASES);
   const currentIndex = phases.indexOf(currentPhase);
 
+  // Remove navigation restrictions - allow free navigation
   const canNavigate = (phase) => {
-    const targetIndex = phases.indexOf(phase);
-    return targetIndex <= currentIndex;
+    return true; // Always allow navigation to any phase
   };
+
+  // Handle arrow key navigation
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      // Only handle if no input/textarea is focused
+      if (document.activeElement?.tagName === 'INPUT' || 
+          document.activeElement?.tagName === 'TEXTAREA' ||
+          document.activeElement?.contentEditable === 'true') {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' && currentIndex > 0) {
+        event.preventDefault();
+        actions.advancePhase(phases[currentIndex - 1]);
+      } else if (event.key === 'ArrowRight' && currentIndex < phases.length - 1) {
+        event.preventDefault();
+        actions.advancePhase(phases[currentIndex + 1]);
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [currentIndex, phases, actions]);
 
   // Handle keyboard navigation
   const handleKeyDown = (event, phase) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (canNavigate(phase)) {
-        actions.advancePhase(phase);
-      }
+      actions.advancePhase(phase);
     }
   };
 
@@ -33,7 +54,7 @@ function NavigationBar() {
 
   return (
     <nav 
-      className="glass-card border-0 rounded-none shadow-lg backdrop-blur-lg bg-white/10 navigation-container"
+      className="flex-shrink-0 glass-card border-0 rounded-none shadow-lg backdrop-blur-lg bg-white/10"
       role="navigation"
       aria-label="Main navigation"
     >
@@ -46,11 +67,11 @@ function NavigationBar() {
         Skip to main content
       </a>
 
-      <div className="px-2 sm:px-4 py-2 sm:py-3">
-        <div className="flex items-center justify-between gap-1 sm:gap-2">
-          {/* Logo - Compact */}
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
           <div className="flex-shrink-0">
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-2">
               <div 
                 className="w-8 h-8 glass-card flex items-center justify-center shadow-lg"
                 role="img"
@@ -58,16 +79,16 @@ function NavigationBar() {
               >
                 <span className="text-sm" aria-hidden="true">🚀</span>
               </div>
-              <h1 className="text-xs sm:text-sm font-bold text-on-glass hidden md:block">
+              <h1 className="text-sm font-bold text-on-glass">
                 StratoSort
               </h1>
             </div>
           </div>
 
-          {/* Phase Navigation - Much Smaller */}
-          <div className="flex-1 overflow-x-auto nav-scroll-container">
+          {/* Phase Navigation */}
+          <div className="flex-1 flex items-center justify-center">
             <div 
-              className="flex items-center justify-center gap-1 min-w-fit px-1"
+              className="flex items-center gap-2"
               role="tablist"
               aria-label="Workflow phases"
             >
@@ -80,56 +101,50 @@ function NavigationBar() {
                 return (
                   <React.Fragment key={phase}>
                     <button
-                      onClick={() => isNavigable && actions.advancePhase(phase)}
+                      onClick={() => actions.advancePhase(phase)}
                       onKeyDown={(e) => handleKeyDown(e, phase)}
-                      disabled={!isNavigable}
                       role="tab"
                       aria-selected={isActive}
                       aria-controls={`phase-${phase}-panel`}
-                      aria-label={`${metadata.title} phase${isCompleted ? ' (completed)' : ''}${isActive ? ' (current)' : ''}${!isNavigable ? ' (locked)' : ''}`}
-                      tabIndex={isNavigable ? 0 : -1}
+                      aria-label={`${metadata.title} phase${isCompleted ? ' (completed)' : ''}${isActive ? ' (current)' : ''}`}
+                      tabIndex={0}
                       className={`
-                        group flex items-center gap-1 px-1 py-1 sm:px-2 sm:py-2
-                        min-w-[50px] sm:min-w-[70px] md:min-w-[90px] lg:min-w-[110px]
-                        max-w-[60px] sm:max-w-[80px] md:max-w-[100px] lg:max-w-[130px]
-                        transition-all duration-300 text-xs font-medium rounded-lg
+                        group flex items-center gap-2 px-3 py-2
+                        transition-all duration-300 text-sm font-medium rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                        cursor-pointer hover:scale-105
                         ${isActive 
                     ? 'glass-button-primary scale-105' 
-                    : isCompleted
-                      ? 'glass-card hover:glass-card-strong text-on-glass'
-                      : isNavigable 
-                        ? 'glass-card hover:glass-card-strong text-on-glass'
-                        : 'glass-card opacity-50 cursor-not-allowed text-readable-light'
+                    : 'glass-card hover:glass-card-strong text-on-glass hover:bg-white/20'
                   }
                       `}
-                      title={`${metadata.title}${metadata.description ? ` - ${metadata.description}` : ''}`}
+                      title={`${metadata.title}${metadata.description ? ` - ${metadata.description}` : ''} (Click to navigate)`}
                     >
-                      {/* Step Number - Smaller */}
+                      {/* Step Number */}
                       <div className={`
-                        flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full text-xs font-bold
+                        flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold
                         backdrop-filter backdrop-blur-sm transition-all duration-300
                         ${isActive 
                     ? 'bg-white/90 text-blue-600 shadow-lg' 
                     : isCompleted
                       ? 'bg-green-500/80 text-white shadow-md'
-                      : 'bg-white/60 text-gray-600'
+                      : 'bg-white/60 text-gray-600 group-hover:bg-white/80'
                   }
                       `}>
                         {isCompleted && !isActive ? '✓' : index + 1}
                       </div>
                       
-                      {/* Phase Name - Hidden on small screens */}
+                      {/* Phase Name */}
                       <span className={`
-                        hidden lg:block font-semibold truncate text-xs
-                        ${isActive ? 'text-white' : 'text-on-glass'}
+                        font-semibold text-sm
+                        ${isActive ? 'text-white' : 'text-on-glass group-hover:text-white'}
                       `}>
                         {metadata.title.split(' ')[0]}
                       </span>
 
-                      {/* Icon - Smaller */}
+                      {/* Icon */}
                       <span 
-                        className={`text-xs sm:text-sm transition-transform duration-300 ${
+                        className={`text-sm transition-transform duration-300 ${
                           isActive ? 'animate-pulse scale-110' : 'group-hover:scale-110'
                         }`}
                         aria-hidden="true"
@@ -138,11 +153,11 @@ function NavigationBar() {
                       </span>
                     </button>
 
-                    {/* Connector Line - Much Smaller */}
+                    {/* Connector Line */}
                     {index < phases.length - 1 && (
                       <div 
                         className={`
-                          w-2 sm:w-3 h-0.5 flex-shrink-0 rounded-full transition-all duration-300
+                          w-4 h-0.5 flex-shrink-0 rounded-full transition-all duration-300
                           ${isCompleted ? 'bg-green-400/60 shadow-sm' : 'bg-white/30'}
                         `} 
                         aria-hidden="true"
@@ -154,12 +169,12 @@ function NavigationBar() {
             </div>
           </div>
 
-          {/* Settings Button - Smaller */}
+          {/* Settings Button */}
           <div className="flex-shrink-0">
             <button
               onClick={actions.toggleSettings}
               onKeyDown={handleSettingsKeyDown}
-              className="glass-button w-8 h-8 flex items-center justify-center hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="glass-button w-10 h-10 flex items-center justify-center hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               aria-label="Open settings"
               title="Settings (Ctrl+,)"
             >

@@ -536,8 +536,7 @@ function App() {
         <UndoRedoProvider>
           <ProgressProvider>
             <PerformanceProvider>
-              <div className="h-screen w-screen overflow-hidden flex flex-col phase-container"
-                style={{ padding: 0 }}>
+              <div className="h-screen w-screen flex flex-col bg-gradient-subtle">
                 {/* Navigation - Fixed height */}
                 <NavigationBar />
                 
@@ -547,7 +546,7 @@ function App() {
                 {/* Main Content - Fills remaining space */}
                 <main 
                   id="main-content" 
-                  className="flex-1 overflow-hidden"
+                  className="flex-1 min-h-0"
                   role="main"
                   aria-label="Main application content"
                 >
@@ -615,7 +614,29 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ===== RENDER APP =====
+// ===== WAIT FOR ELECTRON API AND RENDER APP =====
+function waitForElectronAPI() {
+  return new Promise((resolve) => {
+    if (window.electronAPI) {
+      resolve();
+      return;
+    }
+    
+    // Poll for electronAPI availability
+    const checkAPI = () => {
+      if (window.electronAPI) {
+        resolve();
+      } else {
+        setTimeout(checkAPI, 50);
+      }
+    };
+    
+    checkAPI();
+  });
+}
+
+// Wait for electronAPI to be available before rendering
+waitForElectronAPI().then(() => {
 const root = ReactDOM.createRoot(document.getElementById('react-root'));
 root.render(
   // Temporarily disable StrictMode in development to reduce duplicate API calls
@@ -632,4 +653,7 @@ root.render(
   )
 );
 
-// App loaded successfully 
+  console.log('✅ StratoSort React app loaded successfully');
+}).catch((error) => {
+  console.error('❌ Failed to initialize StratoSort:', error);
+}); 

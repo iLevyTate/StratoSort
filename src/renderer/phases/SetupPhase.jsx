@@ -24,12 +24,12 @@ const validateConfig = (config) => {
   
   // Host validation - use correct field name
   if (!config.ollamaHost || config.ollamaHost.trim().length === 0) {
-    errors.host = 'Host URL is required';
+    errors.ollamaHost = 'Host URL is required';
   } else {
     try {
       new URL(config.ollamaHost);
     } catch {
-      errors.host = 'Please enter a valid URL (e.g., http://localhost:11434)';
+      errors.ollamaHost = 'Please enter a valid URL (e.g., http://localhost:11434)';
     }
   }
   
@@ -499,12 +499,12 @@ function SetupPhase() {
             type="text"
             value={settings.ollamaHost}
             onChange={(e) => handleFieldChange('ollamaHost', e.target.value)}
-            className={`glass-input w-full text-sm ${validationErrors.host ? 'border-red-400 bg-red-400/10' : ''}`}
+            className={`glass-input w-full text-sm ${validationErrors.ollamaHost ? 'border-red-400 bg-red-400/10' : ''}`}
             placeholder="http://127.0.0.1:11434"
           />
-          {validationErrors.host && (
+          {validationErrors.ollamaHost && (
             <p className="text-red-400 text-xs mt-1 px-2">
-              {validationErrors.host}
+              {validationErrors.ollamaHost}
             </p>
           )}
           <button onClick={testOllamaConnection} className="glass-button text-xs px-2 sm:px-3 py-1 mt-2">

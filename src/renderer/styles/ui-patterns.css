@@ -709,7 +709,54 @@ html, body {
   font-weight: 600;
 }
 
-/* Enhanced Welcome Phase Styles - Compact Layout System */
+/* Enhanced Welcome Phase Styles - Fixed Layout and Gradient Text */
+.welcome-header {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  max-height: 160px; /* Fixed height to prevent overlap */
+}
+
+.welcome-actions {
+  flex-shrink: 0;
+  padding: 1rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.1), transparent);
+  backdrop-filter: blur(8px);
+  max-height: 100px; /* Fixed height */
+}
+
+/* Fixed Gradient Text - Works across all browsers */
+.stratosort-gradient-text {
+  background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #ec4899 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 3s ease-in-out infinite;
+  display: inline-block;
+  font-weight: 900;
+}
+
+/* Fallback for browsers that don't support background-clip: text */
+@supports not (-webkit-background-clip: text) {
+  .stratosort-gradient-text {
+    background: none;
+    -webkit-text-fill-color: unset;
+    color: #a855f7;
+    text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 .welcome-hero {
   text-align: center;
   margin-bottom: 1rem;
@@ -738,6 +785,7 @@ html, body {
   margin-right: auto;
 }
 
+/* Fixed Features Grid - No Overlapping */
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -755,15 +803,16 @@ html, body {
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
-  padding: 1.5rem;
+  padding: 1rem;
   text-align: center;
   transition: all var(--transition-slow);
-  min-height: 160px;
+  min-height: 140px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   position: relative;
   overflow: hidden;
+  margin: 0; /* Remove any default margins */
 }
 
 .feature-card:hover {
@@ -775,30 +824,49 @@ html, body {
 }
 
 .feature-icon {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
   display: block;
   transition: transform var(--transition-slow);
 }
 
 .feature-title {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 800;
   color: var(--text-on-glass);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   text-shadow: 0 2px 4px rgba(255, 255, 255, 0.4);
   transition: color var(--transition-normal);
+  line-height: 1.2;
 }
 
 .feature-description {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-on-glass-light);
-  line-height: 1.4;
+  line-height: 1.3;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
   font-weight: 500;
+  flex: 1;
 }
 
-/* Enhanced Glass Card Variants - Compact */
+/* Enhanced Glass Card Variants - No Overlapping */
+.glass-card {
+  background: var(--glass-white);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  transition: all var(--transition-normal);
+  margin: 0; /* Ensure no default margins */
+}
+
+.glass-card:hover {
+  background: var(--glass-white-strong);
+  box-shadow: var(--shadow-glass-hover);
+  transform: translateY(-2px);
+}
+
 .glass-card-strong {
   background: var(--glass-white-strong);
   backdrop-filter: blur(24px);
@@ -809,6 +877,7 @@ html, body {
     var(--shadow-glass-strong),
     0 8px 32px rgba(0, 0, 0, 0.1);
   transition: all var(--transition-normal);
+  margin: 0; /* Ensure no default margins */
 }
 
 .glass-card-strong:hover {
@@ -819,13 +888,13 @@ html, body {
     0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
-/* Enhanced Action Buttons Styling - Compact */
+/* Enhanced Action Buttons Styling - Fixed Layout */
 .action-buttons {
   display: flex;
   gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
-  margin-top: 1rem;
+  margin: 0; /* Remove margin to prevent overlap */
   animation: fadeInUp 1s ease-out 0.4s both;
 }
 
@@ -839,6 +908,7 @@ html, body {
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
+  margin: 0; /* Ensure no default margins */
 }
 
 .action-buttons .btn-primary {
@@ -870,12 +940,12 @@ html, body {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
-/* Stats Section Styling - Compact */
+/* Stats Section Styling - No Overlapping */
 .stats-row {
   display: flex;
   justify-content: center;
   gap: 1rem;
-  margin-bottom: 2rem;
+  margin: 0 0 1.5rem 0; /* Controlled margins */
   flex-wrap: wrap;
 }
 
@@ -885,11 +955,12 @@ html, body {
   -webkit-backdrop-filter: blur(16px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--glass-border);
-  padding: 1rem;
+  padding: 0.75rem;
   text-align: center;
   min-width: 80px;
   transition: all var(--transition-normal);
   animation: fadeInUp 0.6s ease-out both;
+  margin: 0; /* Remove default margins */
 }
 
 .stat-card:hover {
@@ -899,36 +970,41 @@ html, body {
 }
 
 .stat-number {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 900;
   color: var(--text-on-glass);
   margin-bottom: 0.25rem;
   text-shadow: 0 2px 4px rgba(255, 255, 255, 0.4);
+  line-height: 1;
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-readable-light);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  line-height: 1;
 }
 
-/* Enhanced Typography for Better Readability */
+/* Enhanced Typography for Better Readability - Fixed */
 .text-gradient {
   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%);
+  background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  color: transparent;
   font-weight: 900;
+  animation: gradient-shift 3s ease-in-out infinite;
 }
 
-/* Privacy Section Enhancements - Compact */
+/* Privacy Section Enhancements - No Overlapping */
 .privacy-features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin: 1rem 0 0 0; /* Controlled margins */
 }
 
 .privacy-feature {
@@ -939,6 +1015,7 @@ html, body {
   font-size: 0.75rem;
   color: var(--text-readable-light);
   font-weight: 500;
+  margin: 0; /* Remove default margins */
 }
 
 .privacy-checkmark {
@@ -947,8 +1024,12 @@ html, body {
   font-size: 0.875rem;
 }
 
-/* Responsive Design Improvements - Mobile First */
+/* Responsive Design Improvements - No Overlapping Elements */
 @media (min-width: 640px) {
+  .welcome-header {
+    max-height: 180px;
+  }
+  
   .welcome-title {
     font-size: 2.5rem;
   }
@@ -964,16 +1045,16 @@ html, body {
   }
   
   .feature-card {
-    padding: 1.75rem;
-    min-height: 180px;
+    padding: 1.25rem;
+    min-height: 160px;
   }
   
   .feature-title {
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
   
   .feature-description {
-    font-size: 0.875rem;
+    font-size: 0.8rem;
   }
   
   .stats-row {
@@ -981,16 +1062,16 @@ html, body {
   }
   
   .stat-card {
-    min-width: 100px;
-    padding: 1.25rem;
+    min-width: 90px;
+    padding: 1rem;
   }
   
   .stat-number {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
   }
   
   .stat-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .action-buttons .btn-primary,
@@ -1002,6 +1083,10 @@ html, body {
 }
 
 @media (min-width: 768px) {
+  .welcome-header {
+    max-height: 200px;
+  }
+  
   .welcome-title {
     font-size: 3rem;
   }
@@ -1016,8 +1101,16 @@ html, body {
   }
   
   .feature-card {
-    padding: 2rem;
-    min-height: 200px;
+    padding: 1.5rem;
+    min-height: 180px;
+  }
+  
+  .feature-title {
+    font-size: 1.125rem;
+  }
+  
+  .feature-description {
+    font-size: 0.85rem;
   }
   
   .stats-row {
@@ -1031,6 +1124,10 @@ html, body {
 }
 
 @media (min-width: 1024px) {
+  .welcome-header {
+    max-height: 220px;
+  }
+  
   .welcome-title {
     font-size: 3.5rem;
   }
@@ -1045,8 +1142,8 @@ html, body {
   }
   
   .feature-card {
-    padding: 2.25rem;
-    min-height: 220px;
+    padding: 1.75rem;
+    min-height: 200px;
   }
   
   .feature-title {
@@ -1054,7 +1151,7 @@ html, body {
   }
   
   .feature-description {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
   
   .action-buttons .btn-primary,
@@ -1065,7 +1162,7 @@ html, body {
   }
 }
 
-/* Animation Enhancements */
+/* Animation Enhancements - No Jitter */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -1092,7 +1189,7 @@ html, body {
   animation: slideInScale 0.5s ease-out both;
 }
 
-/* Stagger animation delays for sequential elements */
+/* Stagger animation delays for sequential elements - No overlap */
 .feature-card:nth-child(1) { animation-delay: 0.1s; }
 .feature-card:nth-child(2) { animation-delay: 0.2s; }
 .feature-card:nth-child(3) { animation-delay: 0.3s; }

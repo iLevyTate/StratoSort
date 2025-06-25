@@ -294,6 +294,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     select: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT),
     selectDirectory: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT_DIRECTORY),
     getDocumentsPath: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH),
+    getFileStats: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILE_STATS, filePath),
+    getFilesInDirectory: (dirPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
     createFolder: (fullPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, fullPath),
     organize: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch_organize', operations }),
     performOperation: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, operations),
@@ -314,6 +316,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Smart Folders
   smartFolders: {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET),
+    getCustom: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM),
+    updateCustom: (customFolders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, customFolders),
+    save: (folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SAVE, folders),
     scanStructure: (rootPath) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, rootPath),
     add: (folder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.ADD, folder),
     edit: (folderId, updatedFolder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.EDIT, folderId, updatedFolder),
@@ -325,6 +330,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: (options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET, options),
     search: (query, options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, query, options),
     getStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS),
+    getFileHistory: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, filePath),
+    clear: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR),
     export: (format) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, format)
   },
 

@@ -35,7 +35,7 @@ async function getOllamaModel() {
 }
 
 async function setOllamaModel(modelName) {
-  return serviceIntegration.modelManager.setAndVerifyModel(modelName);
+  return serviceIntegration.modelManager.setSelectedModel(modelName);
 }
 
 // Legacy folder management functions removed - now handled by SmartFolderService
@@ -183,8 +183,8 @@ function createWindow() {
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
       });
     });
-    // Only open dev tools in development mode if explicitly requested
-    if (process.env.FORCE_DEV_TOOLS === 'true') {
+    // Temporarily enable dev tools to debug React loading issue
+    if (isDev) {
       mainWindow.webContents.openDevTools();
     }
   } else {
@@ -246,6 +246,54 @@ function createWindow() {
 
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
+
+// Add missing SELECT_DIRECTORY handler
+ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Select Directory'
+    });
+    
+    if (result.canceled) {
+      return { canceled: true };
+    }
+    
+    return { 
+      canceled: false, 
+      filePaths: result.filePaths,
+      path: result.filePaths[0] 
+    };
+  } catch (error) {
+    logger.error('Failed to open directory dialog', { 
+      component: 'file-operations',
+      error: error.message 
+    });
+    throw error;
+  }
+});
+
+// Add missing GET_FILE_STATS handler
+ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
+  try {
+    const stats = await fs.stat(filePath);
+    return {
+      size: stats.size,
+      isFile: stats.isFile(),
+      isDirectory: stats.isDirectory(),
+      mtime: stats.mtime,
+      ctime: stats.ctime,
+      atime: stats.atime
+    };
+  } catch (error) {
+    logger.error('Failed to get file stats', { 
+      component: 'file-operations',
+      filePath,
+      error: error.message 
+    });
+    throw error;
+  }
+});
 
 ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, folderPath) => {
   try {
@@ -480,6 +528,30 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
         
       for (let i = 0; i < operation.operations.length; i++) {
         const op = operation.operations[i];
+        
+        // Handle new destination format with smart folder path resolution
+        let finalDestination;
+        if (typeof op.destination === 'object' && op.destination.folderPath && op.destination.fileName) {
+          // New format: resolve smart folder path and construct full destination
+          const documentsPath = app.getPath('documents');
+          let resolvedFolderPath;
+          
+          if (op.destination.folderPath.startsWith('/') || op.destination.folderPath.includes(':')) {
+            // Absolute path
+            resolvedFolderPath = path.resolve(op.destination.folderPath);
+          } else {
+            // Relative path or folder name - resolve from Documents
+            resolvedFolderPath = path.resolve(documentsPath, op.destination.folderPath);
+          }
+          
+          finalDestination = path.join(resolvedFolderPath, op.destination.fileName);
+        } else {
+          // Legacy format: destination is already a complete path
+          finalDestination = op.destination;
+        }
+        
+        // Update the operation with the resolved destination
+        op.destination = finalDestination;
         
         logger.debug('Processing batch operation', { 
           component: 'file-ops',
@@ -949,6 +1021,51 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
   }
 });
 
+// Add missing GET_CUSTOM_FOLDERS handler
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, async () => {
+  try {
+    const customFolders = await serviceIntegration.smartFolderService.getCustomFolders();
+    logger.info(`Retrieved ${customFolders.length} custom folders`, { component: 'smart-folders' });
+    return { success: true, folders: customFolders };
+  } catch (error) {
+    logger.error('Failed to get custom folders', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
+    return { success: false, error: error.message, folders: [] };
+  }
+});
+
+// Add missing UPDATE_CUSTOM_FOLDERS handler
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, customFolders) => {
+  try {
+    const result = await serviceIntegration.smartFolderService.updateCustomFolders(customFolders);
+    logger.info(`Updated ${customFolders.length} custom folders`, { component: 'smart-folders' });
+    return { success: true, folders: result };
+  } catch (error) {
+    logger.error('Failed to update custom folders', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
+// Add missing SAVE_SMART_FOLDERS handler
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
+  try {
+    const result = await serviceIntegration.smartFolderService.saveSmartFolders(folders);
+    logger.info(`Saved ${folders.length} smart folders`, { component: 'smart-folders' });
+    return { success: true, folders: result };
+  } catch (error) {
+    logger.error('Failed to save smart folders', { 
+      component: 'smart-folders',
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
 // Analyze a single file (legacy handler - using correct service call)
 ipcMain.handle(IPC_CHANNELS.FILE_ANALYZE, async (event, payload) => {
   const { filePath, options = {} } = payload || {};
@@ -1295,6 +1412,41 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
     return await serviceIntegration.analysisHistory.getStatistics();
   } catch (error) {
     logger.error('Failed to get analysis statistics', { component: 'analysis-history', error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Add missing GET_FILE_HISTORY handler
+ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, async (event, filePath) => {
+  try {
+    const history = await serviceIntegration.analysisHistoryService.getFileHistory(filePath);
+    logger.info(`Retrieved analysis history for file: ${filePath}`, { 
+      component: 'analysis-history',
+      filePath,
+      historyCount: history.length 
+    });
+    return { success: true, history };
+  } catch (error) {
+    logger.error('Failed to get file analysis history', { 
+      component: 'analysis-history',
+      filePath,
+      error: error.message 
+    });
+    return { success: false, error: error.message, history: [] };
+  }
+});
+
+// Add missing CLEAR_ANALYSIS_HISTORY handler
+ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR, async () => {
+  try {
+    const result = await serviceIntegration.analysisHistoryService.clearHistory();
+    logger.info('Analysis history cleared', { component: 'analysis-history' });
+    return { success: true, result };
+  } catch (error) {
+    logger.error('Failed to clear analysis history', { 
+      component: 'analysis-history',
+      error: error.message 
+    });
     return { success: false, error: error.message };
   }
 });

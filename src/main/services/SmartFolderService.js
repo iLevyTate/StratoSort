@@ -40,7 +40,7 @@ class SmartFolderService {
         id: 'financial-docs-default',
         name: 'Financial Documents',
         description: 'Invoices, receipts, tax documents, financial statements.',
-        path: path.join(documentsPath, 'StratoSort/Financial'),
+        path: path.join(documentsPath, 'StratoSort', 'Financial'),
         emoji: '💰',
         isDefault: true,
       },
@@ -48,7 +48,7 @@ class SmartFolderService {
         id: 'project-files-default',
         name: 'Project Files',
         description: 'Proposals, specifications, plans, and reports.',
-        path: path.join(documentsPath, 'StratoSort/Projects'),
+        path: path.join(documentsPath, 'StratoSort', 'Projects'),
         emoji: '📂',
         isDefault: true,
       },
@@ -97,19 +97,22 @@ class SmartFolderService {
       throw new Error('Folder name and path are required.');
     }
 
+    // Normalize the path to use correct separators for the current platform
+    const normalizedPath = path.resolve(folderPath);
+
     const folders = this.getAll();
     if (folders.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
       throw new Error(`A smart folder with the name "${name}" already exists.`);
     }
-    if (folders.some((f) => f.path === folderPath)) {
-      throw new Error(`A smart folder with the path "${folderPath}" already exists.`);
+    if (folders.some((f) => path.resolve(f.path) === normalizedPath)) {
+      throw new Error(`A smart folder with the path "${normalizedPath}" already exists.`);
     }
 
     const newFolder = {
       id: randomUUID(),
       name,
       description: description || '',
-      path: folderPath,
+      path: normalizedPath,
       emoji: emoji || '📁',
       createdAt: new Date().toISOString(),
     };
@@ -146,15 +149,19 @@ class SmartFolderService {
     // If path changed, rename physical directory
     if (updatedData.path && updatedData.path !== originalFolder.path) {
       try {
+        // Normalize the new path to use correct separators
+        const normalizedNewPath = path.resolve(updatedData.path);
+        updatedFolder.path = normalizedNewPath;
+        
         // Ensure new parent directory exists
-        await fs.mkdir(path.dirname(updatedData.path), { recursive: true });
+        await fs.mkdir(path.dirname(normalizedNewPath), { recursive: true });
         // Check if original path exists before trying to rename
         const stats = await fs.stat(originalFolder.path).catch(() => null);
         if (stats) {
-          await fs.rename(originalFolder.path, updatedData.path);
+          await fs.rename(originalFolder.path, normalizedNewPath);
         } else {
            // If original path doesn't exist, just create the new one
-           await fs.mkdir(updatedData.path, { recursive: true });
+           await fs.mkdir(normalizedNewPath, { recursive: true });
         }
       } catch (error) {
         logger.error(`Failed to rename smart folder directory from ${originalFolder.path} to ${updatedData.path}`, { component: 'SmartFolderService', error: error.message });

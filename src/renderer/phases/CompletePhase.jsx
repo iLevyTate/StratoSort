@@ -11,51 +11,49 @@ function CompletePhase() {
 
   return (
     <PhaseLayout>
-      <div className="phase-content animate-fade-in-up">
-        {/* Hero Section */}
-        <div className="welcome-hero">
-          <div className="text-6xl mb-4">✅</div>
-          <h1 className="welcome-title">Organization Complete!</h1>
-          <p className="welcome-subtitle">
-            Successfully organized {organizedFiles.length} files using AI-powered analysis
+      <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8">
+        {/* Success Icon */}
+        <div className="mb-6">
+          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+            <span className="text-4xl">✅</span>
+          </div>
+        </div>
+
+        {/* Success Message */}
+        <div className="text-center mb-8 max-w-2xl">
+          <h1 className="text-heading font-bold text-on-glass mb-4">
+            Organization Complete!
+          </h1>
+          <p className="text-body text-readable">
+            {organizedFiles.length} files have been successfully organized into your smart folders.
           </p>
         </div>
 
-        {organizedFiles.length > 0 && (
-          <div className="glass-card p-8 mb-8 text-left max-w-2xl">
-            <h3 className="text-on-glass text-xl font-bold mb-6 text-center">Organization Summary</h3>
-            <div className="space-y-3">
-              {organizedFiles.slice(0, 5).map((file, index) => (
-                <div key={index} className="flex items-center space-x-3 text-readable">
-                  <span className="text-green-500 font-bold">✓</span>
-                  <span className="text-sm">
-                    <span className="font-medium">{file.originalName || `File ${index + 1}`}</span>
-                    <span className="text-readable-light"> → {file.newLocation || 'Organized'}</span>
-                  </span>
-                </div>
-              ))}
-              {organizedFiles.length > 5 && (
-                <div className="text-sm text-readable-light italic text-center pt-2">
-                  ...and {organizedFiles.length - 5} more files
-                </div>
-              )}
+        {/* Results Summary */}
+        <div className="glass-card p-6 mb-8 w-full max-w-md">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-on-glass mb-2">
+              {organizedFiles.length}
+            </div>
+            <div className="text-caption text-readable">
+              Files Organized
             </div>
           </div>
-        )}
+        </div>
 
         {/* Action Buttons */}
-        <div className="action-buttons">
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
           <button 
             onClick={() => actions.advancePhase(PHASES.ORGANIZE)}
-            className="action-button"
+            className="btn-glass-subtle px-6 py-3 w-full sm:w-auto"
           >
-            ← Back to Organization
+            ← Back to Organize
           </button>
           <button 
-            onClick={() => actions.resetWorkflow()}
-            className="action-button-primary"
+            onClick={() => actions.resetWorkflow()} 
+            className="btn-glass-primary px-6 py-3 w-full sm:w-auto"
           >
-            🚀 Start New Session
+            🔄 Start New Session
           </button>
         </div>
       </div>

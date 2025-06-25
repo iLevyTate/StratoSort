@@ -9,6 +9,7 @@ import useDragAndDrop from '../hooks/useDragAndDrop';
 import { useFileAnalysis } from '../hooks/useFileAnalysis';
 import PhaseLayout from '../layout/PhaseLayout';
 import { useErrorHandler } from '../utils/ErrorHandling';
+import Button from '../components/Button';
 
 const { PHASES } = require('../../shared/constants');
 
@@ -97,6 +98,7 @@ function DiscoverPhase() {
   // Handle file selection
   const handleFileSelection = async () => {
     try {
+      showInfo('Opening file browser...');
       const result = await window.electronAPI.files.select();
       
       if (result && result.success && result.files && result.files.length > 0) {
@@ -119,25 +121,33 @@ function DiscoverPhase() {
         showSuccess(`Added ${newFiles.length} files`);
       } else if (result && !result.success) {
         if (result.error) {
+          console.error('File selection error:', result.error);
           handleError(new Error(result.error), 'File Selection');
+        } else {
+          console.log('File selection cancelled by user');
         }
-        // If no error, user likely cancelled - don't show error
+      } else {
+        console.log('File selection cancelled or no files selected');
       }
     } catch (error) {
+      console.error('File selection error:', error);
       handleError(error, 'File Selection');
+      showError('Failed to open file browser - please try again');
     }
   };
 
   // Handle folder selection
   const handleFolderSelection = async () => {
     try {
+      showInfo('Opening folder browser...');
       const result = await window.electronAPI.files.selectDirectory();
       
       if (result && result.folder) {
         setIsScanning(true);
+        showInfo('Scanning folder for files...');
         const scanResult = await window.electronAPI.smartFolders.scanStructure(result.folder);
         
-        if (scanResult && scanResult.files) {
+        if (scanResult && scanResult.files && scanResult.files.length > 0) {
           const newFiles = scanResult.files.map((filePath) => {
             const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
             return {
@@ -155,10 +165,19 @@ function DiscoverPhase() {
           });
 
           showSuccess(`Scanned folder: ${newFiles.length} files found`);
+        } else if (scanResult && scanResult.files && scanResult.files.length === 0) {
+          showWarning('No supported files found in selected folder');
+        } else {
+          console.error('Folder scan result:', scanResult);
+          showError('Folder scan failed - no files returned');
         }
+      } else {
+        console.log('Folder selection cancelled by user');
       }
     } catch (error) {
+      console.error('Folder selection error:', error);
       handleError(error, 'Folder Selection');
+      showError('Failed to scan folder - please try again');
     } finally {
       setIsScanning(false);
     }
@@ -168,9 +187,11 @@ function DiscoverPhase() {
   const handleSystemScan = async () => {
     try {
       setIsScanning(true);
+      showInfo('Starting system scan...');
+      
       const result = await window.electronAPI.system.scanCommonDirectories();
       
-      if (result && result.files) {
+      if (result && result.files && result.files.length > 0) {
         const newFiles = result.files.map((filePath) => {
           const pathString = typeof filePath === 'string' ? filePath : filePath.path || '';
           return {
@@ -183,9 +204,16 @@ function DiscoverPhase() {
 
         setSelectedFiles(newFiles);
         showSuccess(`System scan complete: ${newFiles.length} files found`);
+      } else if (result && result.files && result.files.length === 0) {
+        showWarning('No supported files found in common directories');
+      } else {
+        console.error('System scan result:', result);
+        showError('System scan failed - no files returned');
       }
     } catch (error) {
+      console.error('System scan error:', error);
       handleError(error, 'System Scan');
+      showError('System scan failed - please try again');
     } finally {
       setIsScanning(false);
     }
@@ -208,18 +236,28 @@ function DiscoverPhase() {
 
   // Handle proceed
   const handleProceed = () => {
+    console.log('DiscoverPhase proceeding with data:', {
+      selectedFiles: selectedFiles.length,
+      analysisResults: analysisResults.length,
+      analysisResultsStructure: analysisResults[0]
+    });
     actions.setPhaseData('selectedFiles', selectedFiles);
     actions.setPhaseData('analysisResults', analysisResults);
     actions.advancePhase(PHASES.ORGANIZE);
   };
 
   const canProceed = () => {
-    return selectedFiles.length > 0 && analysisResults.length > 0;
+    const readyFiles = selectedFiles.filter(file => 
+      analysisResults.find(r => r.file.path === file.path)
+    );
+    return selectedFiles.length > 0 && readyFiles.length > 0;
   };
 
   const getStatusCounts = () => {
     const total = selectedFiles.length;
-    const analyzed = analysisResults.length;
+    const analyzed = selectedFiles.filter(file => 
+      analysisResults.find(r => r.file.path === file.path)
+    ).length;
     const analyzing = isAnalyzing ? 1 : 0;
     const pending = total - analyzed - analyzing;
     
@@ -231,64 +269,104 @@ function DiscoverPhase() {
       case 'drag':
         return (
           <DropZone 
-            className={`glass-card transition-all ${
-              isDragActive ? 'glass-card-strong scale-105' : ''
+            className={`card-glass-medium p-8 transition-all duration-300 interactive-lift ${
+              isDragActive ? 'ring-2 ring-blue-500 scale-105 bg-blue-500/10' : ''
             }`}
             showInstructions={false}
           >
-            <div className="text-4xl mb-2">📁</div>
-            <h3 className="text-on-glass text-lg font-bold mb-1">
-              {isDragActive ? 'Drop files here' : 'Drag & Drop Files'}
-            </h3>
-            <p className="text-readable-light text-sm">
-              Drag files or folders directly into this area
-            </p>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-primary rounded-xl flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📁</span>
+              </div>
+              <h3 className="text-heading font-bold text-on-glass mb-3">
+                {isDragActive ? 'Drop Files Here!' : 'Drag & Drop Files'}
+              </h3>
+              <p className="text-body text-readable max-w-md mx-auto mb-4">
+                Drag files or folders directly into this area for instant processing
+              </p>
+              <div className="flex justify-center gap-2">
+                <span className="px-3 py-1 bg-blue-500/20 text-blue-300 text-sm rounded-full">PDF</span>
+                <span className="px-3 py-1 bg-green-500/20 text-green-300 text-sm rounded-full">DOCX</span>
+                <span className="px-3 py-1 bg-purple-500/20 text-purple-300 text-sm rounded-full">Images</span>
+              </div>
+            </div>
           </DropZone>
         );
 
       case 'files':
         return (
-          <div className="glass-card p-6 text-center">
-            <div className="text-4xl mb-2">🗂️</div>
-            <h3 className="text-on-glass text-lg font-bold mb-2">Select Files</h3>
+          <div className="card-glass-medium p-8 text-center interactive-lift">
+            <div className="w-16 h-16 bg-gradient-accent rounded-xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">🗂️</span>
+            </div>
+            <h3 className="text-heading font-bold text-on-glass mb-3">Select Individual Files</h3>
+            <p className="text-body text-readable max-w-md mx-auto mb-6">
+              Browse and select specific files from your system for analysis
+            </p>
             <button
               onClick={handleFileSelection}
-              className="glass-button-primary"
+              className="btn-glass-primary px-6 py-3 text-base font-bold interactive-scale"
             >
-              Browse Files
+              📁 Browse Files
             </button>
           </div>
         );
 
       case 'folder':
         return (
-          <div className="glass-card p-6 text-center">
-            <div className="text-4xl mb-2">📂</div>
-            <h3 className="text-on-glass text-lg font-bold mb-2">Select Folder</h3>
+          <div className="card-glass-medium p-8 text-center interactive-lift">
+            <div className="w-16 h-16 bg-gradient-secondary rounded-xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">📂</span>
+            </div>
+            <h3 className="text-heading font-bold text-on-glass mb-3">Select Entire Folder</h3>
+            <p className="text-body text-readable max-w-md mx-auto mb-6">
+              Choose a folder to automatically discover all supported files within it
+            </p>
             <button
               onClick={handleFolderSelection}
               disabled={isScanning}
-              className="glass-button-primary"
+              className="btn-glass-primary px-6 py-3 text-base font-bold interactive-scale"
             >
-              {isScanning ? 'Scanning...' : 'Browse Folders'}
+              {isScanning ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
+                  Scanning...
+                </>
+              ) : (
+                '📁 Browse Folders'
+              )}
             </button>
           </div>
         );
 
       case 'scan':
         return (
-          <div className="glass-card p-6 text-center">
-            <div className="text-4xl mb-2">🔍</div>
-            <h3 className="text-on-glass text-lg font-bold mb-2">System Scan</h3>
-            <p className="text-readable-light text-sm mb-2">
-              Automatically discover files in common directories
+          <div className="card-glass-medium p-8 text-center interactive-lift">
+            <div className="w-16 h-16 bg-gradient-primary rounded-xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">🔍</span>
+            </div>
+            <h3 className="text-heading font-bold text-on-glass mb-3">Intelligent System Scan</h3>
+            <p className="text-body text-readable max-w-md mx-auto mb-4">
+              Automatically discover files in common directories like Documents, Downloads, and Desktop
             </p>
+            <div className="flex justify-center gap-2 mb-6">
+              <span className="px-3 py-1 bg-white/20 text-on-glass text-sm rounded-full">📄 Documents</span>
+              <span className="px-3 py-1 bg-white/20 text-on-glass text-sm rounded-full">📥 Downloads</span>
+              <span className="px-3 py-1 bg-white/20 text-on-glass text-sm rounded-full">🖥️ Desktop</span>
+            </div>
             <button
               onClick={handleSystemScan}
               disabled={isScanning}
-              className="glass-button-primary"
+              className="btn-glass-hero px-6 py-3 text-base font-bold interactive-scale"
             >
-              {isScanning ? 'Scanning...' : 'Start System Scan'}
+              {isScanning ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
+                  Scanning System...
+                </>
+              ) : (
+                '🚀 Start System Scan'
+              )}
             </button>
           </div>
         );
@@ -304,75 +382,112 @@ function DiscoverPhase() {
     const { total, analyzed, analyzing, pending } = getStatusCounts();
 
     return (
-      <div className="glass-card max-h-48 overflow-hidden">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-on-glass text-sm font-bold">
-            Selected Files ({total})
-          </h3>
-          <div className="flex space-x-2">
-            <span className="status-badge status-badge-success">
+      <div className="card-glass-medium p-6 interactive-lift">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
+              <span className="text-lg">📄</span>
+            </div>
+            <div>
+              <h3 className="text-title font-bold text-on-glass">
+                Selected Files
+              </h3>
+              <p className="text-caption text-readable-light">{total} files selected</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1 bg-green-500/20 text-green-300 text-sm rounded-full font-medium">
               {analyzed} Ready
             </span>
             {analyzing > 0 && (
-              <span className="status-badge status-badge-info">
+              <span className="px-3 py-1 bg-blue-500/20 text-blue-300 text-sm rounded-full font-medium">
                 {analyzing} Analyzing
               </span>
             )}
             {pending > 0 && (
-              <span className="status-badge status-badge-warning">
+              <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 text-sm rounded-full font-medium">
                 {pending} Pending
               </span>
             )}
           </div>
         </div>
           
-        <div className="space-y-1 max-h-24 overflow-y-auto glass-scroll">
-          {selectedFiles.slice(0, 3).map((file, index) => (
-            <div key={index} className="flex items-center justify-between p-1 bg-white/10 rounded text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="text-lg">
-                  {file.type === 'document' ? '📄' : 
-                    file.type === 'image' ? '🖼️' : 
-                      file.type === 'audio' ? '🎵' : '📁'}
-                </span>
-                <div>
-                  <p className="text-on-glass font-medium text-xs">{file.name}</p>
-                  <p className="text-readable-light text-xs opacity-75">{file.type}</p>
+        <div className="space-y-3 max-h-64 overflow-y-auto modern-scrollbar pr-2">
+          {selectedFiles.slice(0, 5).map((file, index) => {
+            const isAnalyzed = analysisResults.find((r) => r.file.path === file.path);
+            const isCurrentlyAnalyzing = isAnalyzing && (currentAnalysisFile === file.path || currentAnalysisFile === file.name);
+            
+            return (
+              <div key={index} className="card-glass-subtle p-4 interactive-glow">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">
+                        {file.type === 'document' ? '📄' : 
+                          file.type === 'image' ? '🖼️' : 
+                            file.type === 'audio' ? '🎵' : '📁'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-body font-semibold text-on-glass truncate">{file.name}</p>
+                      <p className="text-caption text-readable-light capitalize">{file.type || 'unknown'} file</p>
+                    </div>
+                  </div>
+                        
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isAnalyzed && (
+                      <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-full font-medium">
+                        ✓ Ready
+                      </span>
+                    )}
+                    {isCurrentlyAnalyzing && (
+                      <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full font-medium">
+                        <div className="animate-spin w-3 h-3 border border-blue-300 border-t-transparent rounded-full inline-block mr-1"></div>
+                        Analyzing
+                      </span>
+                    )}
+                    {!isAnalyzed && !isCurrentlyAnalyzing && (
+                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full font-medium">
+                        Pending
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-                    
-              <div className="flex items-center space-x-2">
-                {analysisResults.find((r) => r.filePath === file.path) && (
-                  <span className="status-badge status-badge-success text-xs">✓</span>
-                )}
-                {isAnalyzing && currentAnalysisFile === file.path && (
-                  <span className="status-badge status-badge-info text-xs">...</span>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           
-          {selectedFiles.length > 3 && (
-            <p className="text-readable-light text-center text-xs">
-              ... and {selectedFiles.length - 3} more files
-            </p>
+          {selectedFiles.length > 5 && (
+            <div className="text-center py-4">
+              <p className="text-readable-light text-sm">
+                ... and <span className="font-bold">{selectedFiles.length - 5}</span> more files
+              </p>
+            </div>
           )}
         </div>
 
         {selectedFiles.length > 0 && (
-          <div className="mt-4 flex space-x-3">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <button 
               onClick={handleStartAnalysis}
               disabled={isAnalyzing}
-              className="glass-button-primary flex-1"
+              className="btn-glass-primary flex-1 px-6 py-3 text-base font-bold interactive-scale"
             >
-              {isAnalyzing ? `Analyzing... (${analysisProgress?.current || 0}/${analysisProgress?.total || 0})` : 'Start AI Analysis'}
+              {isAnalyzing ? (
+                <>
+                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
+                  Analyzing ({analysisProgress?.current || 0}/{analysisProgress?.total || 0})
+                </>
+              ) : (
+                '🤖 Start AI Analysis'
+              )}
             </button>
             <button 
               onClick={() => setSelectedFiles([])}
-              className="glass-button"
+              className="btn-glass-subtle px-6 py-3 text-base interactive-glow"
             >
-              Clear All
+              🗑️ Clear All
             </button>
           </div>
         )}
@@ -382,67 +497,94 @@ function DiscoverPhase() {
 
   return (
     <PhaseLayout>
-      <div className="phase-content-compact animate-fade-in-up">
-        {/* Header */}
-        <div className="phase-header">
-          <h1 className="welcome-title">Discover Files</h1>
-          <p className="welcome-subtitle">Choose how you'd like to add files for organization</p>
+      <div className="h-full flex flex-col p-2 sm:p-4">
+        {/* Enhanced Header Section */}
+        <div className="flex-shrink-0 py-3 px-4 text-center">
+          <div className="max-w-4xl mx-auto">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-primary rounded-xl mb-3 shadow-lg">
+              <span className="text-xl">🔍</span>
+            </div>
+            <h1 className="text-title font-bold text-on-glass mb-2">
+              Discover Files
+            </h1>
+            <p className="text-caption text-readable max-w-2xl mx-auto">
+              Choose how you'd like to add files for AI-powered organization
+            </p>
+          </div>
         </div>
-          
+
         {/* Discovery Method Selector */}
-        <div className="phase-tabs">
-          <div className="glass-card p-2 inline-flex rounded-2xl">
-            {[
-              { id: 'drag', label: 'Drag & Drop', icon: '📁' },
-              { id: 'files', label: 'Select Files', icon: '🗂️' },
-              { id: 'folder', label: 'Select Folder', icon: '📂' },
-              { id: 'scan', label: 'System Scan', icon: '🔍' }
-            ].map((method) => (
+        <div className="flex-shrink-0 px-4 pb-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="card-glass-medium p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: 'drag', label: 'Drag & Drop', icon: '📁' },
+                  { id: 'files', label: 'Select Files', icon: '🗂️' },
+                  { id: 'folder', label: 'Select Folder', icon: '📂' },
+                  { id: 'scan', label: 'System Scan', icon: '🔍' }
+                ].map((method) => (
+                  <button
+                    key={method.id}
+                    onClick={() => setDiscoveryMethod(method.id)}
+                    className={`p-3 rounded-lg font-medium transition-all text-sm text-center interactive-scale ${
+                      discoveryMethod === method.id
+                        ? 'bg-gradient-primary text-white shadow-lg'
+                        : 'card-glass-subtle text-readable hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="text-xl mb-2">{method.icon}</div>
+                    <div className="font-bold">{method.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area - Responsive with controlled scrolling */}
+        <div className="flex-1 px-4 min-h-0 overflow-y-auto">
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Discovery Interface */}
+            <div className="space-y-4">
+              <div className="text-center">
+                <h2 className="text-title font-bold text-on-glass mb-2">Active Discovery Method</h2>
+                <p className="text-caption text-readable-light">Use the selected method to add files</p>
+              </div>
+              {renderDiscoveryMethod()}
+            </div>
+
+            {/* File List */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <h2 className="text-title font-bold text-on-glass mb-2">Selected Files</h2>
+                  <p className="text-caption text-readable-light">{selectedFiles.length} files ready for analysis</p>
+                </div>
+                {renderFileList()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Phase Navigation - Fixed at bottom */}
+        <div className="flex-shrink-0 px-4 py-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <button
-                key={method.id}
-                onClick={() => setDiscoveryMethod(method.id)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
-                  discoveryMethod === method.id
-                    ? 'glass-button-primary'
-                    : 'text-readable-light hover:bg-white/10'
-                }`}
+                onClick={() => actions.advancePhase(PHASES.SETUP)}
+                className="btn-glass-subtle px-6 py-3 interactive-glow w-full sm:w-auto"
               >
-                <span className="mr-2">{method.icon}</span>
-                {method.label}
+                ← Back to Setup
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content Area - Scrollable */}
-        <div className="content-compact">
-          {/* Discovery Interface */}
-          <div className="discovery-method-compact">
-            {renderDiscoveryMethod()}
-          </div>
-
-          {/* File List */}
-          <div className="file-list-compact">
-            {renderFileList()}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="phase-actions">
-          <div className="action-buttons">
-            <button
-              onClick={() => actions.advancePhase(PHASES.SETUP)}
-              className="action-button"
-            >
-              ← Back to Setup
-            </button>
-            <button
-              onClick={handleProceed}
-              disabled={!canProceed()}
-              className="action-button-primary"
-            >
-              Continue to Organization →
-            </button>
+              <button
+                onClick={handleProceed}
+                disabled={!canProceed()}
+                className="btn-glass-primary px-6 py-3 interactive-scale w-full sm:w-auto"
+              >
+                Continue to Organization →
+              </button>
+            </div>
           </div>
         </div>
 

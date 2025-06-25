@@ -709,6 +709,115 @@ html, body {
   font-weight: 600;
 }
 
+/* Enhanced Welcome Phase Styles - Ultra Compact Layout */
+.welcome-header-compact {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 0.25rem 1rem;
+  max-height: 80px; /* Much more compact */
+}
+
+.welcome-actions-compact {
+  flex-shrink: 0;
+  padding: 0.5rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.1), transparent);
+  backdrop-filter: blur(8px);
+  max-height: 80px; /* More compact actions */
+}
+
+/* Ultra Compact Glass Cards */
+.glass-card-compact {
+  background: var(--glass-white);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  transition: all var(--transition-normal);
+  margin: 0;
+  padding: 0.5rem;
+}
+
+.glass-card-compact:hover {
+  background: var(--glass-white-strong);
+  box-shadow: var(--shadow-glass-hover);
+  transform: translateY(-1px) scale(1.02);
+}
+
+/* Compact Feature Cards */
+.feature-card-compact {
+  background: var(--glass-white);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  padding: 0.75rem;
+  text-align: center;
+  transition: all var(--transition-slow);
+  min-height: 100px; /* Much smaller minimum height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  margin: 0;
+}
+
+.feature-card-compact:hover {
+  background: var(--glass-white-strong);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 
+    var(--shadow-glass-hover),
+    0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.feature-card-compact .feature-icon {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+  display: block;
+  transition: transform var(--transition-slow);
+}
+
+.feature-card-compact .feature-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-on-glass);
+  margin-bottom: 0.25rem;
+  text-shadow: 0 2px 4px rgba(255, 255, 255, 0.4);
+  transition: color var(--transition-normal);
+  line-height: 1.1;
+}
+
+.feature-card-compact .feature-description {
+  font-size: 0.65rem;
+  color: var(--text-on-glass-light);
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+  font-weight: 500;
+  flex: 1;
+}
+
+/* Compact Layout Grid System */
+.compact-stats-features {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.compact-stats-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 80px;
+}
+
+.compact-features-column {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
 /* Enhanced Welcome Phase Styles - Fixed Layout and Gradient Text */
 .welcome-header {
   flex-shrink: 0;
@@ -1024,7 +1133,73 @@ html, body {
   font-size: 0.875rem;
 }
 
-/* Responsive Design Improvements - No Overlapping Elements */
+/* Responsive Design Improvements - Compact Layout */
+@media (min-width: 640px) {
+  .welcome-header-compact {
+    max-height: 100px;
+  }
+  
+  .feature-card-compact {
+    min-height: 120px;
+    padding: 1rem;
+  }
+  
+  .feature-card-compact .feature-title {
+    font-size: 0.875rem;
+  }
+  
+  .feature-card-compact .feature-description {
+    font-size: 0.75rem;
+  }
+  
+  .glass-card-compact {
+    padding: 0.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .welcome-header-compact {
+    max-height: 120px;
+  }
+  
+  .compact-features-column {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .feature-card-compact {
+    min-height: 140px;
+    padding: 1.25rem;
+  }
+  
+  .feature-card-compact .feature-title {
+    font-size: 0.9rem;
+  }
+  
+  .feature-card-compact .feature-description {
+    font-size: 0.8rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .welcome-header-compact {
+    max-height: 140px;
+  }
+  
+  .feature-card-compact {
+    min-height: 160px;
+    padding: 1.5rem;
+  }
+  
+  .feature-card-compact .feature-title {
+    font-size: 1rem;
+  }
+  
+  .feature-card-compact .feature-description {
+    font-size: 0.85rem;
+  }
+}
+
+/* Regular responsive styles for backwards compatibility */
 @media (min-width: 640px) {
   .welcome-header {
     max-height: 180px;

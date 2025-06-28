@@ -8,18 +8,20 @@
     <!-- Enhanced CSP: Allows Ollama API calls and WebSocket connections for HMR -->
 </head>
 <body>
-    <div id="react-root">
-        <main class="layout-flex-center" style="height: 100vh; font-family: 'Inter', -apple-system, sans-serif;">
-            <section class="text-center layout-stack" style="max-width: 400px;">
-                <div class="animate-float" style="font-size: 48px; margin-bottom: 16px;" aria-hidden="true">🚀</div>
-                <h1 class="text-heading-4" style="color: #334155; margin: 0;">Loading StratoSort</h1>
-                <p class="text-body-small" style="color: #64748B; margin: 8px 0 0 0;">AI-Powered File Organization</p>
-                <div class="mt-6" style="margin-top: 24px;">
-                    <div class="loading-spinner" style="width: 24px; height: 24px; border: 2px solid #E2E8F0; border-top: 2px solid #2563EB; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                </div>
-            </section>
-        </main>
+    <!-- Initial loading screen -->
+    <div id="initial-loading" style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Inter', -apple-system, sans-serif;">
+        <section style="text-align: center; max-width: 400px;">
+            <div class="animate-float" style="font-size: 48px; margin-bottom: 16px;" aria-hidden="true">🚀</div>
+            <h1 style="color: #334155; margin: 0; font-size: 24px; font-weight: 600;">Loading StratoSort</h1>
+            <p style="color: #64748B; margin: 8px 0 0 0; font-size: 14px;">AI-Powered File Organization</p>
+            <div style="margin-top: 24px;">
+                <div class="loading-spinner" style="width: 24px; height: 24px; border: 2px solid #E2E8F0; border-top: 2px solid #2563EB; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            </div>
+        </section>
     </div>
+    
+    <!-- React root container (must be empty for React to work) -->
+    <div id="root"></div>
     
     <style>
         @keyframes spin {

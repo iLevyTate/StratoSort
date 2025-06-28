@@ -1824,7 +1824,7 @@ if (!gotTheLock) {
       logger.info('[MAIN] Service integration initialized successfully');
       
       // Verify AI models on startup
-      const { ModelVerifier } = require('./services/ModelVerifier');
+      const ModelVerifier = require('./services/ModelVerifier');
       const modelVerifier = new ModelVerifier();
       const modelStatus = await modelVerifier.verifyEssentialModels();
       

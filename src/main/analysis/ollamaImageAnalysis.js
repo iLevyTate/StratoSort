@@ -2,13 +2,13 @@ const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
 
-// App configuration for image analysis
+// App configuration for image analysis - Optimized for speed
 const AppConfig = {
   ai: {
     imageAnalysis: {
-      defaultModel: 'gemma3:4b', // Multimodal model handles both text and vision
+      defaultModel: 'llava:latest', // Dedicated vision model for image analysis
       defaultHost: 'http://127.0.0.1:11434',
-      timeout: 180000, // 3 minutes for multimodal analysis (Gemma 3:4b needs more time)
+      timeout: 120000, // Reduced to 2 minutes with dedicated vision model
       temperature: 0.2,
       maxTokens: 1000,
     }

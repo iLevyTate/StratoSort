@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useContext, createContext, useReducer, useCallback } from 'react';
-import ReactDOM from 'react-dom/client';
+import React, { useState, useEffect, useContext, createContext, useReducer, useCallback, useMemo } from 'react';
 import './tailwind.css';
 
 // Import the UndoRedo system
@@ -331,7 +330,7 @@ function SettingsPanel() {
   const { actions } = usePhase();
   const { addNotification } = useNotification();
   const [settings, setSettings] = useState({
-    ollamaModel: 'gemma3:4b', // Multimodal model for both text and vision analysis
+    ollamaModel: 'llama3.2:latest', // Fastest 2GB model for optimal speed
     ollamaHost: 'http://localhost:11434',
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
@@ -832,9 +831,18 @@ function SetupPhase() {
 
   const loadSmartFolders = async () => {
     try {
+      console.log('[SETUP-DEBUG] Loading smart folders...');
       const folders = await window.electronAPI.smartFolders.get();
+      console.log('[SETUP-DEBUG] Smart folders received from API:', {
+        folders: folders,
+        foldersLength: folders?.length,
+        foldersType: typeof folders
+      });
+      
       setSmartFolders(folders || []);
       actions.setPhaseData('smartFolders', folders || []);
+      
+      console.log('[SETUP-DEBUG] Smart folders set to phase data:', folders || []);
       
       // Update all phase data that depends on smart folders
       await propagateSmartFolderChanges(folders || []);
@@ -2875,6 +2883,14 @@ function OrganizePhase() {
 
   const analysisResults = phaseData.analysisResults || [];
   const smartFolders = phaseData.smartFolders || [];
+  
+  // DEBUG: Log smart folders data
+  console.log('[ORGANIZE-PHASE-DEBUG] Smart folders from phase data:', {
+    smartFoldersCount: smartFolders.length,
+    smartFolders: smartFolders,
+    phaseDataKeys: Object.keys(phaseData),
+    phaseDataSmartFolders: phaseData.smartFolders
+  });
 
   // NEW: Load persisted file states and processed files
   useEffect(() => {
@@ -3104,22 +3120,44 @@ function OrganizePhase() {
     setSelectedFiles(new Set());
   };
 
-  // Find smart folder for category with enhanced matching
-  const findSmartFolderForCategory = (category) => {
-    if (!category) return null;
+  // Find smart folder for category with enhanced matching (memoized for performance)
+  const findSmartFolderForCategory = useMemo(() => {
+    const folderCache = new Map();
     
-    console.log(`[FOLDER-MATCH] Finding smart folder for category: "${category}"`);
-    console.log(`[FOLDER-MATCH] Available smart folders:`, smartFolders.map(f => f.name));
+    return (category) => {
+      if (!category) return null;
+      
+      // Check cache first
+      if (folderCache.has(category)) {
+        return folderCache.get(category);
+      }
+      
+      // Only log in development mode to reduce console spam
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[FOLDER-MATCH] Finding smart folder for category: "${category}"`);
+        console.log(`[FOLDER-MATCH] Available smart folders:`, smartFolders.map(f => ({ name: f?.name, type: typeof f?.name })));
+      }
     
     // Normalize category for matching
     const normalizedCategory = category.toLowerCase().trim();
     
     // 1. Exact match first (case-insensitive)
-    let folder = smartFolders.find(f => 
-      f.name.toLowerCase().trim() === normalizedCategory
-    );
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[FOLDER-MATCH] Searching for exact match with normalized category: "${normalizedCategory}"`);
+    }
+    let folder = smartFolders.find(f => {
+      const folderNameNormalized = f?.name?.toLowerCase()?.trim();
+      const isMatch = folderNameNormalized === normalizedCategory;
+      if (process.env.NODE_ENV === 'development' && isMatch) {
+        console.log(`[FOLDER-MATCH] Exact match candidate: "${f.name}" (normalized: "${folderNameNormalized}") vs "${normalizedCategory}"`);
+      }
+      return isMatch;
+    });
     if (folder) {
-      console.log(`[FOLDER-MATCH] Exact match found: "${folder.name}"`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[FOLDER-MATCH] Exact match found: "${folder.name}"`);
+      }
+      folderCache.set(category, folder);
       return folder;
     }
     
@@ -3141,7 +3179,10 @@ function OrganizePhase() {
         f.name.toLowerCase().replace(/\s+/g, '_') === variant
       );
       if (folder) {
-        console.log(`[FOLDER-MATCH] Variation match found: "${folder.name}" for variant "${variant}"`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[FOLDER-MATCH] Variation match found: "${folder.name}" for variant "${variant}"`);
+        }
+        folderCache.set(category, folder);
         return folder;
       }
     }
@@ -3211,7 +3252,10 @@ function OrganizePhase() {
     
     // Return best match if score is meaningful
     if (bestScore >= 3) {
-      console.log(`[FOLDER-MATCH] Best match found: "${bestMatch.name}" with score ${bestScore}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[FOLDER-MATCH] Best match found: "${bestMatch.name}" with score ${bestScore}`);
+      }
+      folderCache.set(category, bestMatch);
       return bestMatch;
     }
     
@@ -3224,7 +3268,10 @@ function OrganizePhase() {
     );
     
     if (defaultFolder) {
-      console.log(`[FOLDER-MATCH] Using default folder: "${defaultFolder.name}" for category "${category}"`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[FOLDER-MATCH] Using default folder: "${defaultFolder.name}" for category "${category}"`);
+      }
+      folderCache.set(category, defaultFolder);
       return defaultFolder;
     }
     
@@ -3260,14 +3307,21 @@ function OrganizePhase() {
         f.name.toLowerCase().includes(mapping.toLowerCase())
       );
       if (mappedFolder) {
-        console.log(`[FOLDER-MATCH] Mapped category "${category}" to "${mappedFolder.name}" via intelligent mapping`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[FOLDER-MATCH] Mapped category "${category}" to "${mappedFolder.name}" via intelligent mapping`);
+        }
+        folderCache.set(category, mappedFolder);
         return mappedFolder;
       }
     }
     
-    console.log(`[FOLDER-MATCH] No match found for category: "${category}"`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[FOLDER-MATCH] No match found for category: "${category}"`);
+    }
+    folderCache.set(category, null);
     return null;
-  };
+    };
+  }, [smartFolders]); // Memoize based on smartFolders changes
 
   // Handle editing file properties
   const handleEditFile = (fileIndex, field, value) => {
@@ -3743,7 +3797,9 @@ function OrganizePhase() {
           <div className="space-y-fib-8">
             {unprocessedFiles.map((file, index) => {
               const fileWithEdits = getFileWithEdits(file, index);
-              const smartFolder = findSmartFolderForCategory(fileWithEdits.analysis?.category);
+              // Get the current category (either edited or original)
+              const currentCategory = editingFiles[index]?.category || fileWithEdits.analysis?.category;
+              const smartFolder = findSmartFolderForCategory(currentCategory);
               const isSelected = selectedFiles.has(index);
               const stateDisplay = getFileStateDisplay(file.path, !!file.analysis);
               
@@ -4305,21 +4361,5 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ===== RENDER APP =====
-const root = ReactDOM.createRoot(document.getElementById('react-root'));
-root.render(
-  // Temporarily disable StrictMode in development to reduce duplicate API calls
-  process.env.NODE_ENV === 'production' ? (
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-  ) : (
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  )
-);
-
-console.log('🚀 Stratosort React app loaded successfully'); 
+// ===== EXPORT APP COMPONENT =====
+export default App; 

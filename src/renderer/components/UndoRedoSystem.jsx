@@ -223,23 +223,41 @@ export function UndoRedoProvider({ children }) {
     }
   };
 
-  // Undo last action
+  // Undo last action with confirmation for important operations
   const undo = async () => {
-    const action = undoStack.undo();
+    const action = undoStack.peek();
     if (!action) return;
 
+    // Show confirmation for important operations (like file organization)
+    if (action.description && (
+      action.description.toLowerCase().includes('organize') ||
+      action.description.toLowerCase().includes('move') ||
+      action.description.toLowerCase().includes('delete')
+    )) {
+      const confirmed = window.confirm(
+        `Are you sure you want to undo: "${action.description}"?\n\n` +
+        `This will reverse the file operation and move files back to their original locations.`
+      );
+      if (!confirmed) {
+        return; // User cancelled the undo
+      }
+    }
+
+    const undoAction = undoStack.undo();
+    if (!undoAction) return;
+
     try {
-      await action.undo();
+      await undoAction.undo();
       showInfo(
         'Action Undone',
-        `Undid: ${action.description}`
+        `Undid: ${undoAction.description}`
       );
     } catch (error) {
       // If undo fails, restore the action to the stack
-      undoStack.push(action);
+      undoStack.push(undoAction);
       showError(
         'Undo Failed',
-        `Failed to undo ${action.description}: ${error.message}`
+        `Failed to undo ${undoAction.description}: ${error.message}`
       );
     }
   };
@@ -404,18 +422,27 @@ export function UndoRedoToolbar({ className = '' }) {
   const lastAction = peek();
   const nextAction = peekRedo();
 
+  // Check if the last action is an important operation that needs confirmation
+  const isImportantOperation = lastAction?.description && (
+    lastAction.description.toLowerCase().includes('organize') ||
+    lastAction.description.toLowerCase().includes('move') ||
+    lastAction.description.toLowerCase().includes('delete')
+  );
+
   return (
     <div className={`flex items-center space-x-1 ${className}`}>
       <button
         onClick={undo}
         disabled={!canUndo}
-        className={`          p-2 rounded-lg transition-colors
-          ${canUndo 
-            ? 'text-gray-700 hover:bg-gray-100 hover:text-gray-900' 
-            : 'text-gray-300 cursor-not-allowed'
+        className={`p-2 rounded-lg transition-colors border
+          ${!canUndo 
+            ? 'text-gray-300 cursor-not-allowed border-transparent' 
+            : isImportantOperation
+              ? 'text-orange-700 hover:bg-orange-50 hover:text-orange-900 border-orange-200 hover:border-orange-300' 
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 border-transparent hover:border-gray-200'
           }
         `}
-        title={lastAction ? `Undo: ${getActionDescription(lastAction)}` : 'Nothing to undo'}
+        title={lastAction ? `⚠️ Undo: ${getActionDescription(lastAction)}${isImportantOperation ? ' (Will ask for confirmation)' : ''}` : 'Nothing to undo'}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />

@@ -17,13 +17,13 @@ const {
 } = require('../errors/AnalysisError');
 const ModelVerifier = require('../services/ModelVerifier');
 
-// App configuration (simplified)
+// App configuration (simplified) - Optimized for speed
 const AppConfig = {
   ai: {
     textAnalysis: {
-      defaultModel: 'gemma3:4b',
+      defaultModel: 'llama3.2:latest', // Fastest 2GB model instead of 3.3GB gemma3:4b
       defaultHost: 'http://127.0.0.1:11434',
-      timeout: 120000, // 2 minutes for multimodal text analysis
+      timeout: 60000, // Reduced to 1 minute for faster model
       maxContentLength: 12000,
       temperature: 0.1,
       maxTokens: 800,
@@ -66,16 +66,22 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
 
 IMPORTANT: Base your analysis on the CONTENT, not the filename "${originalFileName}". Read through the text carefully to understand the document's true purpose, topics, and themes.
 
-Your response should be a JSON object with these fields:
-- date (any date mentioned in content, in YYYY-MM-DD format)
-- project (main subject/project identified from content, 2-5 words)
-- purpose (document's purpose based on content analysis, 5-10 words)
-- category (most appropriate category for organizing this file)${folderCategoriesStr}
-- keywords (3-7 keywords extracted from the actual content, not filename)
-- confidence (60-100, higher if content is clear and analyzable)
-- suggestedName (descriptive name based on content analysis, underscores, max 50 chars)
+Your response MUST be a valid JSON object with ALL these fields:
+{
+  "date": "YYYY-MM-DD format if found in content, otherwise today's date",
+  "project": "main subject/project from content (2-5 words)",
+  "purpose": "document's purpose based on content (5-10 words)",
+  "category": "most appropriate category"${folderCategoriesStr},
+  "keywords": ["keyword1", "keyword2", "keyword3"], // REQUIRED: 3-7 keywords from the ACTUAL CONTENT
+  "confidence": 85, // number between 60-100
+  "suggestedName": "descriptive_name_based_on_content" // underscores, max 50 chars
+}
 
-CRITICAL: Analyze the content thoroughly. If the content mentions "recovery", "financial planning", "project status", etc., ensure these themes are reflected in your keywords and categorization.
+CRITICAL REQUIREMENTS:
+1. The keywords array MUST contain 3-7 keywords extracted from the document content
+2. Keywords should be specific terms, concepts, or topics mentioned in the text
+3. Do NOT return an empty keywords array
+4. Base ALL fields on the actual document content, not the filename
 
 Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
@@ -92,6 +98,7 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
     if (response.response) {
       try {
+        console.log(`[AI-RAW-RESPONSE] Raw JSON from Ollama: ${response.response}`);
         const parsedJson = JSON.parse(response.response);
         
         // Validate and structure the date
@@ -106,6 +113,9 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
         
         // Ensure array fields are initialized if undefined
         const finalKeywords = Array.isArray(parsedJson.keywords) ? parsedJson.keywords : [];
+        
+        // Log what we got for keywords
+        console.log(`[AI-KEYWORDS-CHECK] Keywords from AI: ${JSON.stringify(parsedJson.keywords)} -> Final: ${JSON.stringify(finalKeywords)}`);
         
         // Ensure confidence is a reasonable number
         if (!parsedJson.confidence || parsedJson.confidence < 60 || parsedJson.confidence > 100) {
@@ -149,8 +159,10 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
 
   // Pre-flight checks for AI-first operation
   try {
-    await modelVerifier.verifyConnection();
-    await modelVerifier.verifyAnalysisType('document');
+    const connectionCheck = await modelVerifier.checkOllamaConnection();
+    if (!connectionCheck.connected) {
+      throw new Error(`Ollama connection failed: ${connectionCheck.error}`);
+    }
   } catch (error) {
     console.error('Pre-flight verification failed:', error.message);
     throw error;

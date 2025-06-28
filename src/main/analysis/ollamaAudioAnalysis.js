@@ -10,14 +10,14 @@ try {
   console.log('node-wav not available, audio analysis will use external tools');
 }
 
-// App configuration for audio analysis
+// App configuration for audio analysis - Optimized for speed
 const AppConfig = {
   ai: {
     audioAnalysis: {
-      whisperModel: 'whisper', // Ollama Whisper model
-      textModel: 'gemma3:4b', // For analyzing transcribed content
+      whisperModel: 'dimavz/whisper-tiny:latest', // Fastest 44MB whisper model
+      textModel: 'llama3.2:latest', // Fastest 2GB text model for analysis
       defaultHost: 'http://127.0.0.1:11434',
-      timeout: 180000, // 3 minutes for audio processing
+      timeout: 60000, // Reduced to 1 minute with tiny whisper model
       temperature: 0.1,
       maxTokens: 1000,
     }

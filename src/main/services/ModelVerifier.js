@@ -12,9 +12,9 @@ class ModelVerifier {
     this.ollamaHost = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
     this.ollama = new Ollama({ host: this.ollamaHost });
     this.essentialModels = [
-      DEFAULT_AI_MODELS.TEXT_ANALYSIS, // gemma3:4b
-      DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // gemma3:4b (multimodal)
-      DEFAULT_AI_MODELS.AUDIO_ANALYSIS, // whisper
+      DEFAULT_AI_MODELS.TEXT_ANALYSIS, // llama3.2:latest (2GB)
+      DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // llava:latest (4.7GB)
+      DEFAULT_AI_MODELS.AUDIO_ANALYSIS, // dimavz/whisper-tiny:latest (44MB)
       'mxbai-embed-large' // For semantic search
     ];
     this.recommendedModels = [

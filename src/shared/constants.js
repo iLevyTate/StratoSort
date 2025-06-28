@@ -198,9 +198,9 @@ const LIMITS = {
   MAX_FILENAME_LENGTH: 255
 };
 
-// Time constants
+// Time constants - Optimized for faster models
 const TIMEOUTS = {
-  AI_REQUEST: 180000, // 3 minutes for multimodal analysis (Gemma 3:4b)
+  AI_REQUEST: 60000, // 1 minute for faster models (llama3.2, whisper-tiny)
   FILE_OPERATION: 10000, // 10 seconds
   DEBOUNCE: 300,
   THROTTLE: 100
@@ -229,12 +229,12 @@ const ALL_SUPPORTED_EXTENSIONS = [
   ...SUPPORTED_ARCHIVE_EXTENSIONS
 ];
 
-// AI Model configurations
+// AI Model configurations - Optimized for speed with smallest available models
 const DEFAULT_AI_MODELS = {
-  TEXT_ANALYSIS: 'gemma3:4b',
-  IMAGE_ANALYSIS: 'gemma3:4b',
-  AUDIO_ANALYSIS: 'whisper',
-  FALLBACK_MODELS: ['llama3.2', 'llama3', 'mistral', 'phi3']
+  TEXT_ANALYSIS: 'llama3.2:latest',        // 2.0GB - Fastest text model
+  IMAGE_ANALYSIS: 'llava:latest',          // 4.7GB - Vision capable model  
+  AUDIO_ANALYSIS: 'dimavz/whisper-tiny:latest', // 44MB - Fastest audio model
+  FALLBACK_MODELS: ['llama3.2:latest', 'gemma3:4b', 'llama3', 'mistral', 'phi3']
 };
 
 // File size limits
@@ -245,11 +245,11 @@ const FILE_SIZE_LIMITS = {
   MAX_DOCUMENT_FILE_SIZE: 200 * 1024 * 1024 // 200MB
 };
 
-// Processing limits
+// Processing limits - Optimized for faster models
 const PROCESSING_LIMITS = {
   MAX_CONCURRENT_ANALYSIS: 3,
   MAX_BATCH_SIZE: 100,
-  ANALYSIS_TIMEOUT: 180000, // 3 minutes
+  ANALYSIS_TIMEOUT: 60000, // 1 minute for faster models
   RETRY_ATTEMPTS: 3
 };
 

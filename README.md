@@ -255,6 +255,7 @@ npm run format           # Code formatting
 3. Follow the established code patterns and architecture
 4. Ensure all tests pass (`npm test`)
 5. Submit pull request with detailed description
+6. Continuous integration will run automatically via [GitHub Actions](.github/workflows/ci.yml)
 
 ### Code Standards
 - **Clean Code**: Follow established patterns, no technical debt

@@ -1352,7 +1352,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
 // System handlers
 ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
   try {
-    return systemAnalytics.getApplicationStatistics();
+    return await serviceIntegration?.getApplicationStatistics?.() || {};
   } catch (error) {
     logger.error('Failed to get system statistics:', error);
     return {};

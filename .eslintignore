@@ -1,0 +1,20 @@
+# Build outputs
+dist/
+release/
+coverage/
+tmp/
+
+# Dependencies
+node_modules/
+
+# Generated files
+*.log
+*.lock
+package-lock.json
+
+# Test files that are auto-generated
+test/mocks/
+test/test-files/
+
+# Electron specific
+*.asar

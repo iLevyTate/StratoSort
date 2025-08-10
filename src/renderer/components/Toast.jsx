@@ -108,12 +108,12 @@ export const ToastContainer = ({ toasts = [], onRemoveToast }) => {
       aria-live="polite"
       aria-label="Notifications"
     >
-      {toasts.map((toast) => (
+      {(toasts || []).slice(-2).map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <Toast
             message={toast.message}
             severity={toast.severity || toast.type}
-            duration={toast.duration}
+            duration={toast.severity === 'error' || toast.type === 'error' ? 0 : toast.duration}
             show={toast.show !== false}
             onClose={() => onRemoveToast?.(toast.id)}
           />

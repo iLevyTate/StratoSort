@@ -548,12 +548,4 @@ function getReverseOperation(operation) {
   return reverseMap[operation] || operation;
 }
 
-export default {
-  UndoRedoProvider,
-  useUndoRedo,
-  UndoRedoToolbar,
-  ACTION_TYPES,
-  createFileAction,
-  createSettingsAction,
-  createBatchAction
-}; 
+export { UndoRedoProvider, useUndoRedo, UndoRedoToolbar };

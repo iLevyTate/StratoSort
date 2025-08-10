@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, createContext, useReducer, useC
 import './tailwind.css';
 
 // Import the UndoRedo system
-import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
+import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem.jsx';
 
 // Import enhanced UI components
 import { ToastContainer, useToast } from './components/Toast';
@@ -1444,27 +1444,19 @@ function SetupPhase() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between">
-        <button 
-          onClick={() => actions.advancePhase(PHASES.WELCOME)}
-          className="btn-secondary"
-        >
-          ← Back to Welcome
-        </button>
-        <button 
-          onClick={() => {
-            if (smartFolders.length === 0) {
-              showWarning('Please add at least one smart folder before continuing');
-            } else {
-              actions.advancePhase(PHASES.DISCOVER);
-            }
-          }}
-          className="btn-primary"
-        >
-          Continue to File Discovery →
-        </button>
-      </div>
+      <StickyActionBar
+        secondaryLabel="← Back to Welcome"
+        onSecondary={() => actions.advancePhase(PHASES.WELCOME)}
+        primaryLabel="Continue to File Discovery →"
+        onPrimary={() => {
+          if (smartFolders.length === 0) {
+            showWarning('Please add at least one smart folder before continuing');
+          } else {
+            actions.advancePhase(PHASES.DISCOVER);
+          }
+        }}
+        meta={`${smartFolders.length} smart folder${smartFolders.length === 1 ? '' : 's'}`}
+      />
 
       {/* Confirmation Dialog */}
       <ConfirmDialog />
@@ -2574,68 +2566,39 @@ function DiscoverPhase() {
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="flex justify-between" role="navigation" aria-label="Phase navigation">
-        <button 
-          onClick={() => actions.advancePhase(PHASES.SETUP)}
-          className="btn-secondary"
-          disabled={false} // Allow navigation even during analysis
-          aria-label="Go back to setup phase"
-        >
-          ← Back to Setup
-        </button>
-        <button 
-          onClick={() => {
-            console.log('[DISCOVER-PHASE] Advancing to ORGANIZE with data:');
-            console.log('[DISCOVER-PHASE] analysisResults:', analysisResults.length);
-            console.log('[DISCOVER-PHASE] fileStates:', Object.keys(fileStates).length);
-            console.log('[DISCOVER-PHASE] smartFolders:', phaseData.smartFolders?.length || 0);
-            
-            // Use functional state update to ensure we capture the most current state
-            setFileStates(currentFileStates => {
-              const finalData = {
-                analysisResults,
-                fileStates: currentFileStates,
-                selectedFiles,
-                isAnalyzing,
-                analysisProgress,
-                namingConvention: {
-                  convention: namingConvention,
-                  dateFormat,
-                  caseConvention,
-                  separator
-                }
-              };
-              
-              console.log('[DISCOVER-PHASE] Final data being passed:', finalData);
-              
-              // Save all phase data before advancing (including current analysis state)
-              actions.setPhaseData('analysisResults', analysisResults);
-              actions.setPhaseData('fileStates', currentFileStates);
-              actions.setPhaseData('selectedFiles', selectedFiles);
-              actions.setPhaseData('isAnalyzing', isAnalyzing);
-              actions.setPhaseData('analysisProgress', analysisProgress);
-              actions.setPhaseData('namingConvention', {
+      <StickyActionBar
+        secondaryLabel="← Back to Setup"
+        onSecondary={() => actions.advancePhase(PHASES.SETUP)}
+        primaryLabel={isAnalyzing ? `Organize Files → (${analysisProgress.current}/${analysisProgress.total} analyzing)` : 'Organize Files →'}
+        onPrimary={() => {
+          setFileStates(currentFileStates => {
+            const finalData = {
+              analysisResults,
+              fileStates: currentFileStates,
+              selectedFiles,
+              isAnalyzing,
+              analysisProgress,
+              namingConvention: {
                 convention: namingConvention,
                 dateFormat,
                 caseConvention,
                 separator
-              });
-              
-              // Advance to organize phase with the complete data
-              actions.advancePhase(PHASES.ORGANIZE, finalData);
-              
-              return currentFileStates; // Return unchanged state
-            });
-          }}
-          disabled={analysisResults.length === 0} // Only disable if no files analyzed yet
-          className={`btn-primary ${analysisResults.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} ${isAnalyzing ? 'animate-pulse' : ''}`}
-          aria-label={`Proceed to organize ${analysisResults.length} analyzed files${isAnalyzing ? ' (analysis in progress)' : ''}`}
-          aria-describedby={analysisResults.length === 0 ? "no-files-message" : (isAnalyzing ? "analysis-in-progress" : undefined)}
-        >
-          {isAnalyzing ? `Organize Files → (${analysisProgress.current}/${analysisProgress.total} analyzing)` : 'Organize Files →'}
-        </button>
-        {analysisResults.length === 0 && (
+              }
+            };
+            actions.setPhaseData('analysisResults', analysisResults);
+            actions.setPhaseData('fileStates', currentFileStates);
+            actions.setPhaseData('selectedFiles', selectedFiles);
+            actions.setPhaseData('isAnalyzing', isAnalyzing);
+            actions.setPhaseData('analysisProgress', analysisProgress);
+            actions.setPhaseData('namingConvention', finalData.namingConvention);
+            actions.advancePhase(PHASES.ORGANIZE, finalData);
+            return currentFileStates;
+          });
+        }}
+        primaryDisabled={analysisResults.length === 0}
+        meta={`${analysisResults.length} analyzed${isAnalyzing ? ' • analyzing…' : ''}`}
+      />
+      {analysisResults.length === 0 && (
           <div id="no-files-message" className="sr-only">
             No files have been analyzed yet. Please select and analyze files before proceeding.
           </div>
@@ -2861,6 +2824,9 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
 
 
 // ===== ORGANIZE PHASE =====
+import StickyActionBar from './components/StickyActionBar.jsx';
+import DetailsDrawer from './components/DetailsDrawer.jsx';
+
 function OrganizePhase() {
   const { actions, phaseData } = usePhase();
   const { addNotification } = useNotification();
@@ -2876,6 +2842,8 @@ function OrganizePhase() {
   const [defaultLocation, setDefaultLocation] = useState('Documents');
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerContent, setDrawerContent] = useState(null);
 
   // NEW: File processing states from discover phase
   const [fileStates, setFileStates] = useState({});
@@ -3863,25 +3831,38 @@ function OrganizePhase() {
                             </span>
                           </div>
                           
-                          {file.analysis.keywords && file.analysis.keywords.length > 0 && (
-                            <div className="text-sm text-system-gray-500 mb-fib-3">
-                              <strong>Keywords:</strong> {file.analysis.keywords.join(', ')}
-                            </div>
-                          )}
-                          {file.analysis.ocrText && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>OCR:</strong> {file.analysis.ocrText.slice(0,120)}{file.analysis.ocrText.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.transcript && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>Transcript:</strong> {file.analysis.transcript.slice(0,120)}{file.analysis.transcript.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.confidence && (
-                            <div className="text-xs text-system-gray-400">
-                              <strong>AI Confidence:</strong> {file.analysis.confidence}%
-                            </div>
+                                                    {file.analysis.keywords && file.analysis.keywords.length > 0 && (
+                            <button
+                              className="text-sm text-stratosort-blue hover:underline"
+                              onClick={() => {
+                                setDrawerContent(
+                                  <div className="space-y-fib-8">
+                                    <div>
+                                      <div className="text-body-small text-system-gray-500">Keywords</div>
+                                      <div className="text-body">{file.analysis.keywords.join(', ')}</div>
+                                    </div>
+                                    {file.analysis.ocrText && (
+                                      <div>
+                                        <div className="text-body-small text-system-gray-500">OCR Text</div>
+                                        <div className="text-sm whitespace-pre-wrap">{file.analysis.ocrText}</div>
+                                      </div>
+                                    )}
+                                    {file.analysis.transcript && (
+                                      <div>
+                                        <div className="text-body-small text-system-gray-500">Transcript</div>
+                                        <div className="text-sm whitespace-pre-wrap">{file.analysis.transcript}</div>
+                                      </div>
+                                    )}
+                                    {file.analysis.confidence && (
+                                      <div className="text-body-small text-system-gray-500">Confidence: {file.analysis.confidence}%</div>
+                                    )}
+                                  </div>
+                                );
+                                setDrawerOpen(true);
+                              }}
+                            >
+                              View details →
+                            </button>
                           )}
                         </>
                       ) : (
@@ -3921,12 +3902,30 @@ function OrganizePhase() {
                     </div>
                   </div>
                 </div>
-                <div className="text-xs text-green-600 font-medium">Organized</div>
+                <button className="btn-ghost-minimal text-xs" onClick={() => {
+                  setDrawerContent(
+                    <div>
+                      <div className="text-body-small text-system-gray-500 mb-fib-5">Destination</div>
+                      <div className="text-sm break-all">{file.newPath}</div>
+                      <div className="mt-fib-13 text-body-small text-system-gray-500">Original</div>
+                      <div className="text-sm break-all">{file.originalPath}</div>
+                    </div>
+                  );
+                  setDrawerOpen(true);
+                }}>View path</button>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <DetailsDrawer
+        title="Details"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        {drawerContent}
+      </DetailsDrawer>
 
       {/* Organization Action */}
       {unprocessedFiles.length > 0 && (
@@ -3983,23 +3982,15 @@ function OrganizePhase() {
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="flex justify-between">
-        <button 
-          onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-          className="btn-secondary"
-          disabled={isOrganizing}
-        >
-          ← Back to Discovery
-        </button>
-        <button 
-          onClick={() => actions.advancePhase(PHASES.COMPLETE)}
-          disabled={processedFiles.length === 0 || isOrganizing}
-          className={`btn-primary ${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          View Results →
-        </button>
-      </div>
+      <StickyActionBar
+        secondaryLabel="← Back to Discovery"
+        onSecondary={() => actions.advancePhase(PHASES.DISCOVER)}
+        secondaryDisabled={isOrganizing}
+        primaryLabel="View Results →"
+        onPrimary={() => actions.advancePhase(PHASES.COMPLETE)}
+        primaryDisabled={processedFiles.length === 0 || isOrganizing}
+        meta={`${unprocessedFiles.length} ready • ${processedFiles.length} organized`}
+      />
     </div>
   );
 }

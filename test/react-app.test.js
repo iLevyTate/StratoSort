@@ -111,22 +111,24 @@ describe('StratoSort React App', () => {
     });
 
     test('undo/redo component file exists', () => {
-      const undoRedoPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
-      expect(fs.existsSync(undoRedoPath)).toBe(true);
+      const candidates = [
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx'),
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js'),
+      ];
+      expect(candidates.some(p => fs.existsSync(p))).toBe(true);
     });
   });
 
   describe('Integration Testing', () => {
     test('React DOM rendering is properly configured', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+      const rendererIndex = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/index.js'), 
         'utf8'
       );
       
-      expect(appContent).toContain('ReactDOM');
-      expect(appContent).toContain('createRoot');
-      expect(appContent).toContain('render');
-      expect(appContent).toContain('<App />');
+      expect(rendererIndex).toContain('createRoot');
+      expect(rendererIndex).toContain('root.render');
+      expect(rendererIndex).toContain('<App />');
     });
   });
 });

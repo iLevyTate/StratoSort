@@ -1,15 +1,14 @@
 // Re-export of IPC channel definitions for TypeScript consumers.
 // This keeps a single source of truth: constants.js remains the canonical list
 // used by the main & preload (CommonJS) code, while TS/React code can now
-// import from this file to get full typing support.
+// import from this file to get typing support via typeof.
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { IPC_CHANNELS: JS_IPC_CHANNELS } = require('./constants');
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - allow importing CJS module in TS
+import constantsJs from './constants';
 
-// Retain literal property types without illegal const-assertion on a non-literal
-export const IPC_CHANNELS = JS_IPC_CHANNELS as typeof JS_IPC_CHANNELS;
+// Extract with runtime value and inferred type
+export const IPC_CHANNELS: typeof constantsJs.IPC_CHANNELS = constantsJs.IPC_CHANNELS;
 
-// Helper union types for stronger type-safety in TS codebases
 export type IpcChannelGroups = typeof IPC_CHANNELS;
-export type IpcChannel =
-  IpcChannelGroups[keyof IpcChannelGroups][keyof IpcChannelGroups[keyof IpcChannelGroups]]; 
+export type IpcChannel = IpcChannelGroups[keyof IpcChannelGroups][keyof IpcChannelGroups[keyof IpcChannelGroups]]; 

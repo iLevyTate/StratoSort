@@ -35,10 +35,10 @@ module.exports = {
       },
       alias: {
         map: [
-          ['@', './electron-react-app/src'],
-          ['@main', './electron-react-app/src/main'],
-          ['@renderer', './electron-react-app/src/renderer'],
-          ['@shared', './electron-react-app/src/shared']
+          ['@', './src'],
+          ['@main', './src/main'],
+          ['@renderer', './src/renderer'],
+          ['@shared', './src/shared']
         ]
       }
     }
@@ -57,7 +57,7 @@ module.exports = {
     'react/prop-types': 'off', // We'll use TypeScript eventually
     'react/react-in-jsx-scope': 'off', // Not needed in React 17+
     'react/jsx-uses-react': 'off',
-    'react/jsx-filename-extension': ['error', { extensions: ['.jsx', '.tsx'] }],
+    'react/jsx-filename-extension': ['error', { extensions: ['.js', '.jsx', '.tsx'] }],
     'react/jsx-props-no-spreading': 'off',
     'react/function-component-definition': ['error', {
       namedComponents: 'function-declaration',
@@ -112,11 +112,17 @@ module.exports = {
       }
     },
     {
-      files: ['electron-react-app/src/main/**/*.js'],
+      files: ['src/main/**/*.js'],
       env: {
         browser: false,
         node: true
       }
+    },
+    {
+      files: ['*.ts', '*.tsx'],
+      parser: '@typescript-eslint/parser',
+      plugins: ['@typescript-eslint'],
+      extends: ['plugin:@typescript-eslint/recommended']
     }
   ]
 }; 

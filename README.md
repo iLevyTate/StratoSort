@@ -93,7 +93,10 @@
 
 2. **Setup Ollama**
    ```bash
-   # Install Ollama (https://ollama.ai)
+   # Option A: Let the app handle it (recommended)
+   npm run setup:ollama
+
+   # Option B: Manual install (https://ollama.ai)
    # Windows
    winget install Ollama.Ollama
    

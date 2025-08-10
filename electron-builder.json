@@ -8,6 +8,7 @@
     "src/main/**/*",
     "src/preload/**/*", 
     "src/shared/**/*",
+    "setup-ollama.js",
     "package.json"
   ],
   "extraMetadata": {

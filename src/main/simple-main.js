@@ -1823,6 +1823,9 @@ if (!gotTheLock) {
       await serviceIntegration.initialize();
       logger.info('[MAIN] Service integration initialized successfully');
       
+      // Attempt to ensure Ollama is available; prompt user if not
+      await ensureOllamaAvailableInteractive();
+      
       // Verify AI models on startup
       const ModelVerifier = require('./services/ModelVerifier');
       const modelVerifier = new ModelVerifier();
@@ -2279,3 +2282,96 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
 
 
 // NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
+
+// Helper to run bundled setup script
+async function runBundledOllamaSetup(args = []) {
+  try {
+    const childProcess = require('child_process');
+    const appPath = app.getAppPath();
+    const scriptPath = path.join(appPath, 'setup-ollama.js');
+    const command = process.execPath; // node/electron binary
+    const fullArgs = [scriptPath, ...args];
+    return await new Promise((resolve) => {
+      const child = childProcess.spawn(command, fullArgs, { shell: true });
+      let out = '';
+      let err = '';
+      child.stdout.on('data', d => out += d.toString());
+      child.stderr.on('data', d => err += d.toString());
+      child.on('close', code => resolve({ code, out, err }));
+      child.on('error', e => resolve({ code: -1, err: e.message }));
+    });
+  } catch (e) {
+    return { code: -1, err: e.message };
+  }
+}
+
+async function ensureOllamaAvailableInteractive() {
+  try {
+    const ModelVerifier = require('./services/ModelVerifier');
+    const mv = new ModelVerifier();
+    const conn = await mv.checkOllamaConnection();
+    if (conn.connected) {
+      return true;
+    }
+
+    const response = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Install & Start Ollama', 'Open Install Guide', 'Continue Without AI'],
+      defaultId: 0,
+      cancelId: 2,
+      title: 'Ollama Not Detected',
+      message: 'StratoSort uses Ollama for local AI. Ollama is not running or not installed. Would you like to install and start it now?',
+      detail: 'This will download and install Ollama and pull small default models (llama3.2, llava, whisper-tiny, mxbai-embed-large).',
+      noLink: true
+    });
+
+    if (response.response === 1) {
+      shell.openExternal('https://ollama.ai');
+      return false;
+    }
+    if (response.response === 2) {
+      return false;
+    }
+
+    // Install
+    const installRes = await runBundledOllamaSetup(['--install']);
+    if (installRes.code !== 0) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Ollama Installation Failed',
+        message: 'Automatic installation failed.',
+        detail: installRes.err || installRes.out || 'Unknown error'
+      });
+      return false;
+    }
+
+    // Start service
+    const startRes = await runBundledOllamaSetup(['--start']);
+    if (startRes.code !== 0) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Ollama Start Failed',
+        message: 'Failed to start Ollama service.',
+        detail: startRes.err || startRes.out || 'Unknown error'
+      });
+      return false;
+    }
+
+    // Pull models (best effort)
+    await runBundledOllamaSetup(['--models', 'llama3.2:latest,llava:latest,dimavz/whisper-tiny:latest,mxbai-embed-large']);
+
+    // Re-check
+    const recheck = await mv.checkOllamaConnection();
+    if (!recheck.connected) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Ollama Not Reachable',
+        message: 'Ollama installation ran, but the service is not yet reachable. You can retry from the menu or start Ollama manually ("ollama serve").'
+      });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}

@@ -486,23 +486,39 @@ export const createFileAction = (type, description, filePath, operation) => ({
   type,
   description,
   execute: async () => {
-    return await window.electronAPI.files.performOperation({
-      operation,
-      filePath,
-      type
-    });
+    const payload = buildOperationPayload(operation, filePath);
+    return await window.electronAPI.files.performOperation(payload);
   },
   undo: async () => {
-    // Implement reverse operation
     const reverseOp = getReverseOperation(operation);
-    return await window.electronAPI.files.performOperation({
-      operation: reverseOp,
-      filePath,
-      type
-    });
+    const payload = buildOperationPayload(reverseOp, filePath, { reverse: true });
+    return await window.electronAPI.files.performOperation(payload);
   },
   metadata: { filePath, operation }
 });
+
+function buildOperationPayload(op, filePath, options = {}) {
+  // For simplicity, use metadata options to infer source/destination when available in the callsite
+  // Consumers should pass a full payload if needed; this helper supports simple single-file ops
+  if (typeof op === 'object' && op !== null) {
+    return op;
+  }
+  const type = String(op);
+  switch (type) {
+    case 'move':
+      // Expect caller to provide { source, destination } via object; fallback keeps API explicit
+      return { type: 'move', source: filePath?.source || filePath, destination: filePath?.destination };
+    case 'copy':
+      return { type: 'copy', source: filePath?.source || filePath, destination: filePath?.destination };
+    case 'delete':
+      return { type: 'delete', source: filePath?.source || filePath };
+    case 'restore':
+      // For restore, caller should pass originalPath via object form for correctness
+      return { type: 'move', source: filePath?.backupPath || filePath, destination: filePath?.originalPath };
+    default:
+      return { type, source: filePath };
+  }
+}
 
 export const createSettingsAction = (description, newSettings, oldSettings) => ({
   type: ACTION_TYPES.SETTINGS_CHANGE,

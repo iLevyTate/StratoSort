@@ -265,12 +265,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Determine file type and route to appropriate analyzer
       const ext = filePath.split('.').pop()?.toLowerCase();
       const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
-      // const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a']; // REMOVED - audio analysis disabled
+      const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a'];
       
       if (imageExts.includes(ext)) {
         return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath);
+      } else if (audioExts.includes(ext)) {
+        return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath);
       } else {
-        // Audio analysis removed - all non-image files go to document analysis
         return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath);
       }
     }
@@ -292,9 +293,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   analysis: {
     document: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
     image: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
-    // audio: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath), // REMOVED - audio analysis disabled
+    audio: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath),
     extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath),
-    // transcribe: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, filePath) // REMOVED - audio analysis disabled
+    transcribe: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, filePath)
   },
 
   // Analysis History

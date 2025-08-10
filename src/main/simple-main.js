@@ -19,7 +19,8 @@ const {
 
 const { scanDirectory } = require('./folderScanner');
 const { getOrganizationSuggestions } = require('./llmService');
-const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig, getOllamaConfigPath } = require('./ollamaUtils');
+const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig } = require('./ollamaUtils');
+const { Ollama } = require('ollama');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -1300,7 +1301,7 @@ ipcMain.handle(IPC_CHANNELS.UNDO_REDO.REDO, async () => {
 
 ipcMain.handle(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, async (event, limit = 50) => {
   try {
-    return await serviceIntegration?.undoRedo?.getHistory(limit) || [];
+    return await serviceIntegration?.undoRedo?.getActionHistory(limit) || [];
   } catch (error) {
     logger.error('Failed to get action history:', error);
     return [];

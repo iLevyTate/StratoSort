@@ -91,7 +91,18 @@
    npm install
    ```
 
-2. **Setup Ollama**
+2. **One-time Setup (automatic)**
+   - The app includes a built-in setup that installs/starts Ollama and pulls required models.
+   - Just run:
+   ```bash
+   npm start
+   ```
+   This will:
+   - Install Ollama (Linux/macOS via script/Homebrew; Windows via winget if available)
+   - Start the Ollama service
+   - Pull the required models: `llama3.2:latest` (text), `llava:latest` (vision), `mxbai-embed-large` (embeddings), `dimavz/whisper-tiny:latest` (audio)
+
+   Manual alternatives:
    ```bash
    # Install Ollama (https://ollama.ai)
    # Windows
@@ -102,18 +113,17 @@
    
    # Linux
    curl -fsSL https://ollama.ai/install.sh | sh
-   ```
-
-3. **Install Required Models**
-   ```bash
+   
+   # Then pull models manually
    ollama pull llama3.2:latest
    ollama pull llava:latest
+   ollama pull mxbai-embed-large
    ollama pull dimavz/whisper-tiny:latest
    ```
 
-4. **Start StratoSort**
+3. **Start StratoSort (subsequent runs)**
    ```bash
-   npm run dev
+   npm run start:dev
    ```
 
 ---

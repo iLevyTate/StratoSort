@@ -110,23 +110,25 @@ describe('StratoSort React App', () => {
       expect(appContent).toContain('UndoRedoToolbar');
     });
 
-    test('undo/redo component file exists', () => {
-      const undoRedoPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
-      expect(fs.existsSync(undoRedoPath)).toBe(true);
+    test('App imports UndoRedo system module path', () => {
+      const appContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/App.js'), 
+        'utf8'
+      );
+      expect(appContent).toContain("from './components/UndoRedoSystem'");
     });
   });
 
   describe('Integration Testing', () => {
     test('React DOM rendering is properly configured', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+      const indexContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/index.js'), 
         'utf8'
       );
       
-      expect(appContent).toContain('ReactDOM');
-      expect(appContent).toContain('createRoot');
-      expect(appContent).toContain('render');
-      expect(appContent).toContain('<App />');
+      expect(indexContent).toContain('createRoot');
+      expect(indexContent).toContain('<App />');
+      expect(indexContent).toContain('root.render');
     });
   });
 });

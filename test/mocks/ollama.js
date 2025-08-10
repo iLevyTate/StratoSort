@@ -39,8 +39,17 @@ const mockOllamaService = {
   list: jest.fn().mockResolvedValue({
     models: [
       { name: 'llama3.2:latest' },
-      { name: 'llava:latest' }
+      { name: 'llava:latest' },
+      { name: 'dimavz/whisper-tiny:latest' },
+      { name: 'mxbai-embed-large' }
     ]
+  }),
+
+  embeddings: jest.fn().mockImplementation(({ prompt }) => {
+    // Return a deterministic fixed-length embedding vector based on input length
+    const length = 8; // small for tests
+    const vector = Array.from({ length }, (_, i) => ((prompt?.length || 1) + i) * 0.01);
+    return Promise.resolve({ embedding: vector });
   })
 };
 

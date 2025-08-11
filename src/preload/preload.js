@@ -198,11 +198,11 @@ class SecureIPCManager {
    * Validate system metrics data structure
    */
   isValidSystemMetrics(data) {
-    return data && 
+    return data &&
            typeof data === 'object' &&
-           Array.isArray(data.cpu) &&
-           Array.isArray(data.memory) &&
-           typeof data.analysisQueue === 'number';
+           typeof data.uptime === 'number' &&
+           typeof data.cpu === 'number' &&
+           data.memory && typeof data.memory.used === 'number' && typeof data.memory.total === 'number';
   }
 
   /**
@@ -214,7 +214,7 @@ class SecureIPCManager {
       case 'get-system-metrics':
         return this.isValidSystemMetrics(result) ? result : null;
       case 'select-directory':
-        return typeof result === 'string' || result === null ? result : null;
+        return result && typeof result === 'object' && 'success' in result ? result : { success: false, folder: null };
       case 'get-custom-folders':
         return Array.isArray(result) ? result : [];
       default:

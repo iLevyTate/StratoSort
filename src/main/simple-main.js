@@ -1831,7 +1831,11 @@ if (!gotTheLock) {
       if (!modelStatus.success) {
         logger.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
         logger.info('[STARTUP] Install missing models:');
-        modelStatus.installationCommands.forEach(cmd => logger.info('  ', cmd));
+        if (modelStatus.installationCommands && Array.isArray(modelStatus.installationCommands)) {
+          modelStatus.installationCommands.forEach(cmd => logger.info('  ', cmd));
+        } else {
+          logger.info('[STARTUP] No installation commands available');
+        }
       } else {
         logger.info('[STARTUP] ✅ All essential AI models verified and ready');
         if (modelStatus.hasWhisper) {

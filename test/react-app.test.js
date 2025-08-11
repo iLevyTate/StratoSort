@@ -117,16 +117,15 @@ describe('StratoSort React App', () => {
   });
 
   describe('Integration Testing', () => {
-    test('React DOM rendering is properly configured', () => {
+    test('React root and createRoot usage is present', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+        path.join(__dirname, '../src/renderer/index.js'), 
         'utf8'
       );
       
-      expect(appContent).toContain('ReactDOM');
       expect(appContent).toContain('createRoot');
-      expect(appContent).toContain('render');
       expect(appContent).toContain('<App />');
+      expect(appContent).toContain("document.getElementById('root')");
     });
   });
 });

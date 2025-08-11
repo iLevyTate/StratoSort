@@ -1352,10 +1352,15 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
 // System handlers
 ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
   try {
-    return systemAnalytics.getApplicationStatistics();
+    if (serviceIntegration?.getApplicationStatistics) {
+      return await serviceIntegration.getApplicationStatistics();
+    }
+    // Fallback to basic metrics if service not ready
+    const metrics = await systemAnalytics.collectMetrics();
+    return { analysis: {}, recentActions: [], metrics, timestamp: new Date().toISOString() };
   } catch (error) {
     logger.error('Failed to get system statistics:', error);
-    return {};
+    return { analysis: {}, recentActions: [], error: error.message };
   }
 });
 
@@ -1688,7 +1693,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
   
   try {
     const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-    const smartFolders = await getSmartFolders();
+    const smartFolders = customFolders; // use current in-memory smart folders
     
     const startTime = Date.now();
     const result = await analyzeAudioFile(filePath, smartFolders);
@@ -2238,44 +2243,21 @@ ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
   }
 });
 
-// Audio analysis handler REMOVED - audio analysis disabled
-// ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-//   try {
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-//     
-//     // Get current smart folders to pass to analysis
-//     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-//     const folderCategories = smartFolders.map(f => ({
-//       name: f.name,
-//       description: f.description || '',
-//       id: f.id
-//     }));
-//     
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-//     
-//     const result = await analyzeAudioFile(filePath, folderCategories);
-//     
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Result:`, {
-//       success: !result.error,
-//       category: result.category,
-//       keywords: result.keywords?.length || 0,
-//       confidence: result.confidence,
-//       has_transcription: result.has_transcription
-//     });
-//     
-//     return result;
-//   } catch (error) {
-//     logger.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
-//     return {
-//       error: error.message,
-//       suggestedName: path.basename(filePath, path.extname(filePath)),
-//       category: 'audio',
-//       keywords: [],
-//       confidence: 0,
-//       has_transcription: false
-//     };
-//   }
-// });
+// Helper functions for file stats used by audio analysis
+async function getFileSize(filePath) {
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.size;
+  } catch (_) {
+    return 0;
+  }
+}
 
-
-// NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
+async function getFileModified(filePath) {
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.mtimeMs;
+  } catch (_) {
+    return Date.now();
+  }
+}

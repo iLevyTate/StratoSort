@@ -2,12 +2,11 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron')
 const path = require('path');
 const fs = require('fs').promises;
 const { existsSync } = require('fs');
-const os = require('os');
 const { performance } = require('perf_hooks');
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
-const logger = require('./utils/logger');
+const { logger } = require('../shared/logger');
 
 // Import error handling system
 const { 
@@ -20,6 +19,8 @@ const {
 const { scanDirectory } = require('./folderScanner');
 const { getOrganizationSuggestions } = require('./llmService');
 const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig, getOllamaConfigPath } = require('./ollamaUtils');
+const SettingsService = require('./services/SettingsService');
+const { Ollama } = require('ollama');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -40,6 +41,7 @@ let customFolders = []; // Initialize customFolders at module level
 
 // Initialize service integration
 let serviceIntegration;
+const settingsService = new SettingsService();
 
 // Persistent storage path for custom folders
 const getCustomFoldersPath = () => {
@@ -231,7 +233,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
         ]
       }
     });
@@ -333,6 +335,64 @@ ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) 
     };
   }
 });
+
+// Smart folder matching using embeddings/LLM as fallback
+ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, async (event, payload) => {
+  try {
+    const { text, smartFolders = [] } = payload || {};
+    if (!text || !Array.isArray(smartFolders) || smartFolders.length === 0) {
+      return { success: false, error: 'Invalid input for SMART_FOLDERS.MATCH' };
+    }
+
+    // Prefer embeddings model if available
+    try {
+      const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+      const queryEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: text });
+      const scored = [];
+      for (const folder of smartFolders) {
+        const folderText = [folder.name, folder.description].filter(Boolean).join(' - ');
+        const folderEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: folderText });
+        const score = cosineSimilarity(queryEmbedding.embedding, folderEmbedding.embedding);
+        scored.push({ folder, score });
+      }
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      return { success: true, folder: best.folder, score: best.score, method: 'embeddings' };
+    } catch (e) {
+      // Fallback to LLM ranking
+      try {
+        const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+        const prompt = `You are ranking folders for organizing a file. Given this description:\n"""${text}"""\n
+Folders:\n${smartFolders.map((f, i) => `${i + 1}. ${f.name} - ${f.description || ''}`).join('\n')}\n
+Return JSON: { "index": <1-based best folder index>, "reason": "..." }`;
+        const resp = await ollama.generate({ model: getOllamaModel() || 'llama3.2:latest', prompt, format: 'json', options: { temperature: 0.1, num_predict: 200 } });
+        const parsed = JSON.parse(resp.response);
+        const idx = Math.max(1, Math.min(smartFolders.length, parseInt(parsed.index, 10)));
+        return { success: true, folder: smartFolders[idx - 1], reason: parsed.reason, method: 'llm' };
+      } catch (llmErr) {
+        // Last-resort: basic text similarity
+        const scored = smartFolders.map(f => {
+          const textLower = text.toLowerCase();
+          const hay = [f.name, f.description].filter(Boolean).join(' ').toLowerCase();
+          let score = 0;
+          textLower.split(/\W+/).forEach(w => { if (w && hay.includes(w)) score += 1; });
+          return { folder: f, score };
+        }).sort((a, b) => b.score - a.score);
+        return { success: true, folder: scored[0]?.folder || smartFolders[0], method: 'fallback' };
+      }
+    }
+  } catch (error) {
+    logger.error('[SMART_FOLDERS.MATCH] Failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
 
 // Delete folder and its contents
 ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
@@ -535,9 +595,10 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
             // Send progress update to renderer
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('operation-progress', {
+                type: 'batch_organize',
                 current: i + 1,
                 total: operation.operations.length,
-                file: path.basename(op.source)
+                currentFile: path.basename(op.source)
               });
             }
             
@@ -1082,7 +1143,8 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
           
           if (item.isFile()) {
             const ext = path.extname(item.name).toLowerCase();
-            const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.wav', '.m4a'];
+            // Audio intentionally excluded from scanning
+            const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
             
             if (supportedExts.includes(ext)) {
               files.push({
@@ -1108,11 +1170,12 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
     
     const files = await scanFolder(rootPath);
     logger.info('[FOLDER-SCAN] Found', files.length, 'supported files');
-    return files;
+    // Return a structured object to match renderer expectations
+    return { success: true, files };
     
   } catch (error) {
     logger.error('[FOLDER-SCAN] Error scanning folder structure:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 });
 
@@ -1208,27 +1271,66 @@ function calculateBasicSimilarity(str1, str2) {
 // Ollama management
 ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
   try {
-    const ollama = getOllama();
-    const response = await ollama.list();
-    return {
-      models: response.models.map(m => m.name),
-      selectedModel: getOllamaModel(),
-      ollamaHealth: systemAnalytics.ollamaHealth 
+    const host = await settingsService.getOllamaHost();
+    const client = new (require('ollama').Ollama)({ host });
+    const response = await client.list();
+    const allModels = (response.models || []).map(m => m.name);
+
+    // Categorize models by capability (heuristic)
+    const textModels = [];
+    const visionModels = [];
+    const embeddingModels = [];
+    for (const name of allModels) {
+      const lower = name.toLowerCase();
+      if (lower.includes('embed') || lower.includes('mxbai') || lower.includes('nomic') || lower.includes('text-embeddings')) {
+        embeddingModels.push(name);
+        continue;
+      }
+      if (lower.includes('llava') || lower.includes('vision') || lower.includes('gemma3') || lower.includes('moondream') || lower.includes('bakllava')) {
+        visionModels.push(name);
+        continue;
+      }
+      // Default bucket
+      textModels.push(name);
+    }
+
+    const saved = await settingsService.getSettings();
+    const result = {
+      models: allModels,
+      categories: {
+        text: textModels,
+        vision: visionModels,
+        embedding: embeddingModels
+      },
+      selected: {
+        textModel: saved.textModel,
+        visionModel: saved.visionModel,
+        embeddingModel: saved.embeddingModel
+      },
+      host,
+      ollamaHealth: systemAnalytics.ollamaHealth
     };
+    return result;
   } catch (error) {
     logger.error('[IPC] Error fetching Ollama models:', error);
     if (error.cause && error.cause.code === 'ECONNREFUSED') {
-      systemAnalytics.ollamaHealth = { 
-        status: 'unhealthy', 
-        error: 'Connection refused. Ensure Ollama is running.', 
-        lastCheck: Date.now() 
+      systemAnalytics.ollamaHealth = {
+        status: 'unhealthy',
+        error: 'Connection refused. Ensure Ollama is running.',
+        lastCheck: Date.now()
       };
     }
-    return { 
-      models: [], 
-      selectedModel: getOllamaModel(), 
-      error: error.message, 
-      ollamaHealth: systemAnalytics.ollamaHealth 
+    const saved = await settingsService.getSettings().catch(() => ({}));
+    return {
+      models: [],
+      categories: { text: [], vision: [], embedding: [] },
+      selected: {
+        textModel: saved?.textModel,
+        visionModel: saved?.visionModel,
+        embeddingModel: saved?.embeddingModel
+      },
+      error: error.message,
+      ollamaHealth: systemAnalytics.ollamaHealth
     };
   }
 });
@@ -1352,7 +1454,17 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS, async () => {
 // System handlers
 ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, async () => {
   try {
-    return systemAnalytics.getApplicationStatistics();
+    // Synthesize application statistics from available services
+    const [analysisStats, historyRecent] = await Promise.all([
+      serviceIntegration?.analysisHistory?.getStatistics?.() || Promise.resolve({}),
+      serviceIntegration?.analysisHistory?.getRecentAnalysis?.(20) || Promise.resolve([])
+    ]);
+    return {
+      analysis: analysisStats,
+      recentActions: serviceIntegration?.undoRedo?.getActionHistory?.(20) || [],
+      recentAnalysis: historyRecent,
+      timestamp: new Date().toISOString()
+    };
   } catch (error) {
     logger.error('Failed to get system statistics:', error);
     return {};
@@ -1401,10 +1513,9 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
       title: 'Select Files to Organize',
       buttonLabel: 'Select Files',
       filters: [
-        { name: 'All Supported Files', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'mp3', 'wav', 'm4a', 'flac', 'ogg', 'zip', 'rar', '7z', 'tar', 'gz'] },
+        { name: 'All Supported Files', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'zip', 'rar', '7z', 'tar', 'gz'] },
         { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
         { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'] },
-        // Audio removed - { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'flac', 'ogg'] },
         { name: 'Archives', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
         { name: 'All Files', extensions: ['*'] }
       ]
@@ -1419,7 +1530,8 @@ ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
     logger.info(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
     
     const allFiles = [];
-    const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
+    // Audio extensions intentionally omitted to filter out audio files at selection
+    const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.zip', '.rar', '.7z', '.tar', '.gz'];
     
     // Helper function to scan folders recursively
     const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
@@ -1602,6 +1714,7 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
     
     logger.info(`[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
     
+    // Ensure analysis modules use current settings (host/models)
     const result = await analyzeDocumentFile(filePath, folderCategories);
     
     const duration = performance.now() - startTime;
@@ -1683,81 +1796,13 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
 });
 
 // Audio analysis handlers
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-  logger.info('[IPC] Audio analysis requested for:', filePath);
-  
-  try {
-    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-    const smartFolders = await getSmartFolders();
-    
-    const startTime = Date.now();
-    const result = await analyzeAudioFile(filePath, smartFolders);
-    const processingTime = Date.now() - startTime;
-    
-    systemAnalytics.recordProcessingTime(processingTime);
-    systemAnalytics.recordSuccess();
-    
-    // Record in analysis history
-    if (serviceIntegration?.analysisHistory) {
-      await serviceIntegration.analysisHistory.recordAnalysis({
-        path: filePath,
-        size: await getFileSize(filePath),
-        lastModified: await getFileModified(filePath),
-        mimeType: 'audio/*'
-      }, {
-        ...result,
-        processingTime
-      });
-    }
-    
-    logger.info(`[IPC] Audio analysis completed in ${processingTime}ms`);
-    mainWindow?.webContents.send('analysis-progress', {
-      filePath,
-      status: 'completed',
-      result
-    });
-    
-    return result;
-  } catch (error) {
-    logger.error('[IPC] Audio analysis failed:', error);
-    systemAnalytics.recordFailure(error);
-    mainWindow?.webContents.send('analysis-error', {
-      filePath,
-      error: error.message,
-      type: 'audio'
-    });
-    throw error;
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, async (event, filePath) => {
-  logger.info('[IPC] Audio transcription requested for:', filePath);
-  
-  try {
-    const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
-    const result = await analyzeAudioFile(filePath, [], { transcriptOnly: true });
-    
-    return { 
-      success: true, 
-      transcript: result.transcript || result.text || result.summary || ''
-    };
-  } catch (error) {
-    logger.error('[IPC] Audio transcription failed:', error);
-    return { success: false, error: error.message };
-  }
-});
+// Audio analysis is disabled in the current UI and preload. IPC handlers removed to avoid drift and runtime errors.
 
 // Settings handlers
 ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
   try {
-    // Return default settings for now - could be expanded to use a proper settings service
-    return {
-      theme: 'system',
-      autoAnalyze: true,
-      concurrentAnalysis: 3,
-      smartFolderDefaults: true,
-      notifications: true
-    };
+    const settings = await settingsService.getSettings();
+    return settings;
   } catch (error) {
     logger.error('Failed to get settings:', error);
     return {};
@@ -1766,9 +1811,9 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
 
 ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
   try {
-    // For now, just return success - could be expanded to persist settings
-    logger.info('[SETTINGS] Saving settings:', settings);
-    return { success: true, settings };
+    const saved = await settingsService.saveSettings(settings || {});
+    logger.info('[SETTINGS] Saved settings');
+    return { success: true, settings: saved };
   } catch (error) {
     logger.error('Failed to save settings:', error);
     return { success: false, error: error.message };
@@ -2152,24 +2197,15 @@ Please provide a JSON response with the following enhancements:
 }
 
 // Error handling
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
 logger.info('✅ StratoSort main process initialized');
 
-// Add comprehensive error handling
+// Add comprehensive error handling (single registration)
 process.on('uncaughtException', (error) => {
-  logger.error('🔥 UNCAUGHT EXCEPTION:', error);
-  logger.error('Stack:', error.stack);
+  logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('🔥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  logger.error('UNHANDLED REJECTION', { reason, promise: String(promise) });
 });
 
 // Keep the process alive for debugging

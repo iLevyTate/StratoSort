@@ -1,6 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
+const SettingsService = require('../services/SettingsService');
+const sharp = require('sharp');
 
 // App configuration for image analysis - Optimized for speed
 const AppConfig = {
@@ -16,8 +18,15 @@ const AppConfig = {
 };
 
 // Initialize Ollama client
-const ollamaHost = process.env.OLLAMA_BASE_URL || AppConfig.ai.imageAnalysis.defaultHost;
-const ollamaClient = new Ollama({ host: ollamaHost });
+const settingsServiceImg = new SettingsService();
+let ollamaClient = null;
+async function getOllamaClient() {
+  if (!ollamaClient) {
+    const host = (await settingsServiceImg.getSettings()).ollamaHost || AppConfig.ai.imageAnalysis.defaultHost;
+    ollamaClient = new Ollama({ host });
+  }
+  return ollamaClient;
+}
 
 async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolders = []) {
   try {
@@ -58,8 +67,10 @@ If you cannot determine a field, omit it from the JSON. Do not make up informati
 
 Analyze this image:`;
 
-    const response = await ollamaClient.generate({
-      model: AppConfig.ai.imageAnalysis.defaultModel,
+    const client = await getOllamaClient();
+    const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const response = await client.generate({
+      model,
       prompt,
       images: [imageBase64],
       options: {
@@ -138,8 +149,8 @@ async function analyzeImageFile(filePath, smartFolders = []) {
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
 
-  // Check if file extension is supported
-  const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff'];
+  // Check if file extension is supported (include SVG by rasterizing via sharp)
+  const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
   if (!supportedExtensions.includes(fileExtension)) {
     return {
       error: `Unsupported image format: ${fileExtension}`,
@@ -166,7 +177,25 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     console.log(`Image file size: ${stats.size} bytes`);
 
     // Read and encode image as base64
-    const imageBuffer = await fs.readFile(filePath);
+    let imageBuffer = await fs.readFile(filePath);
+    
+    // Rasterize SVG to PNG for analysis
+    if (fileExtension === '.svg') {
+      try {
+        imageBuffer = await sharp(imageBuffer)
+          .png()
+          .resize({ width: 1280, withoutEnlargement: true })
+          .toBuffer();
+      } catch (svgErr) {
+        console.error(`Failed to rasterize SVG ${filePath}:`, svgErr.message);
+        return {
+          error: 'Failed to process SVG image',
+          category: 'error',
+          keywords: [],
+          confidence: 0
+        };
+      }
+    }
     
     // Validate buffer is not empty
     if (imageBuffer.length === 0) {
@@ -242,8 +271,10 @@ async function extractTextFromImage(filePath) {
 
     const prompt = `Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".`;
 
-    const response = await ollamaClient.generate({
-      model: AppConfig.ai.imageAnalysis.defaultModel,
+    const client = await getOllamaClient();
+    const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const response = await client.generate({
+      model,
       prompt,
       images: [imageBase64],
       options: {

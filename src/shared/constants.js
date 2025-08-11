@@ -61,7 +61,8 @@ const IPC_CHANNELS = {
     SCAN_STRUCTURE: 'scan-folder-structure',
     ADD: 'add-smart-folder',
     EDIT: 'edit-smart-folder',
-    DELETE: 'delete-smart-folder'
+    DELETE: 'delete-smart-folder',
+    MATCH: 'match-smart-folder'
   },
   
   // Analysis

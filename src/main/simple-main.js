@@ -1,7 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
-const { existsSync } = require('fs');
 const { performance } = require('perf_hooks');
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -534,7 +533,7 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
               throw new Error(`Source file does not exist: ${op.source}`);
             }
             
-            // Check if destination already exists
+            // Check if destination already exists (async, non-blocking)
             try {
               await fs.access(op.destination);
               logger.info(`[FILE-OPS] ⚠️  Destination already exists: ${op.destination}`);
@@ -542,13 +541,23 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
               let counter = 1;
               let uniqueDestination = op.destination;
               const ext = path.extname(op.destination);
-              const baseName = op.destination.replace(ext, '');
-              
-              while (existsSync(uniqueDestination)) {
-                uniqueDestination = `${baseName}_${counter}${ext}`;
-                counter++;
+              const baseName = op.destination.slice(0, -ext.length);
+
+              // Probe asynchronously for the first non-existing destination
+              while (true) {
+                try {
+                  await fs.access(uniqueDestination);
+                  counter++;
+                  uniqueDestination = `${baseName}_${counter}${ext}`;
+                  if (counter > 1000) {
+                    throw new Error('Too many name collisions while generating unique destination');
+                  }
+                } catch {
+                  // Path does not exist; safe to use
+                  break;
+                }
               }
-              
+
               if (uniqueDestination !== op.destination) {
                 logger.info(`[FILE-OPS] Using unique name: ${uniqueDestination}`);
                 op.destination = uniqueDestination;
@@ -1136,32 +1145,44 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath
       
       try {
         const items = await fs.readdir(folderPath, { withFileTypes: true });
-        const files = [];
-        
-        for (const item of items) {
+        const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+
+        const tasks = items.map(async (item) => {
           const itemPath = path.join(folderPath, item.name);
-          
+
+          // Skip hidden/system and heavy directories
+          if (item.isDirectory() && (item.name.startsWith('.') || item.name === 'node_modules' || item.name === '__pycache__')) {
+            return [];
+          }
+
           if (item.isFile()) {
             const ext = path.extname(item.name).toLowerCase();
-            // Audio intentionally excluded from scanning
-            const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
-            
             if (supportedExts.includes(ext)) {
-              files.push({
-                name: item.name,
-                path: itemPath,
-                type: 'file',
-                extension: ext,
-                size: (await fs.stat(itemPath)).size
-              });
+              try {
+                const { size } = await fs.stat(itemPath);
+                return [{
+                  name: item.name,
+                  path: itemPath,
+                  type: 'file',
+                  extension: ext,
+                  size
+                }];
+              } catch {
+                return [];
+              }
             }
-          } else if (item.isDirectory() && !item.name.startsWith('.')) {
-            const subFiles = await scanFolder(itemPath, depth + 1, maxDepth);
-            files.push(...subFiles);
+            return [];
           }
-        }
-        
-        return files;
+
+          if (item.isDirectory()) {
+            return await scanFolder(itemPath, depth + 1, maxDepth);
+          }
+
+          return [];
+        });
+
+        const results = await Promise.all(tasks);
+        return results.flat();
       } catch (error) {
         logger.warn('[FOLDER-SCAN] Error scanning folder:', folderPath, error.message);
         return [];

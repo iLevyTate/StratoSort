@@ -2229,35 +2229,35 @@ function DiscoverPhase() {
       
       // Persist data for use in organize phase
       setAnalysisResults(results);
-      
-      // Use functional state update to ensure we get the latest fileStates
-      setFileStates(currentFileStates => {
-        const updatedStates = { ...currentFileStates };
-        
-        // Ensure all files have their final states updated
-        results.forEach(result => {
-          if (result.analysis && !result.error) {
-            updatedStates[result.path] = {
-              state: 'ready',
-              timestamp: new Date().toISOString(),
-              analysis: result.analysis,
-              analyzedAt: result.analyzedAt
-            };
-          } else if (result.error) {
-            updatedStates[result.path] = {
-              state: 'error',
-              timestamp: new Date().toISOString(),
-              error: result.error,
-              analyzedAt: result.analyzedAt
-            };
-          }
-        });
-        
-      // Persist the updated states to phase data
+
+      // Build a fresh updatedStates from results to avoid relying on async state callbacks
+      const updatedStates = {};
+      results.forEach(result => {
+        if (result.analysis && !result.error) {
+          updatedStates[result.path] = {
+            state: 'ready',
+            timestamp: new Date().toISOString(),
+            analysis: result.analysis,
+            analyzedAt: result.analyzedAt
+          };
+        } else if (result.error) {
+          updatedStates[result.path] = {
+            state: 'error',
+            timestamp: new Date().toISOString(),
+            error: result.error,
+            analyzedAt: result.analyzedAt
+          };
+        }
+      });
+
+      // Update state and phase data synchronously from computed values
+      setFileStates(updatedStates);
+
       const finalPhaseData = {
         analysisResults: results,
         selectedFiles: files,
         fileStates: updatedStates,
+        smartFolders: phaseData.smartFolders || [],
         namingConvention: {
           convention: namingConvention,
           dateFormat,
@@ -2270,9 +2270,6 @@ function DiscoverPhase() {
       actions.setPhaseData('selectedFiles', finalPhaseData.selectedFiles);
       actions.setPhaseData('fileStates', finalPhaseData.fileStates);
       actions.setPhaseData('namingConvention', finalPhaseData.namingConvention);
-        
-        return updatedStates;
-      });
       
       const successCount = results.filter(r => r.analysis).length;
       const failureCount = results.length - successCount;
@@ -2706,7 +2703,7 @@ function DiscoverPhase() {
                 separator
               });
               
-              // Advance to organize phase with the complete data
+              // Advance to organize phase with the complete data (also persisted in phaseData)
               actions.advancePhase(PHASES.ORGANIZE, finalData);
               
               return currentFileStates; // Return unchanged state
@@ -2965,16 +2962,37 @@ function OrganizePhase() {
   const [fileStates, setFileStates] = useState({});
   const [processedFileIds, setProcessedFileIds] = useState(new Set()); // Track which files have been processed
 
-  const analysisResults = phaseData.analysisResults || [];
+  const analysisResults = (phaseData.analysisResults && Array.isArray(phaseData.analysisResults)) ? phaseData.analysisResults : [];
   const smartFolders = phaseData.smartFolders || [];
   
-  // DEBUG: Log smart folders data
-  console.log('[ORGANIZE-PHASE-DEBUG] Smart folders from phase data:', {
+  // DEBUG: Log organize phase data summary
+  console.log('[ORGANIZE-PHASE-DEBUG] Phase data summary:', {
     smartFoldersCount: smartFolders.length,
-    smartFolders: smartFolders,
-    phaseDataKeys: Object.keys(phaseData),
-    phaseDataSmartFolders: phaseData.smartFolders
+    analysisResultsCount: analysisResults.length,
+    fileStatesCount: Object.keys(phaseData.fileStates || {}).length,
+    phaseDataKeys: Object.keys(phaseData)
   });
+
+  // Ensure smart folders are available even if user skipped Setup
+  useEffect(() => {
+    const loadSmartFoldersIfMissing = async () => {
+      try {
+        if (!Array.isArray(smartFolders) || smartFolders.length === 0) {
+          const folders = await window.electronAPI.smartFolders.get();
+          if (Array.isArray(folders) && folders.length > 0) {
+            actions.setPhaseData('smartFolders', folders);
+            addNotification(`Loaded ${folders.length} smart folder${folders.length > 1 ? 's' : ''}`, 'info');
+          } else {
+            console.warn('[ORGANIZE-PHASE] No smart folders returned from API');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load smart folders in Organize phase:', error);
+      }
+    };
+    loadSmartFoldersIfMissing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // NEW: Load persisted file states and processed files
   useEffect(() => {
@@ -2990,6 +3008,26 @@ function OrganizePhase() {
       const persistedStates = phaseData.fileStates || {};
       setFileStates(persistedStates);
       
+      // If we have file states but no analysis results, reconstruct analysisResults from fileStates
+      if ((phaseData.analysisResults || []).length === 0 && Object.keys(persistedStates).length > 0) {
+        console.log('[ORGANIZE-PHASE] Reconstructing analysisResults from fileStates');
+        const reconstructedResults = Object.entries(persistedStates).map(([filePath, stateObj]) => {
+          const fileName = filePath.split(/[/\\]/).pop();
+          return {
+            name: fileName,
+            path: filePath,
+            size: 0,
+            type: 'file',
+            source: 'reconstructed',
+            analysis: stateObj.analysis || null,
+            error: stateObj.error,
+            analyzedAt: stateObj.analyzedAt,
+            status: stateObj.state === 'ready' ? 'analyzed' : (stateObj.state === 'error' ? 'failed' : 'unknown')
+          };
+        });
+        actions.setPhaseData('analysisResults', reconstructedResults);
+      }
+
       // If we don't have file states but we have analysis results, reconstruct them
       if (Object.keys(persistedStates).length === 0 && analysisResults.length > 0) {
         console.log('[ORGANIZE-PHASE] Reconstructing file states from analysis results');
@@ -3067,13 +3105,59 @@ function OrganizePhase() {
   };
 
   // NEW: Filter files to show unprocessed and processed separately
-  const unprocessedFiles = analysisResults.filter(file => 
-    !processedFileIds.has(file.path) && file.analysis
-  );
+  const unprocessedFiles = Array.isArray(analysisResults)
+    ? analysisResults.filter(file => !processedFileIds.has(file.path) && file && file.analysis)
+    : [];
   
-  const processedFiles = organizedFiles.filter(file => 
-    processedFileIds.has(file.originalPath || file.path)
-  );
+  const processedFiles = Array.isArray(organizedFiles)
+    ? organizedFiles.filter(file => processedFileIds.has(file?.originalPath || file?.path))
+    : [];
+
+  // Pre-match categories to smart folders using embeddings/LLM when no direct match
+  useEffect(() => {
+    const preMatchCategories = async () => {
+      try {
+        if (!Array.isArray(smartFolders) || smartFolders.length === 0) return;
+        if (!Array.isArray(analysisResults) || analysisResults.length === 0) return;
+
+        // Iterate unprocessed files and attempt AI matching where needed
+        for (let i = 0; i < unprocessedFiles.length; i++) {
+          const file = unprocessedFiles[i];
+          if (!file || !file.analysis) continue;
+
+          const currentCategory = editingFiles[i]?.category || file.analysis.category;
+          const direct = findSmartFolderForCategory(currentCategory);
+          if (direct) continue; // already resolvable
+
+          const description = [
+            file.analysis?.purpose,
+            (file.analysis?.keywords || []).join(', '),
+            file.analysis?.category,
+            file.name
+          ]
+            .filter(Boolean)
+            .join(' | ');
+
+          try {
+            const match = await window.electronAPI.smartFolders.match(description, smartFolders);
+            if (match && match.success && match.folder && match.folder.name) {
+              setEditingFiles(prev => ({
+                ...prev,
+                [i]: { ...(prev[i] || {}), category: match.folder.name }
+              }));
+            }
+          } catch (e) {
+            // Non-fatal; leave for organize-time fallback
+            console.warn('[PRE-MATCH] smartFolders.match failed:', e.message);
+          }
+        }
+      } catch (error) {
+        console.warn('[PRE-MATCH] Error during pre-matching:', error.message);
+      }
+    };
+    preMatchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartFolders, analysisResults, processedFileIds]);
 
   useEffect(() => {
     // Get the documents path when component mounts
@@ -3516,18 +3600,13 @@ function OrganizePhase() {
           // If still nothing, try general/default
           if (!smartFolder) {
             smartFolder = smartFolders.find(f => 
-              f.name.toLowerCase().includes('general') ||
-              f.name.toLowerCase().includes('other') ||
-              f.name.toLowerCase().includes('misc') ||
-              f.name.toLowerCase().includes('default') ||
-              f.name.toLowerCase().includes('documents')
-            ) || smartFolders[0];
-          }
-
-          if (!smartFolder) {
-            addNotification(`No smart folder found for category: ${file.analysis.category}`, 'warning');
-            skippedFiles.push({ name: file.name, reason: `No folder for category: ${file.analysis.category}` });
-            continue;
+              f.name?.toLowerCase().includes('general') ||
+              f.name?.toLowerCase().includes('other') ||
+              f.name?.toLowerCase().includes('misc') ||
+              f.name?.toLowerCase().includes('default') ||
+              f.name?.toLowerCase().includes('documents')
+            ) || smartFolders[0] || { name: 'Documents', path: documentsPath };
+            console.log(`[FOLDER-FALLBACK] Using ultimate fallback → ${smartFolder?.name || 'Documents'}`);
           }
         }
         

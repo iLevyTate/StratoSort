@@ -111,9 +111,11 @@ describe('StratoSort React App', () => {
     });
 
     test('undo/redo component file exists', () => {
-      const jsxPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx');
-      const jsPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
-      expect(fs.existsSync(jsxPath) || fs.existsSync(jsPath)).toBe(true);
+      const candidates = [
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js'),
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx')
+      ];
+      expect(candidates.some(p => fs.existsSync(p))).toBe(true);
     });
   });
 

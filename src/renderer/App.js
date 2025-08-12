@@ -37,6 +37,26 @@ function NotificationProvider({ children }) {
     removeToast(id);
   }, [removeToast]);
 
+  // Bridge main-process errors into our styled UI (toast/modal), avoiding OS dialogs
+  useEffect(() => {
+    const api = window?.electronAPI?.events;
+    if (!api || typeof api.onAppError !== 'function') return;
+
+    const cleanup = api.onAppError((payload) => {
+      try {
+        const { message, type } = payload || {};
+        if (!message) return;
+        if (type === 'error') showError(message, 5000);
+        else if (type === 'warning') showWarning(message, 4000);
+        else showInfo(message, 3000);
+      } catch (e) {
+        console.error('[Renderer] Failed to display app:error', e);
+      }
+    });
+
+    return cleanup;
+  }, [showError, showWarning, showInfo]);
+
   return (
     <NotificationContext.Provider value={{ 
       notifications: toasts, 
@@ -935,13 +955,9 @@ function SetupPhase() {
       } else {
         // Use default location - resolve it to full path if needed
         let resolvedDefaultLocation = defaultLocation;
-        // If settings.defaultSmartFolderLocation is an absolute path, prefer it
-        if (settings.defaultSmartFolderLocation && (/^[A-Za-z]:[\\/]/.test(settings.defaultSmartFolderLocation) || settings.defaultSmartFolderLocation.startsWith('/'))) {
-          resolvedDefaultLocation = settings.defaultSmartFolderLocation;
-        }
         
         // If defaultLocation is just "Documents" or relative, resolve to full path
-        if (!/^[A-Za-z]:[\\/]/.test(defaultLocation) && !defaultLocation.startsWith('/')) {
+        if (!/^[A-Za-z]:[\\/]/.test(resolvedDefaultLocation) && !resolvedDefaultLocation.startsWith('/')) {
           try {
             const documentsPath = await window.electronAPI.files.getDocumentsPath();
             if (documentsPath) {
@@ -3782,6 +3798,24 @@ function OrganizePhase() {
       actions.setPhaseData('organizedFiles', [...organizedFiles, ...newOrganizedFiles]);
       actions.setPhaseData('processedFileIds', Array.from(processedFileIds));
       
+      // Remove organized files from discover/analysis persistence so they don't reappear
+      try {
+        const organizedFilePathsSet = new Set(organizedFilePaths);
+        const remainingAnalysisResults = (analysisResults || []).filter(f => !organizedFilePathsSet.has(f.path));
+        actions.setPhaseData('analysisResults', remainingAnalysisResults);
+
+        // Remove from fileStates as well
+        const newFileStates = { ...(phaseData.fileStates || {}) };
+        organizedFilePaths.forEach(p => { delete newFileStates[p]; });
+        actions.setPhaseData('fileStates', newFileStates);
+
+        // Remove from selectedFiles
+        const remainingSelectedFiles = (phaseData.selectedFiles || []).filter(f => !organizedFilePathsSet.has(f.path));
+        actions.setPhaseData('selectedFiles', remainingSelectedFiles);
+      } catch (cleanupError) {
+        console.warn('[ORGANIZE-CLEANUP] Failed to clean discover persistence:', cleanupError.message);
+      }
+      
       addNotification(`Successfully organized ${operations.length} files!`, 'success');
       
       // Don't auto-advance if there are still unprocessed files
@@ -3793,7 +3827,10 @@ function OrganizePhase() {
         // Auto-advance to complete phase only if all files are processed
         setTimeout(() => {
           actions.advancePhase(PHASES.COMPLETE, { 
-            organizedFiles: [...organizedFiles, ...newOrganizedFiles] 
+            organizedFiles: [...organizedFiles, ...newOrganizedFiles],
+            analysisResults: [],
+            selectedFiles: [],
+            fileStates: {}
           });
         }, 1500);
       } else {

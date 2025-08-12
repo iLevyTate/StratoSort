@@ -17,10 +17,19 @@ const {
 
 const { scanDirectory } = require('./folderScanner');
 const { getOrganizationSuggestions } = require('./llmService');
-const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig, getOllamaConfigPath } = require('./ollamaUtils');
+const {
+  getOllama,
+  getOllamaModel,
+  getOllamaVisionModel,
+  setOllamaModel,
+  setOllamaVisionModel,
+  getOllamaHost,
+  setOllamaHost,
+  loadOllamaConfig,
+  getOllamaConfigPath
+} = require('./ollamaUtils');
+const ModelManager = require('./services/ModelManager');
 const SettingsService = require('./services/SettingsService');
-const { Ollama } = require('ollama');
-const { buildOllamaOptions } = require('./services/PerformanceService');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -41,7 +50,7 @@ let customFolders = []; // Initialize customFolders at module level
 
 // Initialize service integration
 let serviceIntegration;
-const settingsService = new SettingsService();
+let settingsService;
 
 // Persistent storage path for custom folders
 const getCustomFoldersPath = () => {
@@ -233,7 +242,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
         ]
       }
     });
@@ -1363,46 +1372,27 @@ function calculateBasicSimilarity(str1, str2) {
 // Ollama management
 ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
   try {
-    const host = await settingsService.getOllamaHost();
-    const client = new (require('ollama').Ollama)({ host });
-    const response = await client.list();
-    const allModels = (response.models || []).map(m => m.name);
-
-    // Categorize models by capability (heuristic)
-    const textModels = [];
-    const visionModels = [];
-    const embeddingModels = [];
-    for (const name of allModels) {
-      const lower = name.toLowerCase();
-      if (lower.includes('embed') || lower.includes('mxbai') || lower.includes('nomic') || lower.includes('text-embeddings')) {
-        embeddingModels.push(name);
-        continue;
-      }
-      if (lower.includes('llava') || lower.includes('vision') || lower.includes('gemma3') || lower.includes('moondream') || lower.includes('bakllava')) {
-        visionModels.push(name);
-        continue;
-      }
-      // Default bucket
-      textModels.push(name);
-    }
-
-    const saved = await settingsService.getSettings();
-    const result = {
-      models: allModels,
-      categories: {
-        text: textModels,
-        vision: visionModels,
-        embedding: embeddingModels
-      },
+    const ollama = getOllama();
+    const response = await ollama.list();
+    // Categorize models using ModelManager's patterns
+    const mm = new ModelManager();
+    mm.availableModels = response.models || [];
+    for (const m of mm.availableModels) mm.analyzeModelCapabilities(m);
+    const all = mm.getAllModelsWithCapabilities();
+    const categories = {
+      text: all.filter(x => x.capabilities?.text).map(x => x.name),
+      vision: all.filter(x => x.capabilities?.vision).map(x => x.name),
+      embedding: all.filter(x => /embed|embedding/i.test(x.name)).map(x => x.name)
+    };
+    return {
+      models: response.models.map(m => m.name),
+      categories,
       selected: {
-        textModel: saved.textModel,
-        visionModel: saved.visionModel,
-        embeddingModel: saved.embeddingModel
+        textModel: getOllamaModel(),
+        visionModel: getOllamaVisionModel()
       },
-      host,
       ollamaHealth: systemAnalytics.ollamaHealth
     };
-    return result;
   } catch (error) {
     logger.error('[IPC] Error fetching Ollama models:', error);
     if (error.cause && error.cause.code === 'ECONNREFUSED') {
@@ -1412,14 +1402,12 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
         lastCheck: Date.now()
       };
     }
-    const saved = await settingsService.getSettings().catch(() => ({}));
     return {
       models: [],
       categories: { text: [], vision: [], embedding: [] },
       selected: {
-        textModel: saved?.textModel,
-        visionModel: saved?.visionModel,
-        embeddingModel: saved?.embeddingModel
+        textModel: getOllamaModel(),
+        visionModel: getOllamaVisionModel()
       },
       error: error.message,
       ollamaHealth: systemAnalytics.ollamaHealth
@@ -1430,7 +1418,7 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
 // Ollama connection test
 ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async (event, hostUrl) => {
   try {
-    const testUrl = hostUrl || 'http://localhost:11434';
+    const testUrl = hostUrl || 'http://127.0.0.1:11434';
     const testOllama = new Ollama({ host: testUrl });
     
     // Test connection by listing models
@@ -1462,7 +1450,7 @@ ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, async (event, hostUrl) => {
     
     return {
       success: false,
-      host: hostUrl || 'http://localhost:11434',
+      host: hostUrl || 'http://127.0.0.1:11434',
       error: error.message,
       ollamaHealth: systemAnalytics.ollamaHealth
     };
@@ -1959,8 +1947,8 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath)
 // Settings handlers
 ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
   try {
-    const settings = await settingsService.getSettings();
-    return settings;
+    const loaded = await settingsService.load();
+    return loaded;
   } catch (error) {
     logger.error('Failed to get settings:', error);
     return {};
@@ -1969,9 +1957,18 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
 
 ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
   try {
-    const saved = await settingsService.saveSettings(settings || {});
+    const merged = await settingsService.save(settings);
+    if (merged.ollamaHost) {
+      await setOllamaHost(merged.ollamaHost);
+    }
+    if (merged.textModel) {
+      await setOllamaModel(merged.textModel);
+    }
+    if (merged.visionModel) {
+      await setOllamaVisionModel(merged.visionModel);
+    }
     logger.info('[SETTINGS] Saved settings');
-    return { success: true, settings: saved };
+    return { success: true, settings: merged };
   } catch (error) {
     logger.error('Failed to save settings:', error);
     return { success: false, error: error.message };
@@ -2030,6 +2027,8 @@ if (!gotTheLock) {
       serviceIntegration = new ServiceIntegration();
       await serviceIntegration.initialize();
       logger.info('[MAIN] Service integration initialized successfully');
+      // Initialize settings service
+      settingsService = new SettingsService();
       
       // Resume any incomplete organize batches (best-effort)
       try {
@@ -2061,8 +2060,10 @@ if (!gotTheLock) {
       // Fire-and-forget resume of incomplete batches shortly after window is ready
       setTimeout(() => { resumeIncompleteBatches(); }, 500);
       
-      // Load Ollama config
-      await loadOllamaConfig();
+      // Load Ollama config and apply any saved selections
+      const cfg = await loadOllamaConfig();
+      if (cfg.selectedTextModel) await setOllamaModel(cfg.selectedTextModel);
+      if (cfg.selectedVisionModel) await setOllamaVisionModel(cfg.selectedVisionModel);
       logger.info('[STARTUP] Ollama configuration loaded');
       
     } catch (error) {

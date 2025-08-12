@@ -1,8 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
-const SettingsService = require('../services/SettingsService');
-const { buildOllamaOptions } = require('../services/PerformanceService');
+const { getOllamaModel, loadOllamaConfig } = require('../ollamaUtils');
 
 // Enforce required dependency for AI-first operation
 const pdf = require('pdf-parse');
@@ -36,11 +35,11 @@ const AppConfig = {
 };
 
 // Initialize Ollama client with verification
-const settingsServiceDoc = new SettingsService();
 let ollamaClient = null;
 async function getOllamaClient() {
   if (!ollamaClient) {
-    const host = (await settingsServiceDoc.getSettings()).ollamaHost || AppConfig.ai.textAnalysis.defaultHost;
+    const cfg = await loadOllamaConfig();
+    const host = cfg?.host || AppConfig.ai.textAnalysis.defaultHost;
     ollamaClient = new Ollama({ host });
   }
   return ollamaClient;
@@ -94,19 +93,13 @@ CRITICAL REQUIREMENTS:
 Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
+    const cfg = await loadOllamaConfig();
+    const modelToUse = getOllamaModel() || cfg.selectedTextModel || cfg.selectedModel || AppConfig.ai.textAnalysis.defaultModel;
     const client = await getOllamaClient();
-    let model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
-    // Validate selected model is text-capable; fallback if likely a vision/embedding model
-    const lower = String(model).toLowerCase();
-    if (lower.includes('llava') || lower.includes('vision') || lower.includes('embed') || lower.includes('mxbai')) {
-      model = AppConfig.ai.textAnalysis.defaultModel;
-    }
-    const perfOptions = await buildOllamaOptions('text');
     const response = await client.generate({
-      model,
+      model: modelToUse,
       prompt,
       options: {
-        ...perfOptions,
         temperature: AppConfig.ai.textAnalysis.temperature,
         num_predict: AppConfig.ai.textAnalysis.maxTokens,
       },

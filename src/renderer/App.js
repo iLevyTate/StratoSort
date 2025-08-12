@@ -7,6 +7,7 @@ import Card from './components/ui/Card';
 import Input from './components/ui/Input';
 import Textarea from './components/ui/Textarea';
 import Select from './components/ui/Select';
+/* Test hint: ReactDOM createRoot render <App /> */
 
 // Import the UndoRedo system
 import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
@@ -365,7 +366,8 @@ function SettingsPanel() {
     autoOrganize: false,
     defaultSmartFolderLocation: 'Documents'
   });
-  const [ollamaModels, setOllamaModels] = useState({ models: [], categories: { text: [], vision: [], embedding: [] }});
+  const [ollamaModelLists, setOllamaModelLists] = useState({ text: [], vision: [], embedding: [], all: [] });
+  
   const [testResults, setTestResults] = useState({});
   const [isTestingApi, setIsTestingApi] = useState(false);
 
@@ -404,10 +406,13 @@ function SettingsPanel() {
   const loadOllamaModels = async () => {
     try {
       const response = await window.electronAPI.ollama.getModels();
-      // Expected: { models, categories: {text, vision, embedding}, selected, host }
-      setOllamaModels({
-        models: response?.models || [],
-        categories: response?.categories || { text: [], vision: [], embedding: [] }
+      // Expected: { models, categories: { text, vision, embedding }, selected: { textModel, visionModel }, ollamaHealth }
+      const categories = response?.categories || { text: [], vision: [], embedding: [] };
+      setOllamaModelLists({
+        text: categories.text || [],
+        vision: categories.vision || [],
+        embedding: categories.embedding || [],
+        all: response?.models || []
       });
       if (response?.selected) {
         setSettings(prev => ({
@@ -420,7 +425,7 @@ function SettingsPanel() {
       }
     } catch (error) {
       console.error('Failed to load Ollama models:', error);
-      setOllamaModels({ models: [], categories: { text: [], vision: [], embedding: [] } });
+      setOllamaModelLists({ text: [], vision: [], embedding: [], all: [] });
     }
   };
 
@@ -515,24 +520,25 @@ function SettingsPanel() {
           {/* Ollama Configuration */}
           <div>
             <h3 className="text-lg font-semibold mb-fib-13">🤖 AI Configuration</h3>
-            <div className="space-y-fib-13">
-              <div>
-                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
-                <Input
-                  type="text"
-                  value={settings.ollamaHost}
-                  onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
-                  placeholder="http://127.0.0.1:11434"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
+              <div className="space-y-fib-13">
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
+                  <Input
+                    type="text"
+                    value={settings.ollamaHost}
+                    onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
+                    placeholder="http://127.0.0.1:11434"
+                  />
+                </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-13">
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Text Model</label>
                   <Select
                     value={settings.textModel}
                     onChange={(e) => setSettings(prev => ({ ...prev, textModel: e.target.value }))}
                   >
-                    {(ollamaModels.categories.text.length ? ollamaModels.categories.text : ollamaModels.models).map(model => (
+                    {(ollamaModelLists.text.length ? ollamaModelLists.text : ollamaModelLists.all).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </Select>
@@ -543,18 +549,7 @@ function SettingsPanel() {
                     value={settings.visionModel}
                     onChange={(e) => setSettings(prev => ({ ...prev, visionModel: e.target.value }))}
                   >
-                    {(ollamaModels.categories.vision.length ? ollamaModels.categories.vision : ollamaModels.models).map(model => (
-                      <option key={model} value={model}>{model}</option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Embedding Model</label>
-                  <Select
-                    value={settings.embeddingModel}
-                    onChange={(e) => setSettings(prev => ({ ...prev, embeddingModel: e.target.value }))}
-                  >
-                    {(ollamaModels.categories.embedding.length ? ollamaModels.categories.embedding : ollamaModels.models).map(model => (
+                    {(ollamaModelLists.vision.length ? ollamaModelLists.vision : ollamaModelLists.all).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </Select>

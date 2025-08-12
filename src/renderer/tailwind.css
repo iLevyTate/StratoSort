@@ -212,6 +212,8 @@
     -webkit-backdrop-filter: blur(12px);
     max-width: 320px;
     font-size: 0.875rem;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
   }
   
   .toast-enhanced.show {
@@ -232,6 +234,36 @@
   
   .toast-info {
     @apply border-stratosort-blue/40 bg-stratosort-blue/5 text-stratosort-blue/90;
+  }
+
+  /* Enhanced Tooltip (unified with toast aesthetics) */
+  .tooltip-enhanced {
+    @apply fixed z-[2147483646] pointer-events-none select-none text-system-gray-800 text-xs px-fib-5 py-fib-3 rounded-md shadow-md border border-system-gray-200/60 bg-white/90;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transform: translate3d(0, -4px, 0) scale(0.98);
+    transition: opacity 120ms ease-out, transform 120ms ease-out;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    max-width: 280px;
+  }
+
+  .tooltip-enhanced.show {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  .tooltip-arrow {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    transform: rotate(45deg);
+    @apply bg-white/90 border border-system-gray-200/60;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    will-change: transform, opacity;
+    backface-visibility: hidden;
   }
   
   /* Enhanced Progress Components */

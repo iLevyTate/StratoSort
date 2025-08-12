@@ -112,8 +112,7 @@ const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-fib-13 animate-modal-backdrop"
-      style={{ position: 'fixed', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '21px', zIndex: 2147483646 }}
+      className="fixed inset-0 z-max flex items-center justify-center p-fib-13 animate-modal-backdrop"
       onClick={handleOverlayClick}
     >
       {/* Backdrop */}

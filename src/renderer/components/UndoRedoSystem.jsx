@@ -1,5 +1,6 @@
 // Undo/Redo System - Implementing Shneiderman's Golden Rule #6: Action Reversal Infrastructure
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { ConfirmModal } from './Modal';
 
 // Undo/Redo Context
 const UndoRedoContext = createContext();
@@ -181,6 +182,39 @@ export function UndoRedoProvider({ children }) {
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const { showSuccess, showError, showInfo } = useSimpleNotifications();
 
+  // Local confirmation dialog state for nicer UX than window.confirm
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    variant: 'default',
+    onConfirm: null,
+    onClose: null
+  });
+
+  const showConfirm = useCallback(({ title = 'Confirm Action', message = '', confirmText = 'Confirm', cancelText = 'Cancel', variant = 'default' }) => {
+    return new Promise((resolve) => {
+      setConfirmState({
+        isOpen: true,
+        title,
+        message,
+        confirmText,
+        cancelText,
+        variant,
+        onConfirm: () => {
+          resolve(true);
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+        },
+        onClose: () => {
+          resolve(false);
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+        }
+      });
+    });
+  }, []);
+
   // Update state when stack changes
   const updateState = useCallback(() => {
     setCanUndo(undoStack.canUndo());
@@ -234,10 +268,18 @@ export function UndoRedoProvider({ children }) {
       action.description.toLowerCase().includes('move') ||
       action.description.toLowerCase().includes('delete')
     )) {
-      const confirmed = window.confirm(
-        `Are you sure you want to undo: "${action.description}"?\n\n` +
-        `This will reverse the file operation and move files back to their original locations.`
-      );
+      const confirmed = await showConfirm({
+        title: 'Undo Operation',
+        message: (
+          <>
+            <p>Are you sure you want to undo: "{action.description}"?</p>
+            <p className="mt-2">This will reverse the file operation and move files back to their original locations.</p>
+          </>
+        ),
+        confirmText: 'Undo',
+        cancelText: 'Cancel',
+        variant: 'warning'
+      });
       if (!confirmed) {
         return; // User cancelled the undo
       }
@@ -318,6 +360,17 @@ export function UndoRedoProvider({ children }) {
     <UndoRedoContext.Provider value={contextValue}>
       {children}
       {isHistoryVisible && <HistoryModal />}
+      {/* Confirmation dialog for Undo/Redo provider */}
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={confirmState.onClose || (() => setConfirmState(prev => ({ ...prev, isOpen: false })))}
+        onConfirm={confirmState.onConfirm || (() => setConfirmState(prev => ({ ...prev, isOpen: false })))}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </UndoRedoContext.Provider>
   );
 }

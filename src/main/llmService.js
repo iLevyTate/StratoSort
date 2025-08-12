@@ -1,5 +1,6 @@
 const { Ollama } = require('ollama');
 const { logger } = require('../shared/logger');
+const { buildOllamaOptions } = require('./services/PerformanceService');
 const { DEFAULT_AI_MODELS } = require('../shared/constants');
 
 // Initialize Ollama instance
@@ -121,11 +122,13 @@ async function getOrganizationSuggestions(directoryStructure) {
     
     const startTime = Date.now();
     
+    const perfOptions = await buildOllamaOptions('text');
     const response = await ollama.generate({
       model: model,
       prompt: prompt,
       format: 'json',
       options: {
+        ...perfOptions,
         temperature: 0.3, // Lower temperature for more consistent suggestions
         num_predict: 1000,
         stop: ['\n\n', '###']

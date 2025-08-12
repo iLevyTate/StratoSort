@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
 const SettingsService = require('../services/SettingsService');
+const { buildOllamaOptions } = require('../services/PerformanceService');
 const sharp = require('sharp');
 
 // App configuration for image analysis - Optimized for speed
@@ -32,7 +33,7 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
   try {
     console.log(`Analyzing image content with Ollama model: ${AppConfig.ai.imageAnalysis.defaultModel}`);
     
-    // Build folder categories string for the prompt
+    // Build folder categories string for the prompt (include descriptions)
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       const validFolders = smartFolders.filter(f => 
@@ -40,12 +41,12 @@ async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolder
       );
       
       if (validFolders.length > 0) {
-        const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
+        const folderListDetailed = validFolders
           .slice(0, 10)
-          .join(', ');
+          .map((f, i) => `${i + 1}. "${f.name.trim()}" — ${f.description ? f.description.trim() : 'no description provided'}`)
+          .join('\n');
         
-        folderCategoriesStr = `\n\nCRITICAL: The user has these smart folders configured: ${folderList}. You MUST choose the category from this exact list. Do NOT create new categories. If the image doesn't clearly fit any of these folders, choose the closest match or use the first folder as a fallback.`;
+        folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the IMAGE CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
       }
     }
     
@@ -55,7 +56,7 @@ Your response should be a JSON object with the following fields:
 - date (if there's a visible date in the image, in YYYY-MM-DD format)
 - project (a short, 2-5 word project name or main subject based on image content)
 - purpose (a concise, 5-10 word description of what this image shows or represents)
-- category (most appropriate category for organizing this file)${folderCategoriesStr}
+- category (most appropriate category for organizing this file; must be one of the folder names above)${folderCategoriesStr}
 - keywords (an array of 3-7 relevant keywords describing the image content)
 - confidence (a number from 60-100 indicating analysis confidence)
 - content_type (e.g., 'people', 'landscape', 'text_document', 'interface', 'object', 'animal', 'food', 'vehicle', 'architecture')
@@ -68,12 +69,20 @@ If you cannot determine a field, omit it from the JSON. Do not make up informati
 Analyze this image:`;
 
     const client = await getOllamaClient();
-    const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    let model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    // Validate selected model is vision-capable; fallback if likely a text-only/embedding model
+    const lower = String(model).toLowerCase();
+    const isVision = lower.includes('llava') || lower.includes('vision') || lower.includes('gemma3') || lower.includes('moondream') || lower.includes('bakllava');
+    if (!isVision) {
+      model = AppConfig.ai.imageAnalysis.defaultModel;
+    }
+    const perfOptions = await buildOllamaOptions('vision');
     const response = await client.generate({
       model,
       prompt,
       images: [imageBase64],
       options: {
+        ...perfOptions,
         temperature: AppConfig.ai.imageAnalysis.temperature,
         num_predict: AppConfig.ai.imageAnalysis.maxTokens,
       },
@@ -273,11 +282,13 @@ async function extractTextFromImage(filePath) {
 
     const client = await getOllamaClient();
     const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const perfOptions = await buildOllamaOptions('vision');
     const response = await client.generate({
       model,
       prompt,
       images: [imageBase64],
       options: {
+        ...perfOptions,
         temperature: 0.1, // Lower temperature for text extraction
         num_predict: 2000,
       },

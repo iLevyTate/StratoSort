@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
 const SettingsService = require('../services/SettingsService');
+const { buildOllamaOptions } = require('../services/PerformanceService');
 
 // Enforce required dependency for AI-first operation
 const pdf = require('pdf-parse');
@@ -50,25 +51,22 @@ async function analyzeTextWithOllama(textContent, originalFileName, smartFolders
   try {
     console.log(`Analyzing document content with Ollama model: ${AppConfig.ai.textAnalysis.defaultModel}`);
     
-    // Build folder categories string for the prompt with validation
+    // Build folder categories string for the prompt with validation (include descriptions)
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
-      // Validate that smart folders exist and have valid names
       const validFolders = smartFolders.filter(f => 
-        f && 
-        f.name && 
-        typeof f.name === 'string' && 
-        f.name.trim().length > 0 &&
-        f.name.length < 50 // Reasonable name length limit
+        f &&
+        f.name && typeof f.name === 'string' && f.name.trim().length > 0 &&
+        f.name.length < 50
       );
-      
+
       if (validFolders.length > 0) {
-        const folderList = validFolders
-          .map(f => `"${f.name.trim()}"`)
+        const folderListDetailed = validFolders
           .slice(0, 10) // Limit to 10 folders to avoid prompt bloat
-          .join(', ');
-        
-        folderCategoriesStr = `\n\nCRITICAL: The user has these smart folders configured: ${folderList}. You MUST choose the category from this exact list. Do NOT create new categories. If the document doesn't clearly fit any of these folders, choose the closest match or use the first folder as a fallback.`;
+          .map((f, i) => `${i + 1}. "${f.name.trim()}" — ${f.description ? f.description.trim() : 'no description provided'}`)
+          .join('\n');
+
+        folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the document's CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
       }
     }
     
@@ -81,7 +79,7 @@ Your response MUST be a valid JSON object with ALL these fields:
   "date": "YYYY-MM-DD format if found in content, otherwise today's date",
   "project": "main subject/project from content (2-5 words)",
   "purpose": "document's purpose based on content (5-10 words)",
-  "category": "most appropriate category"${folderCategoriesStr},
+  "category": "most appropriate category (must be one of the folder names above)"${folderCategoriesStr},
   "keywords": ["keyword1", "keyword2", "keyword3"], // REQUIRED: 3-7 keywords from the ACTUAL CONTENT
   "confidence": 85, // number between 60-100
   "suggestedName": "descriptive_name_based_on_content" // underscores, max 50 chars
@@ -97,11 +95,18 @@ Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
     const client = await getOllamaClient();
-    const model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
+    let model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
+    // Validate selected model is text-capable; fallback if likely a vision/embedding model
+    const lower = String(model).toLowerCase();
+    if (lower.includes('llava') || lower.includes('vision') || lower.includes('embed') || lower.includes('mxbai')) {
+      model = AppConfig.ai.textAnalysis.defaultModel;
+    }
+    const perfOptions = await buildOllamaOptions('text');
     const response = await client.generate({
       model,
       prompt,
       options: {
+        ...perfOptions,
         temperature: AppConfig.ai.textAnalysis.temperature,
         num_predict: AppConfig.ai.textAnalysis.maxTokens,
       },

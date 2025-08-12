@@ -178,6 +178,9 @@ module.exports = {
         'md': '8px',
         'lg': '12px',
         'xl': '20px',
+      },
+      zIndex: {
+        'max': 2147483646
       }
     },
   },

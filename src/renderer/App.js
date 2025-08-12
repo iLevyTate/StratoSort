@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useContext, createContext, useReducer, useCallback, useMemo } from 'react';
 import './tailwind.css';
+import AppShell from './components/layout/AppShell';
+import TooltipManager from './components/TooltipManager';
+import Button from './components/ui/Button';
+import Card from './components/ui/Card';
+import Input from './components/ui/Input';
+import Textarea from './components/ui/Textarea';
+import Select from './components/ui/Select';
 
 // Import the UndoRedo system
 import { UndoRedoProvider, useUndoRedo, UndoRedoToolbar } from './components/UndoRedoSystem';
@@ -36,6 +43,26 @@ function NotificationProvider({ children }) {
   const removeNotification = useCallback((id) => {
     removeToast(id);
   }, [removeToast]);
+
+  // Bridge main-process errors into our styled UI (toast/modal), avoiding OS dialogs
+  useEffect(() => {
+    const api = window?.electronAPI?.events;
+    if (!api || typeof api.onAppError !== 'function') return;
+
+    const cleanup = api.onAppError((payload) => {
+      try {
+        const { message, type } = payload || {};
+        if (!message) return;
+        if (type === 'error') showError(message, 5000);
+        else if (type === 'warning') showWarning(message, 4000);
+        else showInfo(message, 3000);
+      } catch (e) {
+        console.error('[Renderer] Failed to display app:error', e);
+      }
+    });
+
+    return cleanup;
+  }, [showError, showWarning, showInfo]);
 
   return (
     <NotificationContext.Provider value={{ 
@@ -472,12 +499,15 @@ function SettingsPanel() {
         <div className="p-fib-21 border-b border-system-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-system-gray-900">⚙️ Settings</h2>
-            <button
+            <Button
               onClick={actions.toggleSettings}
-              className="text-system-gray-500 hover:text-system-gray-700"
+              variant="ghost"
+              className="text-system-gray-500 hover:text-system-gray-700 p-fib-5"
+              aria-label="Close settings"
+              title="Close settings"
             >
               ✕
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -488,50 +518,46 @@ function SettingsPanel() {
             <div className="space-y-fib-13">
               <div>
                 <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
-                <input
+                <Input
                   type="text"
                   value={settings.ollamaHost}
                   onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
-                  className="form-input-enhanced w-full"
                   placeholder="http://127.0.0.1:11434"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Text Model</label>
-                  <select
+                  <Select
                     value={settings.textModel}
                     onChange={(e) => setSettings(prev => ({ ...prev, textModel: e.target.value }))}
-                    className="form-input-enhanced w-full"
                   >
                     {(ollamaModels.categories.text.length ? ollamaModels.categories.text : ollamaModels.models).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Vision Model</label>
-                  <select
+                  <Select
                     value={settings.visionModel}
                     onChange={(e) => setSettings(prev => ({ ...prev, visionModel: e.target.value }))}
-                    className="form-input-enhanced w-full"
                   >
                     {(ollamaModels.categories.vision.length ? ollamaModels.categories.vision : ollamaModels.models).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Embedding Model</label>
-                  <select
+                  <Select
                     value={settings.embeddingModel}
                     onChange={(e) => setSettings(prev => ({ ...prev, embeddingModel: e.target.value }))}
-                    className="form-input-enhanced w-full"
                   >
                     {(ollamaModels.categories.embedding.length ? ollamaModels.categories.embedding : ollamaModels.models).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -577,27 +603,27 @@ function SettingsPanel() {
               <div>
                 <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Default Smart Folder Location</label>
                 <div className="flex gap-fib-8">
-                  <input
+                  <Input
                     type="text"
                     value={settings.defaultSmartFolderLocation}
                     onChange={(e) => setSettings(prev => ({ ...prev, defaultSmartFolderLocation: e.target.value }))}
-                    className="form-input-enhanced flex-1"
+                    className="flex-1"
                     placeholder="Documents"
                   />
-                  <button
+                  <Button
                     onClick={async () => {
                       const res = await window.electronAPI.files.selectDirectory();
                       if (res?.success && res.folder) {
                         setSettings(prev => ({ ...prev, defaultSmartFolderLocation: res.folder }));
                       }
                     }}
-                    className="btn-secondary"
+                    variant="secondary"
                     type="button"
                     title="Browse"
                     aria-label="Browse for default folder"
                   >
                     📁 Browse
-                  </button>
+                  </Button>
                 </div>
                 <p className="text-xs text-system-gray-500 mt-fib-3">Where new smart folders will be created by default</p>
               </div>
@@ -610,13 +636,14 @@ function SettingsPanel() {
           <div>
             <h3 className="text-lg font-semibold mb-fib-13">🔧 Backend API Test</h3>
             <div className="p-fib-13 bg-system-gray-50 rounded-lg">
-              <button
+              <Button
                 onClick={runAPITests}
                 disabled={isTestingApi}
-                className="btn-primary text-sm mb-fib-8 w-full"
+                variant="primary"
+                className="text-sm mb-fib-8 w-full"
               >
                 {isTestingApi ? 'Testing APIs...' : 'Test All APIs'}
-              </button>
+              </Button>
               
               {Object.keys(testResults).length > 0 && (
                 <div className="space-y-fib-3 text-sm">
@@ -633,18 +660,8 @@ function SettingsPanel() {
         </div>
 
         <div className="p-fib-21 border-t border-system-gray-200 flex justify-end gap-fib-13">
-          <button
-            onClick={actions.toggleSettings}
-            className="btn-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={saveSettings}
-            className="btn-primary"
-          >
-            Save Settings
-          </button>
+          <Button onClick={actions.toggleSettings} variant="secondary">Cancel</Button>
+          <Button onClick={saveSettings} variant="primary">Save Settings</Button>
         </div>
       </div>
     </div>
@@ -658,7 +675,7 @@ function WelcomePhase() {
   const { actions } = usePhase();
 
   return (
-    <div className="container-narrow text-center py-fib-34 animate-slide-up">
+        <div className="container-narrow text-center py-fib-34 animate-slide-up">
       <div className="mb-fib-21">
         <header role="banner">
           <h1 id="welcome-heading" className="heading-primary text-center" aria-level="1">
@@ -674,24 +691,26 @@ function WelcomePhase() {
       </div>
 
       <div className="space-y-fib-13" role="navigation" aria-label="Main actions">
-        <button 
+        <Button 
           onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-          className="btn-primary text-lg px-fib-21 py-fib-13"
+          variant="primary"
+          className="text-lg px-fib-21 py-fib-13"
           aria-describedby="organize-help"
         >
           <span role="img" aria-label="folder">🗂️</span> Organize My Files Now
-        </button>
+        </Button>
         <div id="organize-help" className="text-xs text-system-gray-500 mt-fib-3">
           Start organizing files immediately with AI-powered analysis.
         </div>
         
-        <button 
+        <Button 
           onClick={() => actions.advancePhase(PHASES.SETUP)}
-          className="btn-secondary text-lg px-fib-21 py-fib-13"
+          variant="secondary"
+          className="text-lg px-fib-21 py-fib-13"
           aria-describedby="setup-help"
         >
           <span role="img" aria-label="settings">⚙️</span> Setup Configuration First
-        </button>
+        </Button>
         <div id="setup-help" className="text-xs text-system-gray-500 mt-fib-3">
           Configure smart folders and AI settings before organizing files.
         </div>
@@ -935,13 +954,9 @@ function SetupPhase() {
       } else {
         // Use default location - resolve it to full path if needed
         let resolvedDefaultLocation = defaultLocation;
-        // If settings.defaultSmartFolderLocation is an absolute path, prefer it
-        if (settings.defaultSmartFolderLocation && (/^[A-Za-z]:[\\/]/.test(settings.defaultSmartFolderLocation) || settings.defaultSmartFolderLocation.startsWith('/'))) {
-          resolvedDefaultLocation = settings.defaultSmartFolderLocation;
-        }
         
         // If defaultLocation is just "Documents" or relative, resolve to full path
-        if (!/^[A-Za-z]:[\\/]/.test(defaultLocation) && !defaultLocation.startsWith('/')) {
+        if (!/^[A-Za-z]:[\\/]/.test(resolvedDefaultLocation) && !resolvedDefaultLocation.startsWith('/')) {
           try {
             const documentsPath = await window.electronAPI.files.getDocumentsPath();
             if (documentsPath) {
@@ -1236,15 +1251,16 @@ function SetupPhase() {
       <div className="card-enhanced mb-fib-21" role="region" aria-labelledby="current-folders-heading">
         <div className="flex justify-between items-center mb-fib-13">
           <h3 id="current-folders-heading" className="heading-tertiary">📁 Current Smart Folders</h3>
-          {smartFolders.length > 0 && (
-            <button
-              onClick={handleCreateAllFolders}
-              className="btn-primary text-sm"
-              title="Create all smart folder directories"
-            >
-              📁 Create All Folders
-            </button>
-          )}
+            {smartFolders.length > 0 && (
+              <Button
+                onClick={handleCreateAllFolders}
+                variant="primary"
+                className="text-sm"
+                title="Create all smart folder directories"
+              >
+                📁 Create All Folders
+              </Button>
+            )}
         </div>
         {isLoading ? (
           <SmartFolderSkeleton count={3} />
@@ -1261,11 +1277,11 @@ function SetupPhase() {
                   // Edit mode
                   <div className="space-y-fib-8" role="form" aria-label="Edit smart folder">
                     <div className="flex gap-fib-8">
-                      <input
+                      <Input
                         type="text"
                         value={editingFolder.name}
                         onChange={(e) => setEditingFolder({...editingFolder, name: e.target.value})}
-                        className="form-input-enhanced flex-1"
+                        className="flex-1"
                         placeholder="Folder name"
                         aria-label="Folder name"
                         onKeyDown={(e) => {
@@ -1273,11 +1289,11 @@ function SetupPhase() {
                           if (e.key === 'Escape') handleCancelEdit();
                         }}
                       />
-                      <input
+                      <Input
                         type="text"
                         value={editingFolder.path}
                         onChange={(e) => setEditingFolder({...editingFolder, path: e.target.value})}
-                        className="form-input-enhanced flex-1"
+                        className="flex-1"
                         placeholder="Folder path"
                         aria-label="Folder path"
                         onKeyDown={(e) => {
@@ -1287,20 +1303,21 @@ function SetupPhase() {
                       />
                     </div>
                     <div>
-                      <textarea
+                      <Textarea
                         value={editingFolder.description || ''}
                         onChange={(e) => setEditingFolder({...editingFolder, description: e.target.value})}
-                        className="form-input-enhanced w-full"
+                        className="w-full"
                         placeholder="Describe what types of files should go in this folder (helps AI make better decisions)"
-                        rows="2"
+                        rows={2}
                         aria-label="Folder description"
                       />
                     </div>
                     <div className="flex gap-fib-5">
-                      <button
+                      <Button
                         onClick={handleSaveEdit}
                         disabled={isSavingEdit}
-                        className="btn-primary text-sm"
+                        variant="primary"
+                        className="text-sm"
                       >
                         {isSavingEdit ? (
                           <>
@@ -1310,14 +1327,15 @@ function SetupPhase() {
                         ) : (
                           <>💾 Save</>
                         )}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={handleCancelEdit}
                         disabled={isSavingEdit}
-                        className="btn-secondary text-sm"
+                        variant="secondary"
+                        className="text-sm"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -1351,7 +1369,7 @@ function SetupPhase() {
                                               )}
                         <div className="flex gap-fib-5">
                         {!folder.physicallyExists && (
-                          <button
+                          <Button
                             onClick={async () => {
                               const result = await createSingleFolder(folder.path);
                               if (result.success) {
@@ -1366,9 +1384,9 @@ function SetupPhase() {
                             aria-label={`Create directory for ${folder.name}`}
                           >
                             <span role="img" aria-label="create folder">📁</span>
-                          </button>
+                          </Button>
                         )}
-                        <button
+                        <Button
                           onClick={() => handleOpenFolder(folder.path)}
                           className={`p-fib-5 rounded transition-colors ${
                             folder.physicallyExists 
@@ -1380,16 +1398,16 @@ function SetupPhase() {
                           disabled={!folder.physicallyExists}
                         >
                           <span role="img" aria-label="open folder">📂</span>
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleEditFolder(folder)}
                           className="p-fib-5 text-stratosort-blue hover:bg-stratosort-blue/10 rounded transition-colors"
                           title="Edit folder"
                           aria-label={`Edit folder ${folder.name}`}
                         >
                           <span role="img" aria-label="edit">✏️</span>
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleDeleteFolder(folder.id)}
                           disabled={isDeletingFolder === folder.id}
                           className="p-fib-5 text-system-red-600 hover:bg-system-red-100 rounded transition-colors disabled:opacity-50"
@@ -1401,7 +1419,7 @@ function SetupPhase() {
                           ) : (
                             <span role="img" aria-label="delete">🗑️</span>
                           )}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1420,7 +1438,7 @@ function SetupPhase() {
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
               Folder Name
             </label>
-            <input
+            <Input
               type="text"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
@@ -1430,7 +1448,7 @@ function SetupPhase() {
                 }
               }}
               placeholder="e.g., Documents, Photos, Projects"
-              className="form-input-enhanced w-full"
+              className="w-full"
               aria-describedby="folder-name-help"
             />
             <div id="folder-name-help" className="text-xs text-system-gray-500 mt-fib-3">
@@ -1442,20 +1460,20 @@ function SetupPhase() {
               Target Path (optional)
             </label>
             <div className="flex gap-fib-8">
-              <input
+              <Input
                 type="text"
                 value={newFolderPath}
                 onChange={(e) => setNewFolderPath(e.target.value)}
                 placeholder="e.g., Documents/Work, Pictures/Family"
-                className="form-input-enhanced flex-1"
+                className="flex-1"
               />
-              <button
+              <Button
                 onClick={handleBrowseFolder}
-                className="btn-secondary"
+                variant="secondary"
                 title="Browse for folder"
               >
                 📁 Browse
-              </button>
+              </Button>
             </div>
             <p className="text-xs text-system-gray-500 mt-fib-3">
               Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}
@@ -1465,22 +1483,22 @@ function SetupPhase() {
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
               Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span>
             </label>
-            <textarea
+            <Textarea
               value={newFolderDescription}
               onChange={(e) => setNewFolderDescription(e.target.value)}
               placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'"
-              className="form-input-enhanced w-full"
-              rows="3"
+              className="w-full"
+              rows={3}
               aria-describedby="description-help"
             />
             <div id="description-help" className="text-xs text-system-gray-500 mt-fib-3">
               💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.
             </div>
           </div>
-          <button 
+          <Button 
             onClick={handleAddFolder}
             disabled={!newFolderName.trim() || isAddingFolder}
-            className="btn-primary"
+            variant="primary"
             aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}
           >
             {isAddingFolder ? (
@@ -1491,19 +1509,19 @@ function SetupPhase() {
             ) : (
               <>➕ Add Smart Folder</>
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <button 
+        <Button 
           onClick={() => actions.advancePhase(PHASES.WELCOME)}
-          className="btn-secondary"
+          variant="secondary"
         >
           ← Back to Welcome
-        </button>
-        <button 
+        </Button>
+        <Button 
           onClick={() => {
             if (smartFolders.length === 0) {
               showWarning('Please add at least one smart folder before continuing');
@@ -1511,10 +1529,10 @@ function SetupPhase() {
               actions.advancePhase(PHASES.DISCOVER);
             }
           }}
-          className="btn-primary"
+          variant="primary"
         >
           Continue to File Discovery →
-        </button>
+        </Button>
       </div>
 
       {/* Confirmation Dialog */}
@@ -1529,6 +1547,97 @@ function SetupPhase() {
     </div>
   );
 }
+
+// Reusable analysis details renderer to keep Discover and Review consistent
+const AnalysisDetails = React.memo(function AnalysisDetails({ analysis, options = {} }) {
+  if (!analysis) return null;
+  const { showName = true, showCategory = true } = options;
+  const hasKeywords = Array.isArray(analysis.keywords) && analysis.keywords.length > 0;
+  const hasColors = Array.isArray(analysis.colors) && analysis.colors.length > 0;
+  const displayDate = analysis.date;
+  const displayProject = analysis.project;
+  const displayPurpose = analysis.purpose;
+  const displayContentType = analysis.content_type || analysis.contentType;
+  const displayHasText = typeof analysis.has_text === 'boolean' ? analysis.has_text : (typeof analysis.hasText === 'boolean' ? analysis.hasText : undefined);
+
+  return (
+    <div className="space-y-fib-3">
+      {showName && analysis.suggestedName && (
+        <div className="text-sm text-system-gray-700">
+          <strong>Suggested Name:</strong>{' '}
+          <span className="text-stratosort-blue font-mono">{analysis.suggestedName}</span>
+        </div>
+      )}
+
+      {showCategory && analysis.category && (
+        <div className="text-sm text-system-gray-700">
+          <strong>Category:</strong>{' '}
+          <span className="text-stratosort-blue">{analysis.category}</span>
+        </div>
+      )}
+
+      {displayPurpose && (
+        <div className="text-sm text-system-gray-600">
+          <strong>Purpose:</strong> {displayPurpose}
+        </div>
+      )}
+
+      {displayProject && (
+        <div className="text-sm text-system-gray-600">
+          <strong>Project:</strong> {displayProject}
+        </div>
+      )}
+
+      {displayDate && (
+        <div className="text-sm text-system-gray-600">
+          <strong>Date:</strong> {displayDate}
+        </div>
+      )}
+
+      {hasKeywords && (
+        <div className="text-sm text-system-gray-500">
+          <strong>Keywords:</strong> {analysis.keywords.join(', ')}
+        </div>
+      )}
+
+      {typeof analysis.confidence !== 'undefined' && analysis.confidence !== null && (
+        <div className="text-xs text-system-gray-400">
+          <strong>AI Confidence:</strong> {analysis.confidence}%
+        </div>
+      )}
+
+      {displayContentType && (
+        <div className="text-xs text-system-gray-500">
+          <strong>Content Type:</strong> {displayContentType}
+        </div>
+      )}
+
+      {typeof displayHasText !== 'undefined' && (
+        <div className="text-xs text-system-gray-500">
+          <strong>Has Text:</strong> {displayHasText ? 'Yes' : 'No'}
+        </div>
+      )}
+
+      {hasColors && (
+        <div className="text-xs text-system-gray-500">
+          <strong>Colors:</strong> {analysis.colors.join(', ')}
+        </div>
+      )}
+
+      {analysis.ocrText && (
+        <div className="text-xs text-system-gray-500 line-clamp-2">
+          <strong>OCR:</strong> {analysis.ocrText.slice(0,120)}{analysis.ocrText.length>120?'…':''}
+        </div>
+      )}
+
+      {analysis.transcript && (
+        <div className="text-xs text-system-gray-500 line-clamp-2">
+          <strong>Transcript:</strong> {analysis.transcript.slice(0,120)}{analysis.transcript.length>120?'…':''}
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ===== DISCOVER PHASE =====
 function DiscoverPhase() {
@@ -1803,7 +1912,7 @@ function DiscoverPhase() {
   }, [addNotification]);
 
   // Batch file stats processing to avoid rate limiting
-  const getBatchFileStats = async (filePaths, batchSize = 10) => {
+  const getBatchFileStats = async (filePaths, batchSize = 25) => {
     console.log('[BATCH-STATS-DEBUG] Starting batch file stats for', filePaths.length, 'files');
     const results = [];
     
@@ -1814,8 +1923,8 @@ function DiscoverPhase() {
       const batchResults = await Promise.allSettled(
         batch.map(async (filePath) => {
           try {
-            // Add small delay between requests to avoid rate limiting
-            if (i > 0) await new Promise(resolve => setTimeout(resolve, 50));
+            // Lightweight jitter only to avoid thundering herd
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 5));
             
             console.log('[BATCH-STATS-DEBUG] Getting stats for:', filePath);
             const stats = await window.electronAPI.files.getStats(filePath);
@@ -1873,9 +1982,9 @@ function DiscoverPhase() {
         }
       });
       
-      // Add delay between batches
+      // Reduce inter-batch delay for faster scans
       if (i + batchSize < filePaths.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
     }
     
@@ -2099,131 +2208,140 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', { current: 0, total: files.length });
     actions.setPhaseData('currentAnalysisFile', '');
     const results = [];
+    const concurrency = Math.max(1, Math.min(Number(settings.maxConcurrentAnalysis) || 3, 8));
     
     try {
       addNotification(`Starting AI analysis of ${files.length} files...`, 'info');
       
-      // Process files with better error handling and progress tracking
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.name || file.path.split(/[/\\]/).pop();
-        
-        // Update progress BEFORE starting analysis
-        setCurrentAnalysisFile(fileName);
-        setAnalysisProgress({ current: i, total: files.length });
-        actions.setPhaseData('currentAnalysisFile', fileName);
-        actions.setPhaseData('analysisProgress', { current: i, total: files.length });
-        
-        // Update file state to analyzing
-        updateFileState(file.path, 'analyzing', { fileName });
-        
-        // Add a small delay to show progress updates
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        addNotification(`Analyzing file ${i + 1}/${files.length}: ${fileName}`, 'info');
-        
-        try {
-          // Use existing file stats if available, avoid additional API calls
-          const fileInfo = {
-            ...file,
-            size: file.size || 0,
-            created: file.created,
-            modified: file.modified
-          };
-          
-          console.log(`[ANALYSIS-DEBUG] Starting analysis for: ${fileName}`);
-          console.log(`[ANALYSIS-DEBUG] File path: ${file.path}`);
-          console.log(`[ANALYSIS-DEBUG] File size: ${fileInfo.size} bytes`);
-          
-          // Perform AI analysis with timeout
-          const analysisPromise = window.electronAPI.files.analyze(file.path);
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), 180000)
-          );
-          
-          const analysis = await Promise.race([analysisPromise, timeoutPromise]);
-          
-          console.log(`[ANALYSIS-DEBUG] Raw analysis result for ${fileName}:`, analysis);
-          
-          if (analysis && !analysis.error) {
-            // Apply naming convention to suggested name
-            const enhancedAnalysis = {
-              ...analysis,
-              suggestedName: generatePreviewName(analysis.suggestedName || fileName),
-              namingConvention: {
-                convention: namingConvention,
-                dateFormat,
-                caseConvention,
-                separator
-              }
+      // Process files with concurrency
+      let index = 0;
+      const worker = async () => {
+        while (true) {
+          const i = index++;
+          if (i >= files.length) break;
+
+          const file = files[i];
+          const fileName = file.name || file.path.split(/[/\\]/).pop();
+
+          // Update progress BEFORE starting analysis
+          setCurrentAnalysisFile(fileName);
+          setAnalysisProgress({ current: i, total: files.length });
+          actions.setPhaseData('currentAnalysisFile', fileName);
+          actions.setPhaseData('analysisProgress', { current: i, total: files.length });
+
+          // Update file state to analyzing
+          updateFileState(file.path, 'analyzing', { fileName });
+
+          // Allow UI to paint without adding artificial per-file latency
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          addNotification(`Analyzing file ${i + 1}/${files.length}: ${fileName}`, 'info');
+
+          try {
+            // Use existing file stats if available, avoid additional API calls
+            const fileInfo = {
+              ...file,
+              size: file.size || 0,
+              created: file.created,
+              modified: file.modified,
             };
-            
+
+            console.log(`[ANALYSIS-DEBUG] Starting analysis for: ${fileName}`);
+            console.log(`[ANALYSIS-DEBUG] File path: ${file.path}`);
+            console.log(`[ANALYSIS-DEBUG] File size: ${fileInfo.size} bytes`);
+
+            // Perform AI analysis with timeout
+            const analysisPromise = window.electronAPI.files.analyze(file.path);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), 180000)
+            );
+
+            const analysis = await Promise.race([analysisPromise, timeoutPromise]);
+
+            console.log(`[ANALYSIS-DEBUG] Raw analysis result for ${fileName}:`, analysis);
+
+            if (analysis && !analysis.error) {
+              // Apply naming convention to suggested name
+              const enhancedAnalysis = {
+                ...analysis,
+                suggestedName: generatePreviewName(analysis.suggestedName || fileName),
+                namingConvention: {
+                  convention: namingConvention,
+                  dateFormat,
+                  caseConvention,
+                  separator,
+                },
+              };
+
+              const result = {
+                ...fileInfo,
+                analysis: enhancedAnalysis,
+                status: 'analyzed',
+                analyzedAt: new Date().toISOString(),
+              };
+
+              results.push(result);
+
+              // Update file state to ready
+              updateFileState(file.path, 'ready', {
+                analysis: enhancedAnalysis,
+                analyzedAt: new Date().toISOString(),
+              });
+
+              addNotification(`✓ Analysis complete for: ${fileName}`, 'success');
+            } else {
+              console.error('Analysis failed for file:', fileName, analysis?.error);
+
+              const result = {
+                ...fileInfo,
+                analysis: null,
+                error: analysis?.error || 'Analysis failed',
+                status: 'failed',
+                analyzedAt: new Date().toISOString(),
+              };
+
+              results.push(result);
+
+              // Update file state to error
+              updateFileState(file.path, 'error', {
+                error: analysis?.error || 'Analysis failed',
+                analyzedAt: new Date().toISOString(),
+              });
+
+              addNotification(`⚠️ Analysis failed for: ${fileName}`, 'warning');
+            }
+          } catch (error) {
+            console.error('Error analyzing file:', fileName, error);
+
             const result = {
-              ...fileInfo,
-              analysis: enhancedAnalysis,
-              status: 'analyzed',
-              analyzedAt: new Date().toISOString()
-            };
-            
-            results.push(result);
-            
-            // Update file state to ready
-            updateFileState(file.path, 'ready', { 
-              analysis: enhancedAnalysis,
-              analyzedAt: new Date().toISOString()
-            });
-            
-            addNotification(`✓ Analysis complete for: ${fileName}`, 'success');
-          } else {
-            console.error('Analysis failed for file:', fileName, analysis?.error);
-            
-            const result = {
-              ...fileInfo,
+              ...file,
               analysis: null,
-              error: analysis?.error || 'Analysis failed',
+              error: error.message,
               status: 'failed',
-              analyzedAt: new Date().toISOString()
+              analyzedAt: new Date().toISOString(),
             };
-            
+
             results.push(result);
-            
+
             // Update file state to error
-            updateFileState(file.path, 'error', { 
-              error: analysis?.error || 'Analysis failed',
-              analyzedAt: new Date().toISOString()
+            updateFileState(file.path, 'error', {
+              error: error.message,
+              analyzedAt: new Date().toISOString(),
             });
-            
-            addNotification(`⚠️ Analysis failed for: ${fileName}`, 'warning');
+
+            addNotification(`❌ Error analyzing: ${fileName}`, 'error');
           }
-        } catch (error) {
-          console.error('Error analyzing file:', fileName, error);
-          
-          const result = {
-            ...file,
-            analysis: null,
-            error: error.message,
-            status: 'failed',
-            analyzedAt: new Date().toISOString()
-          };
-          
-          results.push(result);
-          
-          // Update file state to error
-          updateFileState(file.path, 'error', { 
-            error: error.message,
-            analyzedAt: new Date().toISOString()
-          });
-          
-          addNotification(`❌ Error analyzing: ${fileName}`, 'error');
+
+          // Update progress AFTER processing each file
+          setAnalysisProgress((prev) => ({ current: Math.min(files.length, prev.current + 1), total: files.length }));
+          actions.setPhaseData('analysisProgress', { current: Math.min(files.length, i + 1), total: files.length });
+          // Yield back to the event loop
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        
-        // Update progress AFTER processing each file
-        setAnalysisProgress({ current: i + 1, total: files.length });
-        actions.setPhaseData('analysisProgress', { current: i + 1, total: files.length });
-        
-        // Allow UI to update
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      };
+
+      const workers = Array.from({ length: concurrency }, () => worker());
+      await Promise.all(workers);
       
       setAnalysisResults(results);
       
@@ -2339,44 +2457,44 @@ function DiscoverPhase() {
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-3">
               Convention Pattern
             </label>
-            <select
+            <Select
               value={namingConvention}
               onChange={(e) => setNamingConvention(e.target.value)}
-              className="form-input-enhanced w-full"
+              className="w-full"
             >
               <option value="subject-date">Subject + Date</option>
               <option value="date-subject">Date + Subject</option>
               <option value="project-subject-date">Project + Subject + Date</option>
               <option value="category-subject">Category + Subject</option>
               <option value="keep-original">Keep Original</option>
-            </select>
+            </Select>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-3">
               Date Format
             </label>
-            <select
+            <Select
               value={dateFormat}
               onChange={(e) => setDateFormat(e.target.value)}
-              className="form-input-enhanced w-full"
+              className="w-full"
               disabled={namingConvention === 'keep-original'}
             >
               <option value="YYYY-MM-DD">2024-12-17</option>
               <option value="MM-DD-YYYY">12-17-2024</option>
               <option value="DD-MM-YYYY">17-12-2024</option>
               <option value="YYYYMMDD">20241217</option>
-            </select>
+            </Select>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-3">
               Case Style
             </label>
-            <select
+            <Select
               value={caseConvention}
               onChange={(e) => setCaseConvention(e.target.value)}
-              className="form-input-enhanced w-full"
+              className="w-full"
               disabled={namingConvention === 'keep-original'}
             >
               <option value="kebab-case">kebab-case</option>
@@ -2385,24 +2503,24 @@ function DiscoverPhase() {
               <option value="PascalCase">PascalCase</option>
               <option value="lowercase">lowercase</option>
               <option value="UPPERCASE">UPPERCASE</option>
-            </select>
+            </Select>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-3">
               Separator
             </label>
-            <select
+            <Select
               value={separator}
               onChange={(e) => setSeparator(e.target.value)}
-              className="form-input-enhanced w-full"
+              className="w-full"
               disabled={namingConvention === 'keep-original'}
             >
               <option value="-">Hyphen (-)</option>
               <option value="_">Underscore (_)</option>
               <option value=".">Dot (.)</option>
               <option value=" ">Space ( )</option>
-            </select>
+            </Select>
           </div>
         </div>
         
@@ -2525,21 +2643,23 @@ function DiscoverPhase() {
           <div className="flex items-center justify-between mb-fib-13">
             <h3 className="text-lg font-semibold">📊 Analysis Results</h3>
             <div className="flex items-center gap-fib-8">
-              <button
+              <Button
                 onClick={() => analyzeFiles(selectedFiles)}
-                className="btn-primary text-sm"
+                variant="primary"
+                className="text-sm"
                 disabled={!selectedFiles.length}
                 aria-label="Reanalyze all files with current smart folder settings"
               >
                 🔄 Reanalyze Files
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setShowAnalysisHistory(true)}
-                className="btn-secondary text-sm"
+                variant="secondary"
+                className="text-sm"
                 aria-label="View detailed analysis history"
               >
                 📊 History
-              </button>
+              </Button>
             </div>
           </div>
           
@@ -2569,34 +2689,7 @@ function DiscoverPhase() {
                       </div>
                       
                       {file.analysis && (
-                        <>
-                          <div className="text-sm text-system-gray-700 mb-fib-3">
-                            <strong>Suggested Name:</strong> <span className="text-stratosort-blue font-mono">{file.analysis.suggestedName}</span>
-                          </div>
-                          <div className="text-sm text-system-gray-700 mb-fib-3">
-                            <strong>Category:</strong> <span className="text-stratosort-blue">{file.analysis.category}</span>
-                          </div>
-                          {file.analysis.keywords && file.analysis.keywords.length > 0 && (
-                            <div className="text-sm text-system-gray-500 mb-fib-3">
-                              <strong>Keywords:</strong> {file.analysis.keywords.join(', ')}
-                            </div>
-                          )}
-                          {file.analysis.confidence && (
-                            <div className="text-xs text-system-gray-400">
-                              <strong>AI Confidence:</strong> {file.analysis.confidence}%
-                            </div>
-                          )}
-                          {file.analysis.ocrText && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>OCR:</strong> {file.analysis.ocrText.slice(0,120)}{file.analysis.ocrText.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.transcript && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>Transcript:</strong> {file.analysis.transcript.slice(0,120)}{file.analysis.transcript.length>120?'…':''}
-                            </div>
-                          )}
-                        </>
+                        <AnalysisDetails analysis={file.analysis} />
                       )}
                       
                       {file.error && (
@@ -2608,39 +2701,43 @@ function DiscoverPhase() {
                     
                     <div className="flex items-center gap-fib-8">
                       <div className="flex items-center gap-fib-3">
-                        <button
+                        <Button
                           onClick={() => analyzeFiles([file])}
-                          className="btn-outline text-xs px-fib-8 py-fib-3"
+                          variant="outline"
+                          className="text-xs px-fib-8 py-fib-3"
                           disabled={isAnalyzing}
                           aria-label={`Reanalyze ${file.name}`}
                           title="Reanalyze this file"
                         >
                           🔄
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleFileAction('open', file.path)}
-                          className="btn-outline text-xs px-fib-8 py-fib-3"
+                          variant="outline"
+                          className="text-xs px-fib-8 py-fib-3"
                           aria-label={`Open ${file.name}`}
                           title="Open file"
                         >
                           📄
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleFileAction('reveal', file.path)}
-                          className="btn-outline text-xs px-fib-8 py-fib-3"
+                          variant="outline"
+                          className="text-xs px-fib-8 py-fib-3"
                           aria-label={`Show ${file.name} in folder`}
                           title="Show in folder"
                         >
                           📁
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleFileAction('delete', file.path, file)}
-                          className="btn-outline text-xs px-fib-8 py-fib-3 text-red-600 hover:bg-red-50"
+                          variant="outline"
+                          className="text-xs px-fib-8 py-fib-3 text-red-600 hover:bg-red-50"
                           aria-label={`Delete ${file.name}`}
                           title="Delete file"
                         >
                           🗑️
-                        </button>
+                        </Button>
                       </div>
                       <div className={`text-sm font-medium flex items-center gap-fib-3 ${stateDisplay.color}`}>
                         <span className={stateDisplay.spinning ? 'animate-spin' : ''}>{stateDisplay.icon}</span>
@@ -2657,15 +2754,15 @@ function DiscoverPhase() {
 
       {/* Navigation */}
       <div className="flex justify-between" role="navigation" aria-label="Phase navigation">
-        <button 
+        <Button 
           onClick={() => actions.advancePhase(PHASES.SETUP)}
-          className="btn-secondary"
+          variant="secondary"
           disabled={false} // Allow navigation even during analysis
           aria-label="Go back to setup phase"
         >
           ← Back to Setup
-        </button>
-        <button 
+        </Button>
+        <Button 
           onClick={() => {
             console.log('[DISCOVER-PHASE] Advancing to ORGANIZE with data:');
             console.log('[DISCOVER-PHASE] analysisResults:', analysisResults.length);
@@ -2710,12 +2807,12 @@ function DiscoverPhase() {
             });
           }}
           disabled={analysisResults.length === 0} // Only disable if no files analyzed yet
-          className={`btn-primary ${analysisResults.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} ${isAnalyzing ? 'animate-pulse' : ''}`}
+          className={`${analysisResults.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} ${isAnalyzing ? 'animate-pulse' : ''}`}
           aria-label={`Proceed to organize ${analysisResults.length} analyzed files${isAnalyzing ? ' (analysis in progress)' : ''}`}
           aria-describedby={analysisResults.length === 0 ? "no-files-message" : (isAnalyzing ? "analysis-in-progress" : undefined)}
         >
           {isAnalyzing ? `Organize Files → (${analysisProgress.current}/${analysisProgress.total} analyzing)` : 'Organize Files →'}
-        </button>
+        </Button>
         {analysisResults.length === 0 && (
           <div id="no-files-message" className="sr-only">
             No files have been analyzed yet. Please select and analyze files before proceeding.
@@ -2760,7 +2857,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
     try {
       const [stats, history] = await Promise.all([
         window.electronAPI.analysisHistory.getStatistics(),
-        window.electronAPI.analysisHistory.get({ limit: 50 })
+        window.electronAPI.analysisHistory.get({ all: true })
       ]);
       
       setAnalysisStats(stats);
@@ -2777,7 +2874,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
     if (!searchQuery.trim()) return;
     
     try {
-      const results = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 50 });
+      const results = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 200 });
       setHistoryData(results);
     } catch (error) {
       console.error('Search failed:', error);
@@ -2865,15 +2962,15 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                   </div>
 
                   {/* Export Options */}
-                  <div className="card-enhanced">
+            <div className="card-enhanced">
                     <h3 className="font-semibold mb-fib-8">📤 Export Options</h3>
                     <div className="flex gap-fib-8">
-                      <button onClick={() => exportHistory('json')} className="btn-outline text-sm">
-                        Export JSON
-                      </button>
-                      <button onClick={() => exportHistory('csv')} className="btn-outline text-sm">
-                        Export CSV
-                      </button>
+                <Button onClick={() => exportHistory('json')} variant="outline" className="text-sm">
+                  Export JSON
+                </Button>
+                <Button onClick={() => exportHistory('csv')} variant="outline" className="text-sm">
+                  Export CSV
+                </Button>
                     </div>
                   </div>
                 </div>
@@ -2883,16 +2980,16 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                 <div className="space-y-fib-13">
                   {/* Search */}
                   <div className="flex gap-fib-8">
-                    <input
+                    <Input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search analysis history..."
-                      className="form-input-enhanced flex-1"
+                      className="flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && searchHistory()}
                     />
-                    <button onClick={searchHistory} className="btn-primary">Search</button>
-                    <button onClick={loadAnalysisData} className="btn-outline">Reset</button>
+                    <Button onClick={searchHistory} variant="primary">Search</Button>
+                    <Button onClick={loadAnalysisData} variant="outline">Reset</Button>
                   </div>
 
                   {/* History List */}
@@ -3782,6 +3879,24 @@ function OrganizePhase() {
       actions.setPhaseData('organizedFiles', [...organizedFiles, ...newOrganizedFiles]);
       actions.setPhaseData('processedFileIds', Array.from(processedFileIds));
       
+      // Remove organized files from discover/analysis persistence so they don't reappear
+      try {
+        const organizedFilePathsSet = new Set(organizedFilePaths);
+        const remainingAnalysisResults = (analysisResults || []).filter(f => !organizedFilePathsSet.has(f.path));
+        actions.setPhaseData('analysisResults', remainingAnalysisResults);
+
+        // Remove from fileStates as well
+        const newFileStates = { ...(phaseData.fileStates || {}) };
+        organizedFilePaths.forEach(p => { delete newFileStates[p]; });
+        actions.setPhaseData('fileStates', newFileStates);
+
+        // Remove from selectedFiles
+        const remainingSelectedFiles = (phaseData.selectedFiles || []).filter(f => !organizedFilePathsSet.has(f.path));
+        actions.setPhaseData('selectedFiles', remainingSelectedFiles);
+      } catch (cleanupError) {
+        console.warn('[ORGANIZE-CLEANUP] Failed to clean discover persistence:', cleanupError.message);
+      }
+      
       addNotification(`Successfully organized ${operations.length} files!`, 'success');
       
       // Don't auto-advance if there are still unprocessed files
@@ -3793,7 +3908,10 @@ function OrganizePhase() {
         // Auto-advance to complete phase only if all files are processed
         setTimeout(() => {
           actions.advancePhase(PHASES.COMPLETE, { 
-            organizedFiles: [...organizedFiles, ...newOrganizedFiles] 
+            organizedFiles: [...organizedFiles, ...newOrganizedFiles],
+            analysisResults: [],
+            selectedFiles: [],
+            fileStates: {}
           });
         }, 1500);
       } else {
@@ -3899,47 +4017,51 @@ function OrganizePhase() {
               
               {selectedFiles.size > 0 && (
                 <div className="flex items-center gap-fib-8">
-                  <button
+                  <Button
                     onClick={approveSelectedFiles}
-                    className="btn-primary text-sm"
+                    variant="primary"
+                    className="text-sm"
                   >
                     ✓ Approve Selected
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => setBulkEditMode(!bulkEditMode)}
-                    className="btn-secondary text-sm"
+                    variant="secondary"
+                    className="text-sm"
                   >
                     ✏️ Bulk Edit
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
             
             {bulkEditMode && (
               <div className="flex items-center gap-fib-5">
-                <select
+                <Select
                   value={bulkCategory}
                   onChange={(e) => setBulkCategory(e.target.value)}
-                  className="form-input-enhanced text-sm"
+                  className="text-sm"
                 >
                   <option value="">Select category...</option>
                   {smartFolders.map(folder => (
                     <option key={folder.id} value={folder.name}>{folder.name}</option>
                   ))}
-                </select>
-                <button
+                </Select>
+                <Button
                   onClick={applyBulkCategoryChange}
-                  className="btn-primary text-sm"
+                  variant="primary"
+                  className="text-sm"
                   disabled={!bulkCategory}
                 >
                   Apply
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => {setBulkEditMode(false); setBulkCategory('');}}
-                  className="btn-secondary text-sm"
+                  variant="secondary"
+                  className="text-sm"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -3962,12 +4084,13 @@ function OrganizePhase() {
               }
             </p>
             {processedFiles.length === 0 && (
-              <button
+              <Button
                 onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-                className="btn-primary mt-fib-13"
+                variant="primary"
+                className="mt-fib-13"
               >
                 ← Go Back to Select Files
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -4010,26 +4133,26 @@ function OrganizePhase() {
                               <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">
                                 Suggested Name
                               </label>
-                              <input
+                              <Input
                                 type="text"
                                 value={editingFiles[index]?.suggestedName || fileWithEdits.analysis.suggestedName}
                                 onChange={(e) => handleEditFile(index, 'suggestedName', e.target.value)}
-                                className="form-input-enhanced text-sm"
+                                className="text-sm"
                               />
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">
                                 Category
                               </label>
-                              <select
+                              <Select
                                 value={editingFiles[index]?.category || fileWithEdits.analysis.category}
                                 onChange={(e) => handleEditFile(index, 'category', e.target.value)}
-                                className="form-input-enhanced text-sm"
+                                className="text-sm"
                               >
                                 {smartFolders.map(folder => (
                                   <option key={folder.id} value={folder.name}>{folder.name}</option>
                                 ))}
-                              </select>
+                              </Select>
                             </div>
                           </div>
                           
@@ -4040,26 +4163,7 @@ function OrganizePhase() {
                             </span>
                           </div>
                           
-                          {file.analysis.keywords && file.analysis.keywords.length > 0 && (
-                            <div className="text-sm text-system-gray-500 mb-fib-3">
-                              <strong>Keywords:</strong> {file.analysis.keywords.join(', ')}
-                            </div>
-                          )}
-                          {file.analysis.ocrText && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>OCR:</strong> {file.analysis.ocrText.slice(0,120)}{file.analysis.ocrText.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.transcript && (
-                            <div className="text-xs text-system-gray-500 mb-fib-3 line-clamp-2">
-                              <strong>Transcript:</strong> {file.analysis.transcript.slice(0,120)}{file.analysis.transcript.length>120?'…':''}
-                            </div>
-                          )}
-                          {file.analysis.confidence && (
-                            <div className="text-xs text-system-gray-400">
-                              <strong>AI Confidence:</strong> {file.analysis.confidence}%
-                            </div>
-                          )}
+                          <AnalysisDetails analysis={file.analysis} options={{ showName: false, showCategory: false }} />
                         </>
                       ) : (
                         <div className="text-sm text-system-red-600 mt-fib-3">
@@ -4149,33 +4253,34 @@ function OrganizePhase() {
               </p>
             </div>
           ) : (
-            <button 
+            <Button 
               onClick={handleOrganizeFiles}
-              className="btn-success text-lg px-fib-21 py-fib-13"
+              variant="success"
+              className="text-lg px-fib-21 py-fib-13"
               disabled={unprocessedFiles.filter(f => f.analysis).length === 0}
             >
               ✨ Organize Files Now
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <button 
+        <Button 
           onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-          className="btn-secondary"
+          variant="secondary"
           disabled={isOrganizing}
         >
           ← Back to Discovery
-        </button>
-        <button 
+        </Button>
+        <Button 
           onClick={() => actions.advancePhase(PHASES.COMPLETE)}
           disabled={processedFiles.length === 0 || isOrganizing}
-          className={`btn-primary ${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           View Results →
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -4219,27 +4324,30 @@ function CompletePhase() {
       <div className="flex flex-col gap-fib-13 mt-fib-21">
         {/* Navigation Back Options */}
         <div className="flex gap-fib-8">
-          <button 
+          <Button 
             onClick={() => actions.advancePhase(PHASES.ORGANIZE)}
-            className="btn-secondary flex-1"
+            variant="secondary"
+            className="flex-1"
           >
             ← Back to Organization
-          </button>
-          <button 
+          </Button>
+          <Button 
             onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-            className="btn-outline flex-1"
+            variant="outline"
+            className="flex-1"
           >
             ← Back to Discovery
-          </button>
+          </Button>
         </div>
         
         {/* New Session Options */}
-        <button 
+        <Button 
           onClick={() => actions.resetWorkflow()}
-          className="btn-primary px-fib-34 py-fib-13"
+          variant="primary"
+          className="px-fib-34 py-fib-13"
         >
           🚀 Start New Organization Session
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -4480,13 +4588,11 @@ function App() {
     <NotificationProvider>
       <UndoRedoProvider>
         <PhaseProvider>
-          <div className="min-h-screen gradient-bg modern-scrollbar">
-            <NavigationBar />
-            <ProgressIndicator />
-            <main className="container-centered py-fib-21 animate-fade-in">
-              <PhaseRenderer />
-            </main>
-          </div>
+          <AppShell header={<NavigationBar />} subheader={<ProgressIndicator />}> 
+            <PhaseRenderer />
+            {/* Global tooltip layer */}
+            <TooltipManager />
+          </AppShell>
         </PhaseProvider>
       </UndoRedoProvider>
     </NotificationProvider>

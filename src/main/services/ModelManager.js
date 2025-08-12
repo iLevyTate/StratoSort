@@ -191,10 +191,13 @@ class ModelManager {
     try {
       console.log(`[MODEL-MANAGER] Testing model: ${modelName}`);
       
+      const { buildOllamaOptions } = require('./PerformanceService');
+      const perfOptions = await buildOllamaOptions('text');
       const testPromise = this.ollamaClient.generate({
         model: modelName,
         prompt: 'Hello',
         options: {
+          ...perfOptions,
           num_predict: 5,
           temperature: 0.1
         }
@@ -301,10 +304,13 @@ class ModelManager {
       try {
         console.log(`[MODEL-MANAGER] Attempting generation with: ${modelName}`);
         
+        const { buildOllamaOptions } = require('./PerformanceService');
+        const perfOptions = await buildOllamaOptions('text');
         const response = await this.ollamaClient.generate({
           model: modelName,
           prompt,
           options: {
+            ...perfOptions,
             temperature: 0.1,
             num_predict: 500,
             ...options

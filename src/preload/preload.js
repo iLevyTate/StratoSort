@@ -26,7 +26,8 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
   'analysis-progress',
   'analysis-error',
-  'operation-progress'
+  'operation-progress',
+  'app:error'
 ];
 
 // Flatten allowed send channels for validation
@@ -198,11 +199,11 @@ class SecureIPCManager {
    * Validate system metrics data structure
    */
   isValidSystemMetrics(data) {
-    return data && 
-           typeof data === 'object' &&
-           Array.isArray(data.cpu) &&
-           Array.isArray(data.memory) &&
-           typeof data.analysisQueue === 'number';
+    // Accept flexible shapes produced by main: ensure object with some expected keys
+    if (!data || typeof data !== 'object') return false;
+    const hasUptime = typeof data.uptime === 'number' || typeof data.uptime === 'string';
+    const hasMemory = typeof data.memory === 'object' || typeof data.memory?.used === 'number';
+    return hasUptime || hasMemory;
   }
 
   /**
@@ -214,7 +215,8 @@ class SecureIPCManager {
       case 'get-system-metrics':
         return this.isValidSystemMetrics(result) ? result : null;
       case 'select-directory':
-        return typeof result === 'string' || result === null ? result : null;
+        // Main returns { success, folder } now
+        return result && typeof result === 'object' ? result : { success: false, folder: null };
       case 'get-custom-folders':
         return Array.isArray(result) ? result : [];
       default:
@@ -285,7 +287,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     scanStructure: (rootPath) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, rootPath),
     add: (folder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.ADD, folder),
     edit: (folderId, updatedFolder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.EDIT, folderId, updatedFolder),
-    delete: (folderId) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.DELETE, folderId)
+    delete: (folderId) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.DELETE, folderId),
+    match: (text, folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.MATCH, { text, smartFolders: folders })
   },
 
   // Analysis
@@ -335,7 +338,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   events: {
     onAnalysisProgress: (callback) => secureIPC.safeOn('analysis-progress', callback),
     onAnalysisError: (callback) => secureIPC.safeOn('analysis-error', callback),
-    onOperationProgress: (callback) => secureIPC.safeOn('operation-progress', callback)
+    onOperationProgress: (callback) => secureIPC.safeOn('operation-progress', callback),
+    onAppError: (callback) => secureIPC.safeOn('app:error', callback)
   },
 
   // Settings

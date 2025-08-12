@@ -330,13 +330,15 @@ function SettingsPanel() {
   const { actions } = usePhase();
   const { addNotification } = useNotification();
   const [settings, setSettings] = useState({
-    ollamaModel: 'llama3.2:latest', // Fastest 2GB model for optimal speed
-    ollamaHost: 'http://localhost:11434',
+    ollamaHost: 'http://127.0.0.1:11434',
+    textModel: 'llama3.2:latest',
+    visionModel: 'llava:latest',
+    embeddingModel: 'mxbai-embed-large',
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
     defaultSmartFolderLocation: 'Documents'
   });
-  const [ollamaModels, setOllamaModels] = useState([]);
+  const [ollamaModels, setOllamaModels] = useState({ models: [], categories: { text: [], vision: [], embedding: [] }});
   const [testResults, setTestResults] = useState({});
   const [isTestingApi, setIsTestingApi] = useState(false);
 
@@ -375,11 +377,23 @@ function SettingsPanel() {
   const loadOllamaModels = async () => {
     try {
       const response = await window.electronAPI.ollama.getModels();
-      // Handle the response structure: { models: [], selectedModel: '', ollamaHealth: {} }
-      setOllamaModels(response?.models || []);
+      // Expected: { models, categories: {text, vision, embedding}, selected, host }
+      setOllamaModels({
+        models: response?.models || [],
+        categories: response?.categories || { text: [], vision: [], embedding: [] }
+      });
+      if (response?.selected) {
+        setSettings(prev => ({
+          ...prev,
+          textModel: response.selected.textModel || prev.textModel,
+          visionModel: response.selected.visionModel || prev.visionModel,
+          embeddingModel: response.selected.embeddingModel || prev.embeddingModel,
+          ollamaHost: response.host || prev.ollamaHost
+        }));
+      }
     } catch (error) {
       console.error('Failed to load Ollama models:', error);
-      setOllamaModels([]); // Ensure it's always an array
+      setOllamaModels({ models: [], categories: { text: [], vision: [], embedding: [] } });
     }
   };
 
@@ -473,31 +487,52 @@ function SettingsPanel() {
             <h3 className="text-lg font-semibold mb-fib-13">🤖 AI Configuration</h3>
             <div className="space-y-fib-13">
               <div>
-                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-                  Ollama Host URL
-                </label>
+                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
                 <input
                   type="text"
                   value={settings.ollamaHost}
                   onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
                   className="form-input-enhanced w-full"
-                  placeholder="http://localhost:11434"
+                  placeholder="http://127.0.0.1:11434"
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-                  AI Model
-                </label>
-                <select
-                  value={settings.ollamaModel}
-                  onChange={(e) => setSettings(prev => ({ ...prev, ollamaModel: e.target.value }))}
-                  className="form-input-enhanced w-full"
-                >
-                  {ollamaModels.map(model => (
-                    <option key={model} value={model}>{model}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Text Model</label>
+                  <select
+                    value={settings.textModel}
+                    onChange={(e) => setSettings(prev => ({ ...prev, textModel: e.target.value }))}
+                    className="form-input-enhanced w-full"
+                  >
+                    {(ollamaModels.categories.text.length ? ollamaModels.categories.text : ollamaModels.models).map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Vision Model</label>
+                  <select
+                    value={settings.visionModel}
+                    onChange={(e) => setSettings(prev => ({ ...prev, visionModel: e.target.value }))}
+                    className="form-input-enhanced w-full"
+                  >
+                    {(ollamaModels.categories.vision.length ? ollamaModels.categories.vision : ollamaModels.models).map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Embedding Model</label>
+                  <select
+                    value={settings.embeddingModel}
+                    onChange={(e) => setSettings(prev => ({ ...prev, embeddingModel: e.target.value }))}
+                    className="form-input-enhanced w-full"
+                  >
+                    {(ollamaModels.categories.embedding.length ? ollamaModels.categories.embedding : ollamaModels.models).map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -540,19 +575,31 @@ function SettingsPanel() {
             <h3 className="text-lg font-semibold mb-fib-13">📁 Default Locations</h3>
             <div className="space-y-fib-13">
               <div>
-                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
-                  Default Smart Folder Location
-                </label>
-                <input
-                  type="text"
-                  value={settings.defaultSmartFolderLocation}
-                  onChange={(e) => setSettings(prev => ({ ...prev, defaultSmartFolderLocation: e.target.value }))}
-                  className="form-input-enhanced w-full"
-                  placeholder="Documents"
-                />
-                <p className="text-xs text-system-gray-500 mt-fib-3">
-                  Where new smart folders will be created by default
-                </p>
+                <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Default Smart Folder Location</label>
+                <div className="flex gap-fib-8">
+                  <input
+                    type="text"
+                    value={settings.defaultSmartFolderLocation}
+                    onChange={(e) => setSettings(prev => ({ ...prev, defaultSmartFolderLocation: e.target.value }))}
+                    className="form-input-enhanced flex-1"
+                    placeholder="Documents"
+                  />
+                  <button
+                    onClick={async () => {
+                      const res = await window.electronAPI.files.selectDirectory();
+                      if (res?.success && res.folder) {
+                        setSettings(prev => ({ ...prev, defaultSmartFolderLocation: res.folder }));
+                      }
+                    }}
+                    className="btn-secondary"
+                    type="button"
+                    title="Browse"
+                    aria-label="Browse for default folder"
+                  >
+                    📁 Browse
+                  </button>
+                </div>
+                <p className="text-xs text-system-gray-500 mt-fib-3">Where new smart folders will be created by default</p>
               </div>
             </div>
           </div>
@@ -888,6 +935,10 @@ function SetupPhase() {
       } else {
         // Use default location - resolve it to full path if needed
         let resolvedDefaultLocation = defaultLocation;
+        // If settings.defaultSmartFolderLocation is an absolute path, prefer it
+        if (settings.defaultSmartFolderLocation && (/^[A-Za-z]:[\\/]/.test(settings.defaultSmartFolderLocation) || settings.defaultSmartFolderLocation.startsWith('/'))) {
+          resolvedDefaultLocation = settings.defaultSmartFolderLocation;
+        }
         
         // If defaultLocation is just "Documents" or relative, resolve to full path
         if (!/^[A-Za-z]:[\\/]/.test(defaultLocation) && !defaultLocation.startsWith('/')) {
@@ -1517,12 +1568,19 @@ function DiscoverPhase() {
       const persistedFiles = phaseData.selectedFiles || [];
       const persistedStates = phaseData.fileStates || {};
       const persistedNaming = phaseData.namingConvention || {};
+      const persistedIsAnalyzing = !!phaseData.isAnalyzing;
+      const persistedProgress = phaseData.analysisProgress || { current: 0, total: 0 };
+      const persistedCurrent = phaseData.currentAnalysisFile || '';
       
       if (persistedResults.length > 0) {
         console.log('[DISCOVER-PHASE] Restoring persisted data');
         setAnalysisResults(persistedResults);
         setSelectedFiles(persistedFiles);
         setFileStates(persistedStates);
+        // Restore ongoing analysis state so UI shows progress if analysis continues in background
+        setIsAnalyzing(persistedIsAnalyzing);
+        setAnalysisProgress(persistedProgress);
+        setCurrentAnalysisFile(persistedCurrent);
         
         // Restore naming convention settings
         setNamingConvention(persistedNaming.convention || 'subject-date');
@@ -1690,6 +1748,7 @@ function DiscoverPhase() {
       }));
       
       setSelectedFiles(enhancedFiles);
+      actions.setPhaseData('selectedFiles', enhancedFiles);
       
       // Initialize file states
       enhancedFiles.forEach(file => {
@@ -1886,6 +1945,7 @@ function DiscoverPhase() {
         
         console.log('[FILE-SELECTION-DEBUG] Setting selected files...');
         setSelectedFiles(enhancedFiles);
+        actions.setPhaseData('selectedFiles', enhancedFiles);
         
         // Report any files that failed to get stats
         const failedFiles = fileObjects.filter(f => !f.success);
@@ -1934,7 +1994,7 @@ function DiscoverPhase() {
         
         if (scanResult && scanResult.files && scanResult.files.length > 0) {
           // Filter for supported files
-          const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
+          const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.zip', '.rar', '.7z', '.tar', '.gz'];
           const supportedFiles = scanResult.files.filter(file => {
             const ext = file.name.includes('.') ? '.' + file.name.split('.').pop().toLowerCase() : '';
             return supportedExts.includes(ext);
@@ -1962,6 +2022,7 @@ function DiscoverPhase() {
           }));
           
           setSelectedFiles(enhancedFiles);
+          actions.setPhaseData('selectedFiles', enhancedFiles);
           
           // Start analysis
           await analyzeFiles(enhancedFiles);
@@ -2033,6 +2094,10 @@ function DiscoverPhase() {
     setIsAnalyzing(true);
     setAnalysisProgress({ current: 0, total: files.length });
     setCurrentAnalysisFile('');
+    // Persist analysis state for cross-phase continuity
+    actions.setPhaseData('isAnalyzing', true);
+    actions.setPhaseData('analysisProgress', { current: 0, total: files.length });
+    actions.setPhaseData('currentAnalysisFile', '');
     const results = [];
     
     try {
@@ -2046,6 +2111,8 @@ function DiscoverPhase() {
         // Update progress BEFORE starting analysis
         setCurrentAnalysisFile(fileName);
         setAnalysisProgress({ current: i, total: files.length });
+        actions.setPhaseData('currentAnalysisFile', fileName);
+        actions.setPhaseData('analysisProgress', { current: i, total: files.length });
         
         // Update file state to analyzing
         updateFileState(file.path, 'analyzing', { fileName });
@@ -2152,6 +2219,7 @@ function DiscoverPhase() {
         
         // Update progress AFTER processing each file
         setAnalysisProgress({ current: i + 1, total: files.length });
+        actions.setPhaseData('analysisProgress', { current: i + 1, total: files.length });
         
         // Allow UI to update
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -2161,64 +2229,57 @@ function DiscoverPhase() {
       
       // Persist data for use in organize phase
       setAnalysisResults(results);
-      
-      // Use functional state update to ensure we get the latest fileStates
-      setFileStates(currentFileStates => {
-        const updatedStates = { ...currentFileStates };
-        
-        // Ensure all files have their final states updated
-        results.forEach(result => {
-          if (result.analysis && !result.error) {
-            updatedStates[result.path] = {
-              state: 'ready',
-              timestamp: new Date().toISOString(),
-              analysis: result.analysis,
-              analyzedAt: result.analyzedAt
-            };
-          } else if (result.error) {
-            updatedStates[result.path] = {
-              state: 'error',
-              timestamp: new Date().toISOString(),
-              error: result.error,
-              analyzedAt: result.analyzedAt
-            };
-          }
-        });
-        
-        // Persist the updated states to phase data
-        actions.setPhaseData('analysisResults', results);
-        actions.setPhaseData('selectedFiles', files);
-        actions.setPhaseData('fileStates', updatedStates);
-        actions.setPhaseData('namingConvention', {
+
+      // Build a fresh updatedStates from results to avoid relying on async state callbacks
+      const updatedStates = {};
+      results.forEach(result => {
+        if (result.analysis && !result.error) {
+          updatedStates[result.path] = {
+            state: 'ready',
+            timestamp: new Date().toISOString(),
+            analysis: result.analysis,
+            analyzedAt: result.analyzedAt
+          };
+        } else if (result.error) {
+          updatedStates[result.path] = {
+            state: 'error',
+            timestamp: new Date().toISOString(),
+            error: result.error,
+            analyzedAt: result.analyzedAt
+          };
+        }
+      });
+
+      // Update state and phase data synchronously from computed values
+      setFileStates(updatedStates);
+
+      const finalPhaseData = {
+        analysisResults: results,
+        selectedFiles: files,
+        fileStates: updatedStates,
+        smartFolders: phaseData.smartFolders || [],
+        namingConvention: {
           convention: namingConvention,
           dateFormat,
           caseConvention,
           separator
-        });
-        
-        return updatedStates;
-      });
+        }
+      };
+
+      actions.setPhaseData('analysisResults', finalPhaseData.analysisResults);
+      actions.setPhaseData('selectedFiles', finalPhaseData.selectedFiles);
+      actions.setPhaseData('fileStates', finalPhaseData.fileStates);
+      actions.setPhaseData('namingConvention', finalPhaseData.namingConvention);
       
       const successCount = results.filter(r => r.analysis).length;
       const failureCount = results.length - successCount;
       
       if (successCount > 0) {
         addNotification(`🎉 Analysis complete! ${successCount} files ready for organization`, 'success');
-        
-        // Auto-advance to organize phase after successful analysis
+        // Auto-advance to organize phase after successful analysis, using finalized data
         setTimeout(() => {
           addNotification('📂 Proceeding to organize phase...', 'info');
-          actions.advancePhase(PHASES.ORGANIZE, { 
-            analysisResults: results,
-            selectedFiles: files,
-            fileStates: fileStates,
-            namingConvention: {
-              convention: namingConvention,
-              dateFormat,
-              caseConvention,
-              separator
-            }
-          });
+          actions.advancePhase(PHASES.ORGANIZE, finalPhaseData);
         }, 2000);
       }
       if (failureCount > 0) {
@@ -2232,11 +2293,31 @@ function DiscoverPhase() {
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');
       setAnalysisProgress({ current: 0, total: 0 });
+      actions.setPhaseData('isAnalyzing', false);
+      actions.setPhaseData('currentAnalysisFile', '');
+      actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
     }
   };
 
   return (
     <div className="w-full">
+      {/* Global analysis status (if analysis running in background) */}
+      {isAnalyzing && (
+        <div className="mb-fib-13 p-fib-8 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-fib-8 text-blue-700">
+            <div className="animate-spin w-fib-8 h-fib-8 border-2 border-blue-500 border-t-transparent rounded-full" />
+            <span>
+              Analysis in progress: {analysisProgress.current}/{analysisProgress.total}{currentAnalysisFile ? ` • ${currentAnalysisFile}` : ''}
+            </span>
+          </div>
+          <button
+            onClick={() => actions.advancePhase(PHASES.DISCOVER)}
+            className="text-blue-700 hover:text-blue-900 underline text-sm"
+          >
+            View details
+          </button>
+        </div>
+      )}
       <div className="mb-fib-21">
         <h2 className="text-2xl font-bold text-system-gray-900 mb-fib-8">
           🔍 Discover & Analyze Files
@@ -2622,7 +2703,7 @@ function DiscoverPhase() {
                 separator
               });
               
-              // Advance to organize phase with the complete data
+              // Advance to organize phase with the complete data (also persisted in phaseData)
               actions.advancePhase(PHASES.ORGANIZE, finalData);
               
               return currentFileStates; // Return unchanged state
@@ -2881,16 +2962,37 @@ function OrganizePhase() {
   const [fileStates, setFileStates] = useState({});
   const [processedFileIds, setProcessedFileIds] = useState(new Set()); // Track which files have been processed
 
-  const analysisResults = phaseData.analysisResults || [];
+  const analysisResults = (phaseData.analysisResults && Array.isArray(phaseData.analysisResults)) ? phaseData.analysisResults : [];
   const smartFolders = phaseData.smartFolders || [];
   
-  // DEBUG: Log smart folders data
-  console.log('[ORGANIZE-PHASE-DEBUG] Smart folders from phase data:', {
+  // DEBUG: Log organize phase data summary
+  console.log('[ORGANIZE-PHASE-DEBUG] Phase data summary:', {
     smartFoldersCount: smartFolders.length,
-    smartFolders: smartFolders,
-    phaseDataKeys: Object.keys(phaseData),
-    phaseDataSmartFolders: phaseData.smartFolders
+    analysisResultsCount: analysisResults.length,
+    fileStatesCount: Object.keys(phaseData.fileStates || {}).length,
+    phaseDataKeys: Object.keys(phaseData)
   });
+
+  // Ensure smart folders are available even if user skipped Setup
+  useEffect(() => {
+    const loadSmartFoldersIfMissing = async () => {
+      try {
+        if (!Array.isArray(smartFolders) || smartFolders.length === 0) {
+          const folders = await window.electronAPI.smartFolders.get();
+          if (Array.isArray(folders) && folders.length > 0) {
+            actions.setPhaseData('smartFolders', folders);
+            addNotification(`Loaded ${folders.length} smart folder${folders.length > 1 ? 's' : ''}`, 'info');
+          } else {
+            console.warn('[ORGANIZE-PHASE] No smart folders returned from API');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load smart folders in Organize phase:', error);
+      }
+    };
+    loadSmartFoldersIfMissing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // NEW: Load persisted file states and processed files
   useEffect(() => {
@@ -2906,6 +3008,26 @@ function OrganizePhase() {
       const persistedStates = phaseData.fileStates || {};
       setFileStates(persistedStates);
       
+      // If we have file states but no analysis results, reconstruct analysisResults from fileStates
+      if ((phaseData.analysisResults || []).length === 0 && Object.keys(persistedStates).length > 0) {
+        console.log('[ORGANIZE-PHASE] Reconstructing analysisResults from fileStates');
+        const reconstructedResults = Object.entries(persistedStates).map(([filePath, stateObj]) => {
+          const fileName = filePath.split(/[/\\]/).pop();
+          return {
+            name: fileName,
+            path: filePath,
+            size: 0,
+            type: 'file',
+            source: 'reconstructed',
+            analysis: stateObj.analysis || null,
+            error: stateObj.error,
+            analyzedAt: stateObj.analyzedAt,
+            status: stateObj.state === 'ready' ? 'analyzed' : (stateObj.state === 'error' ? 'failed' : 'unknown')
+          };
+        });
+        actions.setPhaseData('analysisResults', reconstructedResults);
+      }
+
       // If we don't have file states but we have analysis results, reconstruct them
       if (Object.keys(persistedStates).length === 0 && analysisResults.length > 0) {
         console.log('[ORGANIZE-PHASE] Reconstructing file states from analysis results');
@@ -2983,13 +3105,59 @@ function OrganizePhase() {
   };
 
   // NEW: Filter files to show unprocessed and processed separately
-  const unprocessedFiles = analysisResults.filter(file => 
-    !processedFileIds.has(file.path) && file.analysis
-  );
+  const unprocessedFiles = Array.isArray(analysisResults)
+    ? analysisResults.filter(file => !processedFileIds.has(file.path) && file && file.analysis)
+    : [];
   
-  const processedFiles = organizedFiles.filter(file => 
-    processedFileIds.has(file.originalPath || file.path)
-  );
+  const processedFiles = Array.isArray(organizedFiles)
+    ? organizedFiles.filter(file => processedFileIds.has(file?.originalPath || file?.path))
+    : [];
+
+  // Pre-match categories to smart folders using embeddings/LLM when no direct match
+  useEffect(() => {
+    const preMatchCategories = async () => {
+      try {
+        if (!Array.isArray(smartFolders) || smartFolders.length === 0) return;
+        if (!Array.isArray(analysisResults) || analysisResults.length === 0) return;
+
+        // Iterate unprocessed files and attempt AI matching where needed
+        for (let i = 0; i < unprocessedFiles.length; i++) {
+          const file = unprocessedFiles[i];
+          if (!file || !file.analysis) continue;
+
+          const currentCategory = editingFiles[i]?.category || file.analysis.category;
+          const direct = findSmartFolderForCategory(currentCategory);
+          if (direct) continue; // already resolvable
+
+          const description = [
+            file.analysis?.purpose,
+            (file.analysis?.keywords || []).join(', '),
+            file.analysis?.category,
+            file.name
+          ]
+            .filter(Boolean)
+            .join(' | ');
+
+          try {
+            const match = await window.electronAPI.smartFolders.match(description, smartFolders);
+            if (match && match.success && match.folder && match.folder.name) {
+              setEditingFiles(prev => ({
+                ...prev,
+                [i]: { ...(prev[i] || {}), category: match.folder.name }
+              }));
+            }
+          } catch (e) {
+            // Non-fatal; leave for organize-time fallback
+            console.warn('[PRE-MATCH] smartFolders.match failed:', e.message);
+          }
+        }
+      } catch (error) {
+        console.warn('[PRE-MATCH] Error during pre-matching:', error.message);
+      }
+    };
+    preMatchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartFolders, analysisResults, processedFileIds]);
 
   useEffect(() => {
     // Get the documents path when component mounts
@@ -3409,27 +3577,36 @@ function OrganizePhase() {
         if (!smartFolder) {
           console.log(`[FOLDER-FALLBACK] No match for category "${file.analysis.category}", trying fallbacks...`);
           
-          // Try to find a general/default folder
-          smartFolder = smartFolders.find(f => 
-            f.name.toLowerCase().includes('general') ||
-            f.name.toLowerCase().includes('other') ||
-            f.name.toLowerCase().includes('misc') ||
-            f.name.toLowerCase().includes('default') ||
-            f.name.toLowerCase().includes('documents')
-          );
-          
-          // If still no match, use the first available folder
-          if (!smartFolder && smartFolders.length > 0) {
-            smartFolder = smartFolders[0];
-            console.log(`[FOLDER-FALLBACK] Using first available folder: ${smartFolder.name}`);
+          // Semantic matching via main-process (embeddings/LLM)
+          try {
+            const description = [
+              file.analysis?.purpose,
+              (file.analysis?.keywords || []).join(', '),
+              file.analysis?.category
+            ].filter(Boolean).join(' | ');
+            const match = await window.electronAPI.smartFolders.match(
+              description || file.name,
+              smartFolders
+            );
+            if (match && match.success && match.folder) {
+              smartFolder = match.folder;
+              console.log(`[FOLDER-FALLBACK] Semantic match (${match.method}) → ${smartFolder.name}`);
+              addNotification(`Mapped "${file.analysis.category}" to "${smartFolder.name}" via AI`, 'info');
+            }
+          } catch (e) {
+            console.warn('[FOLDER-FALLBACK] Semantic match failed:', e.message);
           }
-          
+
+          // If still nothing, try general/default
           if (!smartFolder) {
-            addNotification(`No smart folder found for category: ${file.analysis.category}`, 'warning');
-            skippedFiles.push({ name: file.name, reason: `No folder for category: ${file.analysis.category}` });
-            continue;
-          } else {
-            addNotification(`Mapped "${file.analysis.category}" to fallback folder: ${smartFolder.name}`, 'info');
+            smartFolder = smartFolders.find(f => 
+              f.name?.toLowerCase().includes('general') ||
+              f.name?.toLowerCase().includes('other') ||
+              f.name?.toLowerCase().includes('misc') ||
+              f.name?.toLowerCase().includes('default') ||
+              f.name?.toLowerCase().includes('documents')
+            ) || smartFolders[0] || { name: 'Documents', path: documentsPath };
+            console.log(`[FOLDER-FALLBACK] Using ultimate fallback → ${smartFolder?.name || 'Documents'}`);
           }
         }
         

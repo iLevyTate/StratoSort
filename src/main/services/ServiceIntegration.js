@@ -177,19 +177,18 @@ class ServiceIntegration {
   // Get application statistics
   async getApplicationStatistics() {
     try {
-          const [analysisStats, actionHistory] = await Promise.all([
-      this.analysisHistoryService.getStatistics(),
-      this.undoRedoService.getActionHistory(20)
-    ]);
-    
-    return {
-      analysis: analysisStats,
-      recentActions: actionHistory,
-      timestamp: new Date().toISOString()
-    };
+      const [analysisStats, actionHistory] = await Promise.all([
+        this.analysisHistoryService.getStatistics(),
+        Promise.resolve(this.undoRedoService.getActionHistory(20))
+      ]);
+      return {
+        analysis: analysisStats,
+        recentActions: actionHistory,
+        timestamp: new Date().toISOString()
+      };
     } catch (error) {
       console.error('Failed to get application statistics:', error);
-      throw error;
+      return { analysis: {}, recentActions: [], timestamp: new Date().toISOString() };
     }
   }
 
@@ -251,7 +250,6 @@ class ServiceIntegration {
     const path = require('path');
     const { analyzeDocumentFile } = require('../analysis/ollamaDocumentAnalysis');
     const { analyzeImageFile } = require('../analysis/ollamaImageAnalysis');
-    const { analyzeAudioFile } = require('../analysis/ollamaAudioAnalysis');
     
     try {
       const extension = path.extname(filePath).toLowerCase();
@@ -265,7 +263,16 @@ class ServiceIntegration {
       } else if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].includes(extension)) {
         analysisResult = await analyzeImageFile(filePath, options.smartFolders || []);
       } else if (['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'].includes(extension)) {
-        analysisResult = await analyzeAudioFile(filePath, options.smartFolders || []);
+        // Audio analysis disabled in current build; provide graceful placeholder
+        analysisResult = {
+          subject: path.basename(filePath),
+          category: 'audio',
+          tags: ['audio'],
+          confidence: 0,
+          summary: 'Audio analysis disabled',
+          model: 'none',
+          processingTime: Date.now() - startTime
+        };
       } else {
         // Fallback for unsupported files
         return {
@@ -286,7 +293,7 @@ class ServiceIntegration {
         tags: analysisResult.keywords || [],
         confidence: (analysisResult.confidence || 50) / 100, // Convert to decimal
         summary: analysisResult.purpose || analysisResult.summary || 'File analyzed',
-        model: options.model || 'gemma3:4b',
+        model: options.model || analysisResult.model || 'llm',
         processingTime: Date.now() - startTime,
         rawAnalysis: analysisResult // Include full analysis for reference
       };

@@ -111,22 +111,23 @@ describe('StratoSort React App', () => {
     });
 
     test('undo/redo component file exists', () => {
-      const undoRedoPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
-      expect(fs.existsSync(undoRedoPath)).toBe(true);
+      const jsxPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx');
+      const jsPath = path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js');
+      expect(fs.existsSync(jsxPath) || fs.existsSync(jsPath)).toBe(true);
     });
   });
 
   describe('Integration Testing', () => {
     test('React DOM rendering is properly configured', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+      const indexContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/index.js'),
         'utf8'
       );
-      
-      expect(appContent).toContain('ReactDOM');
-      expect(appContent).toContain('createRoot');
-      expect(appContent).toContain('render');
-      expect(appContent).toContain('<App />');
+
+      // Modern React entry should use createRoot and render <App />
+      expect(indexContent).toContain('createRoot');
+      expect(indexContent).toMatch(/root\.(render|hydrate)\(/);
+      expect(indexContent).toContain('<App />');
     });
   });
 });

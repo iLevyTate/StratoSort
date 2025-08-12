@@ -1,9 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
+const SettingsService = require('../services/SettingsService');
 
 // Enforce required dependency for AI-first operation
 const pdf = require('pdf-parse');
+const sharp = require('sharp');
+const tesseract = require('node-tesseract-ocr');
 const mammoth = require('mammoth');
 const officeParser = require('officeparser');
 const XLSX = require('xlsx-populate');
@@ -32,9 +35,16 @@ const AppConfig = {
 };
 
 // Initialize Ollama client with verification
-const ollamaHost = process.env.OLLAMA_BASE_URL || AppConfig.ai.textAnalysis.defaultHost;
-const ollamaClient = new Ollama({ host: ollamaHost });
-const modelVerifier = new ModelVerifier(ollamaHost);
+const settingsServiceDoc = new SettingsService();
+let ollamaClient = null;
+async function getOllamaClient() {
+  if (!ollamaClient) {
+    const host = (await settingsServiceDoc.getSettings()).ollamaHost || AppConfig.ai.textAnalysis.defaultHost;
+    ollamaClient = new Ollama({ host });
+  }
+  return ollamaClient;
+}
+const modelVerifier = new ModelVerifier();
 
 async function analyzeTextWithOllama(textContent, originalFileName, smartFolders = []) {
   try {
@@ -86,8 +96,10 @@ CRITICAL REQUIREMENTS:
 Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
-    const response = await ollamaClient.generate({
-      model: AppConfig.ai.textAnalysis.defaultModel,
+    const client = await getOllamaClient();
+    const model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
+    const response = await client.generate({
+      model,
       prompt,
       options: {
         temperature: AppConfig.ai.textAnalysis.temperature,
@@ -203,8 +215,15 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
             extractedText = await fs.readFile(filePath, 'utf8');
           }
         } else {
-          // Regular text file reading
-          extractedText = await fs.readFile(filePath, 'utf8');
+          // Regular text file reading with basic format-aware cleanup
+          const raw = await fs.readFile(filePath, 'utf8');
+          if (fileExtension === '.rtf') {
+            extractedText = extractPlainTextFromRtf(raw);
+          } else if (fileExtension === '.html' || fileExtension === '.htm' || fileExtension === '.xml') {
+            extractedText = extractPlainTextFromHtml(raw);
+          } else {
+            extractedText = raw;
+          }
         }
         
         if (!extractedText || extractedText.trim().length === 0) {
@@ -300,6 +319,21 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
           extractionError: officeError.message
       };
       }
+    } else if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(fileExtension)) {
+      // Archive metadata inspection (best-effort)
+      const archiveInfo = await tryExtractArchiveMetadata(filePath);
+      const keywords = archiveInfo.keywords?.slice(0, 7) || getIntelligentKeywords(fileName, fileExtension);
+      const category = 'archive';
+      return {
+        purpose: archiveInfo.summary || 'Archive file',
+        project: fileName.replace(fileExtension, ''),
+        category,
+        date: new Date().toISOString().split('T')[0],
+        keywords,
+        confidence: 70,
+        suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
+        extractionMethod: 'archive'
+      };
     } else {
       // Placeholder for other document types
       console.warn(`[FILENAME-FALLBACK] No content parser for ${fileExtension}. Using filename-only analysis for ${fileName}.`);
@@ -318,6 +352,27 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
         extractionMethod: 'filename' // Mark that this used filename-only analysis
       };
+    }
+
+    // If PDF had no extractable text, attempt OCR on a rasterized page
+    if (fileExtension === '.pdf' && (!extractedText || extractedText.trim().length === 0)) {
+      try {
+        const pdfBuffer = await fs.readFile(filePath);
+        try {
+          // Try to rasterize (this may be unsupported depending on libvips build)
+          const rasterPng = await sharp(pdfBuffer, { density: 200 })
+            .png()
+            .toBuffer();
+          const ocrText = await tesseract.recognize(rasterPng, { lang: 'eng', oem: 1, psm: 3 });
+          if (ocrText && ocrText.trim().length > 0) {
+            extractedText = ocrText;
+          }
+        } catch (rasterErr) {
+          console.warn('[PDF-OCR] Rasterization not available in this environment, skipping OCR');
+        }
+      } catch (ocrErr) {
+        console.warn('[PDF-OCR] OCR attempt failed:', ocrErr.message);
+      }
     }
 
     if (extractedText && extractedText.trim().length > 0) {
@@ -377,6 +432,81 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       suggestion: 'Unexpected error during document processing'
     });
   }
+}
+
+// Basic RTF to text converter (best-effort)
+function extractPlainTextFromRtf(rtf) {
+  try {
+    // Decode hex escapes like \'xx to characters
+    const decoded = rtf.replace(/\\'([0-9a-fA-F]{2})/g, (_, hex) => {
+      try { return String.fromCharCode(parseInt(hex, 16)); } catch { return ''; }
+    });
+    // Remove RTF groups and control words
+    const noGroups = decoded.replace(/[{}]/g, '');
+    const noControls = noGroups.replace(/\\[a-zA-Z]+-?\d* ?/g, '');
+    // Collapse whitespace
+    return noControls.replace(/\s+/g, ' ').trim();
+  } catch {
+    return rtf;
+  }
+}
+
+// Basic HTML to text (strip tags and decode common entities)
+function extractPlainTextFromHtml(html) {
+  try {
+    const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+    const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
+    const withoutTags = withoutStyles.replace(/<[^>]+>/g, ' ');
+    const entitiesDecoded = withoutTags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;|&apos;/g, "'");
+    return entitiesDecoded.replace(/\s+/g, ' ').trim();
+  } catch {
+    return html;
+  }
+}
+
+// Best-effort archive metadata extraction (ZIP only without external deps)
+async function tryExtractArchiveMetadata(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const info = { keywords: [], summary: '' };
+  if (ext === '.zip') {
+    try {
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip(filePath);
+      const entries = zip.getEntries().slice(0, 50);
+      const names = entries.map(e => e.entryName);
+      info.keywords = deriveKeywordsFromFilenames(names);
+      info.summary = `ZIP archive with ${zip.getEntries().length} entries`;
+      return info;
+    } catch (e) {
+      info.summary = 'ZIP archive (content listing unavailable)';
+      info.keywords = [];
+      return info;
+    }
+  }
+  info.summary = `${ext.substring(1).toUpperCase()} archive`;
+  info.keywords = [];
+  return info;
+}
+
+function deriveKeywordsFromFilenames(names) {
+  const exts = {};
+  const tokens = new Set();
+  names.forEach(n => {
+    const b = n.split('/').pop();
+    const e = (b.includes('.') ? b.split('.').pop() : '').toLowerCase();
+    if (e) exts[e] = (exts[e] || 0) + 1;
+    b.replace(/[^a-zA-Z0-9]+/g, ' ').toLowerCase().split(' ').forEach(w => {
+      if (w && w.length > 2 && w.length < 20) tokens.add(w);
+    });
+  });
+  const topExts = Object.entries(exts).sort((a,b) => b[1]-a[1]).slice(0,3).map(([k]) => k);
+  return [...topExts, ...Array.from(tokens)].slice(0, 15);
 }
 
 // Intelligent fallback analysis for unsupported file types

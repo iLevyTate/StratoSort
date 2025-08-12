@@ -11,30 +11,77 @@ const getOllamaConfigPath = () => {
 };
 
 let ollamaInstance = null;
-let ollamaModel = null; // To store the currently selected/configured model
+let ollamaHost = 'http://127.0.0.1:11434';
+// Selected models persisted in userData config
+let selectedTextModel = null;
+let selectedVisionModel = null;
 
 // Function to initialize or get the Ollama instance
 function getOllama() {
   if (!ollamaInstance) {
-    // Host is configurable via environment variables
-    ollamaInstance = new Ollama({ host: 'http://127.0.0.1:11434' });
+    // Host is configurable via environment variables or saved config
+    ollamaInstance = new Ollama({ host: ollamaHost });
   }
   return ollamaInstance;
 }
 
-// Function to get the currently configured Ollama model
+// Function to get the currently configured Ollama text model
 function getOllamaModel() {
-  return ollamaModel;
+  return selectedTextModel;
+}
+
+// Function to get the currently configured Ollama vision model
+function getOllamaVisionModel() {
+  return selectedVisionModel;
 }
 
 // Function to set/update the Ollama model
 async function setOllamaModel(modelName) {
-  ollamaModel = modelName;
+  selectedTextModel = modelName;
   try {
-    await saveOllamaConfig({ selectedModel: modelName });
-    console.log(`[OLLAMA] Model set to: ${modelName} and saved.`);
+    const current = await loadOllamaConfig();
+    await saveOllamaConfig({
+      ...current,
+      selectedTextModel: modelName,
+      // Keep legacy field for backward compatibility
+      selectedModel: modelName
+    });
+    console.log(`[OLLAMA] Text model set to: ${modelName} and saved.`);
   } catch (error) {
-    console.error(`[OLLAMA] Error saving model selection:`, error);
+    console.error(`[OLLAMA] Error saving text model selection:`, error);
+  }
+}
+
+async function setOllamaVisionModel(modelName) {
+  selectedVisionModel = modelName;
+  try {
+    const current = await loadOllamaConfig();
+    await saveOllamaConfig({
+      ...current,
+      selectedVisionModel: modelName
+    });
+    console.log(`[OLLAMA] Vision model set to: ${modelName} and saved.`);
+  } catch (error) {
+    console.error(`[OLLAMA] Error saving vision model selection:`, error);
+  }
+}
+
+function getOllamaHost() {
+  return ollamaHost;
+}
+
+async function setOllamaHost(host) {
+  try {
+    if (typeof host === 'string' && host.trim()) {
+      ollamaHost = host.trim();
+      // Recreate client with new host
+      ollamaInstance = new Ollama({ host: ollamaHost });
+      const current = await loadOllamaConfig();
+      await saveOllamaConfig({ ...current, host: ollamaHost });
+      console.log(`[OLLAMA] Host set to: ${ollamaHost}`);
+    }
+  } catch (error) {
+    console.error('[OLLAMA] Error setting host:', error);
   }
 }
 
@@ -44,9 +91,19 @@ async function loadOllamaConfig() {
     const filePath = getOllamaConfigPath();
     const data = await fs.readFile(filePath, 'utf-8');
     const config = JSON.parse(data);
-    if (config.selectedModel) {
-      ollamaModel = config.selectedModel;
-      console.log(`[OLLAMA] Loaded selected model: ${ollamaModel}`);
+    // Support legacy and new keys
+    if (config.selectedTextModel || config.selectedModel) {
+      selectedTextModel = config.selectedTextModel || config.selectedModel;
+      console.log(`[OLLAMA] Loaded selected text model: ${selectedTextModel}`);
+    }
+    if (config.selectedVisionModel) {
+      selectedVisionModel = config.selectedVisionModel;
+      console.log(`[OLLAMA] Loaded selected vision model: ${selectedVisionModel}`);
+    }
+    if (config.host) {
+      ollamaHost = config.host;
+      ollamaInstance = new Ollama({ host: ollamaHost });
+      console.log(`[OLLAMA] Loaded host: ${ollamaHost}`);
     }
     return config;
   } catch (error) {
@@ -57,7 +114,7 @@ async function loadOllamaConfig() {
     // Fallback to a default model or leave as null if no configuration is found
     // You might want to fetch available models and pick one if ollamaModel is still null
     // For now, let's assume a default if nothing is loaded.
-    if (!ollamaModel) {
+    if (!selectedTextModel) {
         // Try to get the first available model or a known default
         try {
             const ollama = getOllama();
@@ -77,7 +134,7 @@ async function loadOllamaConfig() {
                      foundModel = modelsResponse.models[0].name; // Fallback to the first model
                 }
                 await setOllamaModel(foundModel);
-                console.log(`[OLLAMA] No saved model found, defaulted to: ${ollamaModel}`);
+                console.log(`[OLLAMA] No saved text model found, defaulted to: ${selectedTextModel}`);
             } else {
                 console.warn('[OLLAMA] No models available from Ollama server.');
             }
@@ -85,7 +142,7 @@ async function loadOllamaConfig() {
             console.error('[OLLAMA] Error fetching model list during initial load:', listError);
         }
     }
-    return { selectedModel: ollamaModel }; 
+    return { selectedTextModel, selectedVisionModel, host: ollamaHost };
   }
 }
 
@@ -103,7 +160,11 @@ async function saveOllamaConfig(config) {
 module.exports = {
   getOllama,
   getOllamaModel,
+  getOllamaVisionModel,
   setOllamaModel,
+  setOllamaVisionModel,
+  getOllamaHost,
+  setOllamaHost,
   loadOllamaConfig,
   saveOllamaConfig,
 }; 

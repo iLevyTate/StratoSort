@@ -137,6 +137,79 @@
 
 ---
 
+## 🧠 Using Ollama locally
+
+### Windows
+
+- Install:
+```powershell
+winget install Ollama.Ollama
+# or download the Windows installer from https://ollama.ai
+```
+
+- Start the Ollama server:
+```powershell
+ollama serve
+```
+
+- Pull required models:
+```powershell
+# Text (documents)
+ollama pull llama3.2:latest
+
+# Vision (images)
+ollama pull llava:latest
+
+# Optional: Embeddings
+ollama pull mxbai-embed-large
+
+# Optional: Whisper (tiny) for audio transcription
+ollama pull dimavz/whisper-tiny:latest
+```
+
+- Verify:
+```powershell
+ollama list
+curl http://127.0.0.1:11434/api/tags
+ollama run llama3.2:latest -p "Say hello"
+```
+
+- Configure in StratoSort:
+  - Open Settings → AI Configuration
+  - Host: http://127.0.0.1:11434
+  - Text Model: `llama3.2:latest`
+  - Vision Model: `llava:latest`
+  - Save
+
+### macOS
+
+- Install:
+```bash
+brew install ollama
+# or download the macOS app from https://ollama.ai
+```
+- Start:
+```bash
+ollama serve
+```
+- Pull models and verify (same commands as Windows, adjust shell).
+
+### Linux
+
+- Install:
+```bash
+curl -fsSL https://ollama.ai/install.sh | sh
+```
+- Start and pull models (same commands as above).
+
+### Troubleshooting
+
+- **Connection refused**: Ensure the server is running (`ollama serve`).
+- **Model not found**: Run `ollama pull <model>`.
+- **Different host/port**: Set the Host in StratoSort Settings to your Ollama URL (default `http://127.0.0.1:11434`).
+
+---
+
 ## 🏗️ Architecture
 
 ### Modern Tech Stack

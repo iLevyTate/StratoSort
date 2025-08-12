@@ -18,6 +18,26 @@
 
 **StratoSort** is a production-ready, privacy-focused AI document organization system that intelligently categorizes and organizes your files using local AI processing. Built with modern technologies and featuring a beautiful glassmorphism interface, StratoSort provides enterprise-grade file management without compromising your privacy.
 
+## ✅ Feature status
+
+- **Available now**
+  - **Document analysis**: PDFs, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX with Ollama-backed extraction and sensible fallbacks
+  - **Image analysis**: PNG/JPG/JPEG/GIF/BMP/WEBP/TIFF/SVG via vision models; basic OCR support
+  - **Smart folders**: add/edit/delete, directory creation/validation, folder structure scan, semantic matching (embeddings/LLM fallback)
+  - **Batch organize**: conflict-safe moves with progress events and unique-name handling
+  - **Undo/Redo**: action history with confirmation for destructive operations and a history modal
+  - **Analysis history**: record, search, statistics, and JSON export
+  - **Settings**: Ollama host and model selection persisted to user data
+  - **File selection**: select files or scan directories (recursively) for supported types
+
+- **Disabled in this build**
+  - **Audio analysis/transcription**: modules exist, but UI and IPC are disabled. References are commented in `src/preload/preload.js`, `src/renderer/App.js`, and `src/main/simple-main.js`.
+
+- **Planned / in progress**
+  - In-app semantic search UI leveraging stored analysis and embeddings
+  - Expanded accessibility and theming options
+  - Optional video analysis
+
 ### 🔑 Key Benefits
 
 - **🔒 100% Privacy**: All AI processing happens locally using Ollama
@@ -42,7 +62,7 @@
 - **Smart Categorization**: Intelligent folder matching based on content
 - **Metadata Extraction**: Extracts subjects, dates, projects, and purposes
 - **Confidence Scoring**: AI confidence levels for organizational decisions
-- **Multi-Format Support**: PDF, DOCX, TXT, images, and more
+- **Multi-Format Support**: PDF, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX, and common images
 
 ### 🎨 Modern Interface
 - **Glassmorphism Design**: Translucent cards with backdrop blur effects
@@ -60,18 +80,16 @@
 
 ---
 
-## 🤖 AI Models & Performance
+## 🤖 AI Models & performance
 
-### Optimized Model Selection
-- **Text Analysis**: `llama3.2:latest` (2GB) - Fast and accurate content understanding
-- **Vision Analysis**: `llava:latest` - Dedicated image and document analysis
-- **Audio Analysis**: `dimavz/whisper-tiny:latest` (44MB) - Ultra-fast transcription
+### Optimized model selection
+- **Text analysis**: `llama3.2:latest` (default)
+- **Vision analysis**: `llava:latest` (default)
+- **Audio (optional, currently disabled in UI)**: `dimavz/whisper-tiny:latest`
 
-### Performance Metrics
-- **Analysis Speed**: ~3-5 seconds per document
-- **Accuracy**: 90%+ categorization confidence
-- **Memory Usage**: <2GB RAM during processing
-- **Bundle Size**: 1.48MB optimized build
+### Performance notes
+- Real-world speed and accuracy depend on your hardware and chosen models
+- Works offline with local inference via Ollama; without Ollama, AI-driven features are limited
 
 ---
 
@@ -108,7 +126,8 @@
    ```bash
    ollama pull llama3.2:latest
    ollama pull llava:latest
-   ollama pull dimavz/whisper-tiny:latest
+   # Optional (audio; currently disabled in UI)
+   # ollama pull dimavz/whisper-tiny:latest
    ```
 
 4. **Start StratoSort**
@@ -152,21 +171,36 @@ stratosort/
 ### Available Commands
 ```bash
 # Development
-npm run dev              # Start development server
-npm run build:dev        # Build development bundle
-npm run start:dev        # Full development pipeline
+npm run dev                # Start development Electron app (dev build)
+npm run start:dev          # Dev build + Electron with logging
+npm run start:debug        # Dev build + Electron with inspector
+npm run electron           # Build dev bundle and launch Electron
+npm run build:dev          # Build renderer/main in development mode
 
-# Production
-npm run build:prod       # Production build
-npm run package          # Create distributable
+# Build & distribution
+npm run build              # Production build
+npm run package            # Create distributable
+npm run dist               # Build installer for current platform
+npm run dist:win           # Build Windows installer (.exe)
+npm run dist:mac           # Build macOS installer (.dmg)
+npm run dist:linux         # Build Linux AppImage/.deb (per config)
+npm run dist:all           # Build for all platforms
 
 # Testing
-npm test                 # Run test suite
-npm run test:integration # Integration tests
+npm test                   # Run Jest test suite
+npm run test:quick         # Quick run (bail on first failure)
+npm run test:full          # Full test suite with coverage
+npm run verify             # Show test guide and available commands
 
-# Utilities
-npm run lint             # Code linting
-npm run format           # Code formatting
+# Ollama utilities
+npm run setup:ollama       # Guided setup
+npm run check:ollama       # Check Ollama status
+npm run start:ollama       # Start Ollama service
+npm run ollama:models      # Pull example model(s)
+npm run ollama:serve       # Alias to 'ollama serve'
+
+# Linting
+npm run lint               # Code linting
 ```
 
 ### Development Features
@@ -180,17 +214,12 @@ npm run format           # Code formatting
 
 ## 🧪 Testing
 
-### Test Coverage
-- **Unit Tests**: Component and service testing
-- **Integration Tests**: End-to-end workflow validation
-- **Performance Tests**: Memory and speed benchmarks
-- **UI Tests**: Accessibility and interaction testing
+### What’s covered
+- **Analysis modules**: document and image analysis happy-paths and edge cases (Ollama calls mocked in tests)
+- **File operations**: move/copy/delete, conflict handling, folder creation
+- **Integration scripts**: sample end-to-end flows for file movement and folder scaffolding
 
-### Current Status
-- ✅ **292 Passing Tests** across 30 test suites
-- ✅ **Core Functionality** fully tested and working
-- ✅ **UI/UX Integration** validated
-- ✅ **File Operations** tested with real file system
+Run tests locally with `npm test`. Note: audio analysis tests exist for module-level behavior, but audio features are disabled in the current UI build.
 
 ---
 
@@ -241,7 +270,7 @@ npm run format           # Code formatting
 ### AI Model Configuration
 - **Text Model**: Controls document content analysis
 - **Vision Model**: Handles images and visual documents  
-- **Audio Model**: Processes audio files and transcriptions
+- **Audio Model (optional/disabled)**: Transcription model if you enable audio features during development
 - **Timeout Settings**: Configurable analysis timeouts
 - **Confidence Thresholds**: Minimum confidence for auto-organization
 

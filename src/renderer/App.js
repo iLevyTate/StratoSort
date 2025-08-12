@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, createContext, useReducer, useCallback, useMemo } from 'react';
 import './tailwind.css';
 import AppShell from './components/layout/AppShell';
+import Collapsible from './components/ui/Collapsible';
 import TooltipManager from './components/TooltipManager';
 import Button from './components/ui/Button';
 import Card from './components/ui/Card';
@@ -370,6 +371,7 @@ function SettingsPanel() {
   
   const [testResults, setTestResults] = useState({});
   const [isTestingApi, setIsTestingApi] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -431,11 +433,16 @@ function SettingsPanel() {
 
   const saveSettings = async () => {
     try {
+      setIsSaving(true);
       await window.electronAPI.settings.save(settings);
       addNotification('Settings saved successfully!', 'success');
+      // Close settings after successful save
+      actions.toggleSettings();
     } catch (error) {
       console.error('Failed to save settings:', error);
       addNotification('Failed to save settings', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -504,24 +511,27 @@ function SettingsPanel() {
         <div className="p-fib-21 border-b border-system-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-system-gray-900">⚙️ Settings</h2>
-            <Button
-              onClick={actions.toggleSettings}
-              variant="ghost"
-              className="text-system-gray-500 hover:text-system-gray-700 p-fib-5"
-              aria-label="Close settings"
-              title="Close settings"
-            >
-              ✕
-            </Button>
+            <div className="flex items-center gap-fib-8">
+              <Button onClick={() => { try { ['settings-ai','settings-performance','settings-defaults','settings-api'].forEach(k => localStorage.setItem(`collapsible:${k}`, 'true')); window.dispatchEvent(new Event('storage')); } catch {} }} variant="subtle" className="text-xs">Expand all</Button>
+              <Button onClick={() => { try { ['settings-ai','settings-performance','settings-defaults','settings-api'].forEach(k => localStorage.setItem(`collapsible:${k}`, 'false')); window.dispatchEvent(new Event('storage')); } catch {} }} variant="subtle" className="text-xs">Collapse all</Button>
+              <Button
+                onClick={actions.toggleSettings}
+                variant="ghost"
+                className="text-system-gray-500 hover:text-system-gray-700 p-fib-5"
+                aria-label="Close settings"
+                title="Close settings"
+              >
+                ✕
+              </Button>
+            </div>
           </div>
         </div>
 
         <div className="p-fib-21 space-y-fib-21">
           {/* Ollama Configuration */}
-          <div>
-            <h3 className="text-lg font-semibold mb-fib-13">🤖 AI Configuration</h3>
-              <div className="space-y-fib-13">
-                <div>
+          <Collapsible title="🤖 AI Configuration" defaultOpen persistKey="settings-ai">
+            <div className="space-y-fib-13">
+              <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
                   <Input
                     type="text"
@@ -529,7 +539,7 @@ function SettingsPanel() {
                     onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))}
                     placeholder="http://127.0.0.1:11434"
                   />
-                </div>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-13">
                 <div>
@@ -554,13 +564,12 @@ function SettingsPanel() {
                     ))}
                   </Select>
                 </div>
-              </div>
             </div>
-          </div>
+            </div>
+          </Collapsible>
 
           {/* Performance Settings */}
-          <div>
-            <h3 className="text-lg font-semibold mb-fib-13">⚡ Performance</h3>
+          <Collapsible title="⚡ Performance" defaultOpen persistKey="settings-performance">
             <div className="space-y-fib-13">
               <div>
                 <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
@@ -589,11 +598,10 @@ function SettingsPanel() {
                 </label>
               </div>
             </div>
-          </div>
+          </Collapsible>
 
           {/* Default Locations */}
-          <div>
-            <h3 className="text-lg font-semibold mb-fib-13">📁 Default Locations</h3>
+          <Collapsible title="📁 Default Locations" defaultOpen persistKey="settings-defaults">
             <div className="space-y-fib-13">
               <div>
                 <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Default Smart Folder Location</label>
@@ -623,13 +631,12 @@ function SettingsPanel() {
                 <p className="text-xs text-system-gray-500 mt-fib-3">Where new smart folders will be created by default</p>
               </div>
             </div>
-          </div>
+          </Collapsible>
 
 
 
           {/* Backend API Test */}
-          <div>
-            <h3 className="text-lg font-semibold mb-fib-13">🔧 Backend API Test</h3>
+          <Collapsible title="🔧 Backend API Test" defaultOpen={false} persistKey="settings-api">
             <div className="p-fib-13 bg-system-gray-50 rounded-lg">
               <Button
                 onClick={runAPITests}
@@ -651,13 +658,16 @@ function SettingsPanel() {
                 </div>
               )}
             </div>
-          </div>
+          </Collapsible>
         </div>
 
         <div className="p-fib-21 border-t border-system-gray-200 flex justify-end gap-fib-13">
           <Button onClick={actions.toggleSettings} variant="secondary">Cancel</Button>
-          <Button onClick={saveSettings} variant="primary">Save Settings</Button>
+          <Button onClick={saveSettings} variant="primary" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Settings'}
+          </Button>
         </div>
+        {/* Removed legacy expand/collapse controls below to avoid duplication */}
       </div>
     </div>
   );
@@ -1240,23 +1250,52 @@ function SetupPhase() {
         <p className="text-lg text-system-gray-600 leading-relaxed">
           Set up smart folders where StratoSort will organize your files based on AI analysis.
         </p>
-      </div>
-
-      {/* Current Smart Folders */}
-      <div className="card-enhanced mb-fib-21" role="region" aria-labelledby="current-folders-heading">
-        <div className="flex justify-between items-center mb-fib-13">
-          <h3 id="current-folders-heading" className="heading-tertiary">📁 Current Smart Folders</h3>
-            {smartFolders.length > 0 && (
-              <Button
-                onClick={handleCreateAllFolders}
-                variant="primary"
-                className="text-sm"
-                title="Create all smart folder directories"
-              >
-                📁 Create All Folders
-              </Button>
-            )}
+        <div className="flex items-center justify-center gap-fib-8 mt-fib-8">
+          <button
+            className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+            onClick={() => {
+              try {
+                const keys = ['setup-current-folders','setup-add-folder'];
+                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true'));
+                window.dispatchEvent(new Event('storage'));
+              } catch {}
+            }}
+          >
+            Expand all
+          </button>
+          <span className="text-system-gray-300">•</span>
+          <button
+            className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+            onClick={() => {
+              try {
+                const keys = ['setup-current-folders','setup-add-folder'];
+                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false'));
+                window.dispatchEvent(new Event('storage'));
+              } catch {}
+            }}
+          >
+            Collapse all
+          </button>
         </div>
+      </div>
+      {/* Current Smart Folders */}
+      <Collapsible
+        title={
+          <span>📁 Current Smart Folders</span>
+        }
+        actions={smartFolders.length > 0 ? (
+          <Button
+            onClick={handleCreateAllFolders}
+            variant="primary"
+            className="text-sm"
+            title="Create all smart folder directories"
+          >
+            📁 Create All Folders
+          </Button>
+        ) : null}
+        defaultOpen
+        persistKey="setup-current-folders"
+      >
         {isLoading ? (
           <SmartFolderSkeleton count={3} />
         ) : smartFolders.length === 0 ? (
@@ -1267,15 +1306,18 @@ function SetupPhase() {
         ) : (
           <div className="space-y-fib-8">
             {smartFolders.map((folder, index) => (
-              <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right" style={{animationDelay: `${index * 0.1}s`}}>
+              <div
+                key={folder.id}
+                className="p-fib-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
                 {editingFolder?.id === folder.id ? (
-                  // Edit mode
                   <div className="space-y-fib-8" role="form" aria-label="Edit smart folder">
-                    <div className="flex gap-fib-8">
+                    <div className="flex flex-col md:flex-row gap-fib-8">
                       <Input
                         type="text"
                         value={editingFolder.name}
-                        onChange={(e) => setEditingFolder({...editingFolder, name: e.target.value})}
+                        onChange={(e) => setEditingFolder({ ...editingFolder, name: e.target.value })}
                         className="flex-1"
                         placeholder="Folder name"
                         aria-label="Folder name"
@@ -1287,7 +1329,7 @@ function SetupPhase() {
                       <Input
                         type="text"
                         value={editingFolder.path}
-                        onChange={(e) => setEditingFolder({...editingFolder, path: e.target.value})}
+                        onChange={(e) => setEditingFolder({ ...editingFolder, path: e.target.value })}
                         className="flex-1"
                         placeholder="Folder path"
                         aria-label="Folder path"
@@ -1297,16 +1339,14 @@ function SetupPhase() {
                         }}
                       />
                     </div>
-                    <div>
-                      <Textarea
-                        value={editingFolder.description || ''}
-                        onChange={(e) => setEditingFolder({...editingFolder, description: e.target.value})}
-                        className="w-full"
-                        placeholder="Describe what types of files should go in this folder (helps AI make better decisions)"
-                        rows={2}
-                        aria-label="Folder description"
-                      />
-                    </div>
+                    <Textarea
+                      value={editingFolder.description || ''}
+                      onChange={(e) => setEditingFolder({ ...editingFolder, description: e.target.value })}
+                      className="w-full"
+                      placeholder="Describe what types of files should go in this folder (helps AI make better decisions)"
+                      rows={2}
+                      aria-label="Folder description"
+                    />
                     <div className="flex gap-fib-5">
                       <Button
                         onClick={handleSaveEdit}
@@ -1334,11 +1374,10 @@ function SetupPhase() {
                     </div>
                   </div>
                 ) : (
-                  // View mode
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="font-medium text-system-gray-700 mb-fib-2">{folder.name}</div>
-                      <div className="text-small text-muted mb-fib-3">{folder.path}</div>
+                  <div className="flex items-start justify-between gap-fib-13">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-system-gray-700 mb-fib-2 break-words">{folder.name}</div>
+                      <div className="text-small text-muted mb-fib-3 break-all">{folder.path}</div>
                       {folder.description && (
                         <div className="text-sm text-system-gray-600 bg-stratosort-blue/5 p-fib-8 rounded-lg border-l-4 border-stratosort-blue/30">
                           <div className="font-medium text-stratosort-blue mb-fib-2">📝 AI Context:</div>
@@ -1346,7 +1385,7 @@ function SetupPhase() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-fib-8">
+                    <div className="flex items-center gap-fib-8 shrink-0">
                       <div className="flex items-center gap-fib-5">
                         <div className="status-dot success"></div>
                         <span className="text-sm font-medium text-stratosort-success">Active</span>
@@ -1361,8 +1400,8 @@ function SetupPhase() {
                           <span className="text-xs text-amber-600">📂</span>
                           <span className="text-xs font-medium text-amber-700">Needs Creation</span>
                         </div>
-                                              )}
-                        <div className="flex gap-fib-5">
+                      )}
+                      <div className="flex gap-fib-5">
                         {!folder.physicallyExists && (
                           <Button
                             onClick={async () => {
@@ -1383,12 +1422,8 @@ function SetupPhase() {
                         )}
                         <Button
                           onClick={() => handleOpenFolder(folder.path)}
-                          className={`p-fib-5 rounded transition-colors ${
-                            folder.physicallyExists 
-                              ? 'text-green-600 hover:bg-green-100' 
-                              : 'text-gray-400 cursor-not-allowed'
-                          }`}
-                          title={folder.physicallyExists ? "Open folder in file explorer" : "Folder doesn't exist yet"}
+                          className={`p-fib-5 rounded transition-colors ${folder.physicallyExists ? 'text-green-600 hover:bg-green-100' : 'text-gray-400 cursor-not-allowed'}`}
+                          title={folder.physicallyExists ? 'Open folder in file explorer' : "Folder doesn't exist yet"}
                           aria-label={`Open folder ${folder.name}`}
                           disabled={!folder.physicallyExists}
                         >
@@ -1406,7 +1441,7 @@ function SetupPhase() {
                           onClick={() => handleDeleteFolder(folder.id)}
                           disabled={isDeletingFolder === folder.id}
                           className="p-fib-5 text-system-red-600 hover:bg-system-red-100 rounded transition-colors disabled:opacity-50"
-                          title={folder.physicallyExists ? "Remove from config and delete directory" : "Remove from config only"}
+                          title={folder.physicallyExists ? 'Remove from config and delete directory' : 'Remove from config only'}
                           aria-label={`Delete folder ${folder.name}`}
                         >
                           {isDeletingFolder === folder.id ? (
@@ -1423,11 +1458,10 @@ function SetupPhase() {
             ))}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* Add New Folder */}
-      <div className="card-enhanced mb-fib-21" role="region" aria-labelledby="add-folder-heading">
-        <h3 id="add-folder-heading" className="text-lg font-semibold mb-fib-13">Add New Smart Folder</h3>
+      <Collapsible title="Add New Smart Folder" defaultOpen={false} persistKey="setup-add-folder">
         <div className="space-y-fib-13">
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">
@@ -1506,7 +1540,7 @@ function SetupPhase() {
             )}
           </Button>
         </div>
-      </div>
+      </Collapsible>
 
       {/* Navigation */}
       <div className="flex justify-between">
@@ -2203,7 +2237,15 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', { current: 0, total: files.length });
     actions.setPhaseData('currentAnalysisFile', '');
     const results = [];
-    const concurrency = Math.max(1, Math.min(Number(settings.maxConcurrentAnalysis) || 3, 8));
+    // Fetch max concurrency from persisted settings (settings state is scoped to SettingsPanel)
+    let maxConcurrent = 3;
+    try {
+      const persistedSettings = await window.electronAPI.settings.get();
+      if (persistedSettings && typeof persistedSettings.maxConcurrentAnalysis !== 'undefined') {
+        maxConcurrent = Number(persistedSettings.maxConcurrentAnalysis);
+      }
+    } catch {}
+    const concurrency = Math.max(1, Math.min(Number(maxConcurrent) || 3, 8));
     
     try {
       addNotification(`Starting AI analysis of ${files.length} files...`, 'info');
@@ -2431,22 +2473,42 @@ function DiscoverPhase() {
           </button>
         </div>
       )}
-      <div className="mb-fib-21">
-        <h2 className="text-2xl font-bold text-system-gray-900 mb-fib-8">
-          🔍 Discover & Analyze Files
-        </h2>
-        <p className="text-system-gray-600">
-          Select files for AI-powered analysis and organization. Configure naming conventions to match your preferences.
+      <div className="mb-fib-21 text-center">
+        <h2 className="heading-primary">🔍 Discover & Analyze</h2>
+        <p className="text-lg text-system-gray-600 leading-relaxed">
+          Select files or scan a folder, then let StratoSort analyze and prepare them for organization.
         </p>
+      </div>
+      <div className="flex items-center justify-center gap-fib-8 -mt-fib-8 mb-fib-13">
+        <button
+          className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+          onClick={() => {
+            try {
+              const keys = ['discover-naming','discover-selection','discover-dnd','discover-results'];
+              keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true'));
+              window.dispatchEvent(new Event('storage'));
+            } catch {}
+          }}
+        >
+          Expand all
+        </button>
+        <span className="text-system-gray-300">•</span>
+        <button
+          className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+          onClick={() => {
+            try {
+              const keys = ['discover-naming','discover-selection','discover-dnd','discover-results'];
+              keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false'));
+              window.dispatchEvent(new Event('storage'));
+            } catch {}
+          }}
+        >
+          Collapse all
+        </button>
       </div>
 
       {/* NEW: Naming Convention Configuration */}
-      <div className="card-enhanced mb-fib-21">
-        <h3 className="text-lg font-semibold mb-fib-13 flex items-center gap-fib-5">
-          🏷️ Naming Convention Settings
-          <span className="text-sm font-normal text-system-gray-500">(Applied during analysis)</span>
-        </h3>
-        
+      <Collapsible title={<span>🏷️ Naming Convention Settings <span className="text-sm font-normal text-system-gray-500">(Applied during analysis)</span></span>} defaultOpen={false} persistKey="discover-naming">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-fib-13 mb-fib-13">
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-fib-3">
@@ -2526,11 +2588,12 @@ function DiscoverPhase() {
             {generatePreviewName('example-document.pdf')}
           </div>
         </div>
-      </div>
+      </Collapsible>
 
       {/* File Selection Options */}
-      <div className="max-w-4xl mx-auto mb-fib-21">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-13">
+      <Collapsible title="Selection Methods" defaultOpen persistKey="discover-selection">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-13">
           {/* Select Files */}
           <div 
             className={`card-enhanced text-center transition-all duration-200 cursor-pointer hover:border-stratosort-blue/50 ${
@@ -2576,28 +2639,31 @@ function DiscoverPhase() {
               Auto-scans up to 3 levels deep
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </Collapsible>
 
       {/* Drag and Drop Area */}
-      <div className="max-w-2xl mx-auto mb-fib-21">
-        <div 
-          {...dragProps}
-          className={`card-enhanced text-center transition-all duration-200 ${
-            isDragging ? 'border-stratosort-blue bg-stratosort-blue/10 scale-105' : 'border-dashed border-2 border-system-gray-300'
-          }`}
-        >
-          <div className="text-5xl mb-fib-8">
-            {isDragging ? '✨' : '⬇️'}
+      <Collapsible title="Drag & Drop" defaultOpen={false} persistKey="discover-dnd">
+        <div className="max-w-2xl mx-auto">
+          <div 
+            {...dragProps}
+            className={`card-enhanced text-center transition-all duration-200 ${
+              isDragging ? 'border-stratosort-blue bg-stratosort-blue/10 scale-105' : 'border-dashed border-2 border-system-gray-300'
+            }`}
+          >
+            <div className="text-5xl mb-fib-8">
+              {isDragging ? '✨' : '⬇️'}
+            </div>
+            <h3 className="text-lg font-semibold mb-fib-5 text-system-gray-700">
+              {isDragging ? 'Drop Files Here' : 'Or Drag & Drop Files Here'}
+            </h3>
+            <p className="text-sm text-system-gray-500">
+              {isDragging ? 'Release to analyze files' : 'Drop multiple files at once'}
+            </p>
           </div>
-          <h3 className="text-lg font-semibold mb-fib-5 text-system-gray-700">
-            {isDragging ? 'Drop Files Here' : 'Or Drag & Drop Files Here'}
-          </h3>
-          <p className="text-sm text-system-gray-500">
-            {isDragging ? 'Release to analyze files' : 'Drop multiple files at once'}
-          </p>
         </div>
-      </div>
+      </Collapsible>
 
       {/* Analysis Progress */}
       {isAnalyzing && (
@@ -2634,9 +2700,11 @@ function DiscoverPhase() {
 
       {/* Analysis Results */}
       {analysisResults.length > 0 && !isAnalyzing && (
-        <div className="card-enhanced mb-fib-21">
-          <div className="flex items-center justify-between mb-fib-13">
-            <h3 className="text-lg font-semibold">📊 Analysis Results</h3>
+        <Collapsible
+          title="📊 Analysis Results"
+          defaultOpen
+          persistKey="discover-results"
+          actions={
             <div className="flex items-center gap-fib-8">
               <Button
                 onClick={() => analyzeFiles(selectedFiles)}
@@ -2656,8 +2724,8 @@ function DiscoverPhase() {
                 📊 History
               </Button>
             </div>
-          </div>
-          
+          }
+        >
           <div className="space-y-fib-8">
             {analysisResults.map((file, index) => {
               const stateDisplay = getFileStateDisplay(file.path, !!file.analysis);
@@ -2744,7 +2812,7 @@ function DiscoverPhase() {
               );
             })}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* Navigation */}
@@ -3927,12 +3995,8 @@ function OrganizePhase() {
       <div className="mb-fib-21">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-system-gray-900 mb-fib-8">
-              📂 Review & Organize
-            </h2>
-            <p className="text-system-gray-600">
-              Review AI suggestions and organize your files into smart folders. Unprocessed files remain available for future organization.
-            </p>
+            <h2 className="heading-primary mb-fib-8">📂 Review & Organize</h2>
+            <p className="text-lg text-system-gray-600 leading-relaxed">Review AI suggestions and organize your files into smart folders. Unprocessed files remain available for future organization.</p>
             
             {/* Analysis Status Banner if still running */}
             {isAnalysisRunning && (
@@ -3954,30 +4018,24 @@ function OrganizePhase() {
 
       {/* Smart Folders Summary */}
       {smartFolders.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-8">📁 Target Smart Folders</h3>
+        <Collapsible title="📁 Target Smart Folders" defaultOpen={false} persistKey="organize-target-folders">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-8">
             {smartFolders.map(folder => (
               <div key={folder.id} className="p-fib-13 bg-surface-secondary rounded-lg border border-stratosort-blue/20">
                 <div className="font-medium text-system-gray-900 mb-fib-2">{folder.name}</div>
-                <div className="text-sm text-system-gray-600 mb-fib-3">
-                  📂 {folder.path || `${defaultLocation}/${folder.name}`}
-                </div>
+                <div className="text-sm text-system-gray-600 mb-fib-3">📂 {folder.path || `${defaultLocation}/${folder.name}`}</div>
                 {folder.description && (
-                  <div className="text-xs text-system-gray-500 bg-stratosort-blue/5 p-fib-5 rounded italic">
-                    "{folder.description}"
-                  </div>
+                  <div className="text-xs text-system-gray-500 bg-stratosort-blue/5 p-fib-5 rounded italic">"{folder.description}"</div>
                 )}
               </div>
             ))}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* NEW: File Status Overview */}
       {(unprocessedFiles.length > 0 || processedFiles.length > 0) && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-8">📊 File Status Overview</h3>
+        <Collapsible title="📊 File Status Overview" defaultOpen persistKey="organize-status">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
             <div className="text-center p-fib-13 bg-blue-50 rounded-lg border border-blue-200">
               <div className="text-2xl font-bold text-blue-600">{unprocessedFiles.length}</div>
@@ -3992,12 +4050,12 @@ function OrganizePhase() {
               <div className="text-sm text-gray-700">Failed Analysis</div>
             </div>
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* Bulk Operations Bar */}
       {unprocessedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
+        <Collapsible title="Bulk Operations" defaultOpen persistKey="organize-bulk">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-fib-13">
               <input
@@ -4060,12 +4118,11 @@ function OrganizePhase() {
               </div>
             )}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* File Review */}
-      <div className="card-enhanced mb-fib-21">
-        <h3 className="text-lg font-semibold mb-fib-13">Files Ready for Organization</h3>
+      <Collapsible title="Files Ready for Organization" defaultOpen persistKey="organize-ready-list">
         
         {unprocessedFiles.length === 0 ? (
           <div className="text-center py-fib-21">
@@ -4177,12 +4234,11 @@ function OrganizePhase() {
             })}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* NEW: Previously Organized Files */}
       {processedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21">
-          <h3 className="text-lg font-semibold mb-fib-13">✅ Previously Organized Files</h3>
+        <Collapsible title="✅ Previously Organized Files" defaultOpen={false} persistKey="organize-history">
           <div className="space-y-fib-5 max-h-64 overflow-y-auto">
             {processedFiles.map((file, index) => (
               <div key={index} className="flex items-center justify-between p-fib-8 bg-green-50 rounded-lg border border-green-200">
@@ -4201,13 +4257,12 @@ function OrganizePhase() {
               </div>
             ))}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* Organization Action */}
       {unprocessedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21 text-center">
-          <h3 className="text-lg font-semibold mb-fib-13">Ready to Organize</h3>
+        <Collapsible title="Ready to Organize" defaultOpen persistKey="organize-action">
           <p className="text-system-gray-600 mb-fib-13">
             StratoSort will move and rename <strong>{unprocessedFiles.filter(f => f.analysis).length} files</strong> according to AI suggestions.
           </p>
@@ -4257,7 +4312,7 @@ function OrganizePhase() {
               ✨ Organize Files Now
             </Button>
           )}
-        </div>
+        </Collapsible>
       )}
 
       {/* Navigation */}
@@ -4287,20 +4342,42 @@ function CompletePhase() {
   const organizedFiles = phaseData.organizedFiles || [];
 
   return (
-    <div className="container-narrow text-center py-fib-34">
-      <div className="mb-fib-21">
+    <div className="container-narrow py-fib-34">
+      <div className="text-center mb-fib-21">
         <div className="text-6xl mb-fib-13">✅</div>
-        <h2 className="text-2xl font-bold text-system-gray-900 mb-fib-8">
-          Organization Complete!
-        </h2>
-        <p className="text-lg text-system-gray-600">
-          Successfully organized {organizedFiles.length} files using AI-powered analysis.
-        </p>
+        <h2 className="heading-primary mb-fib-8">Organization Complete!</h2>
+        <p className="text-lg text-system-gray-600">Successfully organized {organizedFiles.length} files using AI-powered analysis.</p>
+        <div className="flex items-center justify-center gap-fib-8 mt-fib-8">
+          <button
+            className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+            onClick={() => {
+              try {
+                const keys = ['complete-summary','complete-next-steps'];
+                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true'));
+                window.dispatchEvent(new Event('storage'));
+              } catch {}
+            }}
+          >
+            Expand all
+          </button>
+          <span className="text-system-gray-300">•</span>
+          <button
+            className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
+            onClick={() => {
+              try {
+                const keys = ['complete-summary','complete-next-steps'];
+                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false'));
+                window.dispatchEvent(new Event('storage'));
+              } catch {}
+            }}
+          >
+            Collapse all
+          </button>
+        </div>
       </div>
 
       {organizedFiles.length > 0 && (
-        <div className="card-enhanced mb-fib-21 text-left">
-          <h3 className="text-lg font-semibold mb-fib-13 text-center">Organization Summary</h3>
+        <Collapsible title="Organization Summary" defaultOpen persistKey="complete-summary">
           <div className="space-y-fib-5">
             {organizedFiles.slice(0, 5).map((file, index) => (
               <div key={index} className="text-sm">
@@ -4308,42 +4385,21 @@ function CompletePhase() {
               </div>
             ))}
             {organizedFiles.length > 5 && (
-              <div className="text-sm text-system-gray-500 italic">
-                ...and {organizedFiles.length - 5} more files
-              </div>
+              <div className="text-sm text-system-gray-500 italic">...and {organizedFiles.length - 5} more files</div>
             )}
           </div>
-        </div>
+        </Collapsible>
       )}
 
-      <div className="flex flex-col gap-fib-13 mt-fib-21">
-        {/* Navigation Back Options */}
-        <div className="flex gap-fib-8">
-          <Button 
-            onClick={() => actions.advancePhase(PHASES.ORGANIZE)}
-            variant="secondary"
-            className="flex-1"
-          >
-            ← Back to Organization
-          </Button>
-          <Button 
-            onClick={() => actions.advancePhase(PHASES.DISCOVER)}
-            variant="outline"
-            className="flex-1"
-          >
-            ← Back to Discovery
-          </Button>
+      <Collapsible title="Next Steps" defaultOpen persistKey="complete-next-steps">
+        <div className="flex flex-col gap-fib-13">
+          <div className="flex gap-fib-8">
+            <Button onClick={() => actions.advancePhase(PHASES.ORGANIZE)} variant="secondary" className="flex-1">← Back to Organization</Button>
+            <Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="outline" className="flex-1">← Back to Discovery</Button>
+          </div>
+          <Button onClick={() => actions.resetWorkflow()} variant="primary" className="px-fib-34 py-fib-13">🚀 Start New Organization Session</Button>
         </div>
-        
-        {/* New Session Options */}
-        <Button 
-          onClick={() => actions.resetWorkflow()}
-          variant="primary"
-          className="px-fib-34 py-fib-13"
-        >
-          🚀 Start New Organization Session
-        </Button>
-      </div>
+      </Collapsible>
     </div>
   );
 }
@@ -4429,10 +4485,35 @@ function NavigationBar() {
 // ===== PROGRESS INDICATOR =====
 function ProgressIndicator() {
   const { currentPhase, getCurrentMetadata } = usePhase();
+  const [showPhaseMenu, setShowPhaseMenu] = useState(false);
   const metadata = getCurrentMetadata();
   
   const phases = Object.values(PHASES);
   const currentIndex = phases.indexOf(currentPhase);
+  
+  const getPersistKeysForPhase = () => {
+    switch (currentPhase) {
+      case PHASES.SETUP:
+        return ['setup-current-folders', 'setup-add-folder'];
+      case PHASES.DISCOVER:
+        return ['discover-naming', 'discover-selection', 'discover-dnd', 'discover-results'];
+      case PHASES.ORGANIZE:
+        return ['organize-target-folders','organize-status','organize-bulk','organize-ready-list','organize-history','organize-action'];
+      case PHASES.COMPLETE:
+        return ['complete-summary','complete-next-steps'];
+      default:
+        return [];
+    }
+  };
+  
+  const applyPhaseExpandCollapse = (expand) => {
+    try {
+      const keys = getPersistKeysForPhase();
+      if (!keys.length) return;
+      keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, expand ? 'true' : 'false'));
+      window.dispatchEvent(new Event('storage'));
+    } catch {}
+  };
   
   return (
     <div className="bg-surface-secondary/50 border-b border-border-light px-fib-21 py-fib-8 backdrop-blur-sm">
@@ -4444,6 +4525,38 @@ function ProgressIndicator() {
               <div className="font-semibold text-system-gray-900">{metadata.title}</div>
               <div className="text-sm text-system-gray-600">Step {currentIndex + 1} of {phases.length}</div>
             </div>
+            {/* Phase expand/collapse control */}
+            {getPersistKeysForPhase().length > 0 && (
+              <div className="relative" onBlur={() => setTimeout(() => setShowPhaseMenu(false), 100)} tabIndex={0}>
+                <button
+                  className="p-fib-5 text-system-gray-500 hover:text-system-gray-700 rounded"
+                  aria-haspopup="menu"
+                  aria-expanded={showPhaseMenu}
+                  title="Phase sections"
+                  onClick={() => setShowPhaseMenu(prev => !prev)}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 011.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {showPhaseMenu && (
+                  <div className="absolute right-0 mt-2 bg-white border border-system-gray-200 rounded-md shadow-lg z-50 min-w-[140px]">
+                    <button
+                      className="nav-item"
+                      onClick={() => { applyPhaseExpandCollapse(true); setShowPhaseMenu(false); }}
+                    >
+                      Expand all
+                    </button>
+                    <button
+                      className="nav-item"
+                      onClick={() => { applyPhaseExpandCollapse(false); setShowPhaseMenu(false); }}
+                    >
+                      Collapse all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-fib-13">

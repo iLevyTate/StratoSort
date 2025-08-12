@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
 const SettingsService = require('../services/SettingsService');
+const { buildOllamaOptions } = require('../services/PerformanceService');
 
 // Enforce required dependency for AI-first operation
 const pdf = require('pdf-parse');
@@ -94,11 +95,18 @@ Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
     const client = await getOllamaClient();
-    const model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
+    let model = (await settingsServiceDoc.getSettings()).textModel || AppConfig.ai.textAnalysis.defaultModel;
+    // Validate selected model is text-capable; fallback if likely a vision/embedding model
+    const lower = String(model).toLowerCase();
+    if (lower.includes('llava') || lower.includes('vision') || lower.includes('embed') || lower.includes('mxbai')) {
+      model = AppConfig.ai.textAnalysis.defaultModel;
+    }
+    const perfOptions = await buildOllamaOptions('text');
     const response = await client.generate({
       model,
       prompt,
       options: {
+        ...perfOptions,
         temperature: AppConfig.ai.textAnalysis.temperature,
         num_predict: AppConfig.ai.textAnalysis.maxTokens,
       },

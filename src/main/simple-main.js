@@ -20,6 +20,7 @@ const { getOrganizationSuggestions } = require('./llmService');
 const { getOllama, getOllamaModel, setOllamaModel, loadOllamaConfig, getOllamaConfigPath } = require('./ollamaUtils');
 const SettingsService = require('./services/SettingsService');
 const { Ollama } = require('ollama');
+const { buildOllamaOptions } = require('./services/PerformanceService');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -346,11 +347,12 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, async (event, payload) => {
     // Prefer embeddings model if available
     try {
       const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
-      const queryEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: text });
+      const perfOptions = await buildOllamaOptions('embeddings');
+      const queryEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: text, options: { ...perfOptions } });
       const scored = [];
       for (const folder of smartFolders) {
         const folderText = [folder.name, folder.description].filter(Boolean).join(' - ');
-        const folderEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: folderText });
+        const folderEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: folderText, options: { ...perfOptions } });
         const score = cosineSimilarity(queryEmbedding.embedding, folderEmbedding.embedding);
         scored.push({ folder, score });
       }
@@ -361,10 +363,11 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, async (event, payload) => {
       // Fallback to LLM ranking
       try {
         const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+        const genPerf = await buildOllamaOptions('text');
         const prompt = `You are ranking folders for organizing a file. Given this description:\n"""${text}"""\n
 Folders:\n${smartFolders.map((f, i) => `${i + 1}. ${f.name} - ${f.description || ''}`).join('\n')}\n
 Return JSON: { "index": <1-based best folder index>, "reason": "..." }`;
-        const resp = await ollama.generate({ model: getOllamaModel() || 'llama3.2:latest', prompt, format: 'json', options: { temperature: 0.1, num_predict: 200 } });
+        const resp = await ollama.generate({ model: getOllamaModel() || 'llama3.2:latest', prompt, format: 'json', options: { ...genPerf, temperature: 0.1, num_predict: 200 } });
         const parsed = JSON.parse(resp.response);
         const idx = Math.max(1, Math.min(smartFolders.length, parseInt(parsed.index, 10)));
         return { success: true, folder: smartFolders[idx - 1], reason: parsed.reason, method: 'llm' };
@@ -391,6 +394,92 @@ function cosineSimilarity(a, b) {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+// Resume any incomplete organize batches from previous sessions
+async function resumeIncompleteBatches() {
+  try {
+    const incomplete = serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() || [];
+    if (!incomplete.length) return;
+    logger.warn(`[RESUME] Resuming ${incomplete.length} incomplete organize batch(es)`);
+
+    for (const batch of incomplete) {
+      const total = batch.operations.length;
+      for (let i = 0; i < total; i++) {
+        const op = batch.operations[i];
+        if (op.status === 'done') {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('operation-progress', {
+              type: 'batch_organize',
+              current: i + 1,
+              total,
+              currentFile: path.basename(op.source)
+            });
+          }
+          continue;
+        }
+        try {
+          await serviceIntegration.processingState.markOrganizeOpStarted(batch.id, i);
+          // Ensure destination directory exists
+          const destDir = path.dirname(op.destination);
+          await fs.mkdir(destDir, { recursive: true });
+          // Check destination collision and adjust
+          try {
+            await fs.access(op.destination);
+            let counter = 1;
+            let uniqueDestination = op.destination;
+            const ext = path.extname(op.destination);
+            const baseName = op.destination.slice(0, -ext.length);
+            while (true) {
+              try {
+                await fs.access(uniqueDestination);
+                counter++;
+                uniqueDestination = `${baseName}_${counter}${ext}`;
+                if (counter > 1000) throw new Error('Too many name collisions');
+              } catch {
+                break;
+              }
+            }
+            if (uniqueDestination !== op.destination) {
+              op.destination = uniqueDestination;
+            }
+          } catch {}
+          // Move with EXDEV handling
+          try {
+            await fs.rename(op.source, op.destination);
+          } catch (renameError) {
+            if (renameError.code === 'EXDEV') {
+              await fs.copyFile(op.source, op.destination);
+              const sourceStats = await fs.stat(op.source);
+              const destStats = await fs.stat(op.destination);
+              if (sourceStats.size !== destStats.size) {
+                throw new Error('File copy verification failed - size mismatch');
+              }
+              await fs.unlink(op.source);
+            } else {
+              throw renameError;
+            }
+          }
+          await serviceIntegration.processingState.markOrganizeOpDone(batch.id, i, { destination: op.destination });
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('operation-progress', {
+              type: 'batch_organize',
+              current: i + 1,
+              total,
+              currentFile: path.basename(op.source)
+            });
+          }
+        } catch (err) {
+          logger.warn('[RESUME] Failed to resume op', i + 1, 'in batch', batch.id, ':', err.message);
+          try { await serviceIntegration.processingState.markOrganizeOpError(batch.id, i, err.message); } catch {}
+        }
+      }
+      try { await serviceIntegration.processingState.completeOrganizeBatch(batch.id); } catch {}
+      logger.info('[RESUME] Completed batch resume:', batch.id);
+    }
+  } catch (e) {
+    logger.warn('[RESUME] Resume batches failed:', e.message);
+  }
 }
 
 // Delete folder and its contents
@@ -502,139 +591,121 @@ ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) =>
         logger.info(`[FILE-OPS] ✅ Successfully deleted: ${operation.source}`);
         return { success: true, message: `Deleted ${operation.source}` };
         
-      case 'batch_organize':
+      case 'batch_organize': {
         logger.info(`[FILE-OPS] Starting batch organization of ${operation.operations.length} files`);
         const results = [];
         let successCount = 0;
         let failCount = 0;
-        
-        for (let i = 0; i < operation.operations.length; i++) {
-          const op = operation.operations[i];
-          try {
-            logger.info(`[FILE-OPS] [${i+1}/${operation.operations.length}] Processing: ${op.source}`);
-            logger.info(`[FILE-OPS] Target: ${op.destination}`);
-            
-            // Validate operation data
-            if (!op.source || !op.destination) {
-              throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
-            }
-            
-            // Ensure destination directory exists
-            const destDir = path.dirname(op.destination);
-            logger.info(`[FILE-OPS] Creating directory if needed: ${destDir}`);
-            await fs.mkdir(destDir, { recursive: true });
-            
-            // Check if source file exists
-            try {
-              await fs.access(op.source);
-              const sourceStats = await fs.stat(op.source);
-              logger.info(`[FILE-OPS] ✅ Source file exists: ${op.source} (${sourceStats.size} bytes)`);
-            } catch (accessError) {
-              throw new Error(`Source file does not exist: ${op.source}`);
-            }
-            
-            // Check if destination already exists (async, non-blocking)
-            try {
-              await fs.access(op.destination);
-              logger.info(`[FILE-OPS] ⚠️  Destination already exists: ${op.destination}`);
-              // Generate unique filename if destination exists
-              let counter = 1;
-              let uniqueDestination = op.destination;
-              const ext = path.extname(op.destination);
-              const baseName = op.destination.slice(0, -ext.length);
+        const batchId = `batch_${Date.now()}`;
+        try {
+          // Persist batch start or load existing if resuming
+          const batch = await serviceIntegration?.processingState?.createOrLoadOrganizeBatch(batchId, operation.operations);
 
-              // Probe asynchronously for the first non-existing destination
-              while (true) {
-                try {
-                  await fs.access(uniqueDestination);
-                  counter++;
-                  uniqueDestination = `${baseName}_${counter}${ext}`;
-                  if (counter > 1000) {
-                    throw new Error('Too many name collisions while generating unique destination');
+          for (let i = 0; i < batch.operations.length; i++) {
+            const op = batch.operations[i];
+            if (op.status === 'done') {
+              // Already completed in a previous run
+              results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move', resumed: true });
+              successCount++;
+              continue;
+            }
+            try {
+              await serviceIntegration?.processingState?.markOrganizeOpStarted(batchId, i);
+
+              // Validate operation data
+              if (!op.source || !op.destination) {
+                throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
+              }
+
+              // Ensure destination directory exists
+              const destDir = path.dirname(op.destination);
+              await fs.mkdir(destDir, { recursive: true });
+
+              // Check if source file exists
+              try {
+                await fs.access(op.source);
+              } catch (accessError) {
+                throw new Error(`Source file does not exist: ${op.source}`);
+              }
+
+              // Check if destination already exists and pick a unique path
+              try {
+                await fs.access(op.destination);
+                let counter = 1;
+                let uniqueDestination = op.destination;
+                const ext = path.extname(op.destination);
+                const baseName = op.destination.slice(0, -ext.length);
+                while (true) {
+                  try {
+                    await fs.access(uniqueDestination);
+                    counter++;
+                    uniqueDestination = `${baseName}_${counter}${ext}`;
+                    if (counter > 1000) {
+                      throw new Error('Too many name collisions while generating unique destination');
+                    }
+                  } catch {
+                    break;
                   }
-                } catch {
-                  // Path does not exist; safe to use
-                  break;
+                }
+                if (uniqueDestination !== op.destination) {
+                  op.destination = uniqueDestination;
+                }
+              } catch {
+                // destination free
+              }
+
+              // Perform move with EXDEV handling
+              try {
+                await fs.rename(op.source, op.destination);
+              } catch (renameError) {
+                if (renameError.code === 'EXDEV') {
+                  await fs.copyFile(op.source, op.destination);
+                  const sourceStats = await fs.stat(op.source);
+                  const destStats = await fs.stat(op.destination);
+                  if (sourceStats.size !== destStats.size) {
+                    throw new Error('File copy verification failed - size mismatch');
+                  }
+                  await fs.unlink(op.source);
+                } else {
+                  throw renameError;
                 }
               }
 
-              if (uniqueDestination !== op.destination) {
-                logger.info(`[FILE-OPS] Using unique name: ${uniqueDestination}`);
-                op.destination = uniqueDestination;
+              await serviceIntegration?.processingState?.markOrganizeOpDone(batchId, i, { destination: op.destination });
+
+              results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move' });
+              successCount++;
+
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('operation-progress', {
+                  type: 'batch_organize',
+                  current: i + 1,
+                  total: batch.operations.length,
+                  currentFile: path.basename(op.source)
+                });
               }
-            } catch (accessError) {
-              logger.info(`[FILE-OPS] ✅ Destination path is clear: ${op.destination}`);
+            } catch (error) {
+              logger.error(`[FILE-OPS] ❌ Operation ${i+1} failed:`, error.message);
+              await serviceIntegration?.processingState?.markOrganizeOpError(batchId, i, error.message);
+              results.push({ success: false, source: op.source, destination: op.destination, error: error.message, operation: op.type || 'move' });
+              failCount++;
             }
-            
-            // Move the file (handle cross-drive moves on Windows)
-            logger.info(`[FILE-OPS] Moving: ${op.source} → ${op.destination}`);
-            
-            try {
-              await fs.rename(op.source, op.destination);
-              logger.info(`[FILE-OPS] ✅ Successfully moved: ${path.basename(op.source)}`);
-            } catch (renameError) {
-              if (renameError.code === 'EXDEV') {
-                // Cross-device link error - copy then delete
-                logger.info(`[FILE-OPS] Cross-device move detected, using copy+delete`);
-                await fs.copyFile(op.source, op.destination);
-                
-                // Verify copy was successful
-                const sourceStats = await fs.stat(op.source);
-                const destStats = await fs.stat(op.destination);
-                if (sourceStats.size !== destStats.size) {
-                  throw new Error('File copy verification failed - size mismatch');
-                }
-                
-                await fs.unlink(op.source);
-                logger.info(`[FILE-OPS] ✅ Successfully copied and removed: ${path.basename(op.source)}`);
-              } else {
-                throw renameError;
-              }
-            }
-            
-            results.push({
-              success: true,
-              source: op.source,
-              destination: op.destination,
-              operation: op.type || 'move'
-            });
-            
-            successCount++;
-            
-            // Send progress update to renderer
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('operation-progress', {
-                type: 'batch_organize',
-                current: i + 1,
-                total: operation.operations.length,
-                currentFile: path.basename(op.source)
-              });
-            }
-            
-          } catch (error) {
-            logger.error(`[FILE-OPS] ❌ Operation ${i+1} failed:`, error.message);
-            
-            results.push({
-              success: false,
-              source: op.source,
-              destination: op.destination,
-              error: error.message,
-              operation: op.type || 'move'
-            });
-            
-            failCount++;
           }
+          await serviceIntegration?.processingState?.completeOrganizeBatch(batchId);
+        } catch (fatal) {
+          logger.error('[FILE-OPS] Batch organize fatal error:', fatal);
         }
-        
+
         logger.info(`[FILE-OPS] Batch operation complete: ${successCount} success, ${failCount} failed`);
-        
         return {
           success: successCount > 0,
-          results: results,
-          successCount: successCount,
-          failCount: failCount,
-          summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`
+          results,
+          successCount,
+          failCount,
+          summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`,
+          batchId
         };
+      }
         
       default:
         logger.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
@@ -1725,6 +1796,9 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
       };
     }
     
+    // Crash-safe resume: mark analysis started
+    try { await serviceIntegration?.processingState?.markAnalysisStart(filePath); } catch {}
+    
     // Get current smart folders to pass to analysis
     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
     const folderCategories = smartFolders.map(f => ({
@@ -1750,10 +1824,40 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
       extractionMethod: result.extractionMethod
     });
     
+    // Record analysis in history (non-blocking best-effort)
+    try {
+      const stats = await fs.stat(filePath);
+      const fileInfo = {
+        path: filePath,
+        size: stats.size,
+        lastModified: stats.mtimeMs,
+        mimeType: null
+      };
+      const normalized = {
+        subject: result.suggestedName || path.basename(filePath),
+        category: result.category || 'uncategorized',
+        tags: Array.isArray(result.keywords) ? result.keywords : [],
+        confidence: typeof result.confidence === 'number' ? result.confidence : 0,
+        summary: result.purpose || result.summary || '',
+        extractedText: result.extractedText || null,
+        model: result.model || 'llm',
+        processingTime: duration,
+        smartFolder: result.smartFolder || null,
+        newName: result.suggestedName || null,
+        renamed: Boolean(result.suggestedName)
+      };
+      await serviceIntegration?.analysisHistory?.recordAnalysis(fileInfo, normalized);
+    } catch (historyError) {
+      logger.warn('[ANALYSIS-HISTORY] Failed to record document analysis:', historyError.message);
+    }
+    // Mark completion
+    try { await serviceIntegration?.processingState?.markAnalysisComplete(filePath); } catch {}
+    
     return result;
   } catch (error) {
     logger.error(`[IPC] Document analysis failed for ${filePath}:`, error);
     systemAnalytics.recordFailure(error);
+    try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
     return {
       error: error.message,
       suggestedName: path.basename(filePath, path.extname(filePath)),
@@ -1768,6 +1872,9 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) =
 ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
   try {
     logger.info(`[IPC] Starting image analysis for: ${filePath}`);
+    
+    // Crash-safe resume: mark analysis started
+    try { await serviceIntegration?.processingState?.markAnalysisStart(filePath); } catch {}
     
     // Get current smart folders to pass to analysis
     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
@@ -1788,9 +1895,39 @@ ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
       confidence: result.confidence
     });
     
+    // Record analysis in history (non-blocking best-effort)
+    try {
+      const stats = await fs.stat(filePath);
+      const fileInfo = {
+        path: filePath,
+        size: stats.size,
+        lastModified: stats.mtimeMs,
+        mimeType: null
+      };
+      const normalized = {
+        subject: result.suggestedName || path.basename(filePath),
+        category: result.category || 'uncategorized',
+        tags: Array.isArray(result.keywords) ? result.keywords : [],
+        confidence: typeof result.confidence === 'number' ? result.confidence : 0,
+        summary: result.purpose || result.summary || '',
+        extractedText: result.extractedText || null,
+        model: result.model || 'vision',
+        processingTime: 0,
+        smartFolder: result.smartFolder || null,
+        newName: result.suggestedName || null,
+        renamed: Boolean(result.suggestedName)
+      };
+      await serviceIntegration?.analysisHistory?.recordAnalysis(fileInfo, normalized);
+    } catch (historyError) {
+      logger.warn('[ANALYSIS-HISTORY] Failed to record image analysis:', historyError.message);
+    }
+    // Mark completion
+    try { await serviceIntegration?.processingState?.markAnalysisComplete(filePath); } catch {}
+    
     return result;
   } catch (error) {
     logger.error(`[IPC] Image analysis failed for ${filePath}:`, error);
+    try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
     return {
       error: error.message,
       suggestedName: path.basename(filePath, path.extname(filePath)),
@@ -1871,10 +2008,15 @@ if (!gotTheLock) {
     // Performance optimizations
     app.commandLine.appendSwitch('enable-zero-copy');
     app.commandLine.appendSwitch('enable-hardware-overlays');
+    app.commandLine.appendSwitch('enable-features', 'Vulkan,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoder,VaapiVideoEncoder');
     
     logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
   } else {
-    logger.info('[DEVELOPMENT] GPU acceleration using default settings');
+    // Even in dev, prefer GPU acceleration where possible
+    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    app.commandLine.appendSwitch('enable-zero-copy');
+    app.commandLine.appendSwitch('enable-features', 'Vulkan,CanvasOopRasterization,UseSkiaRenderer');
+    logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
   }
 
   // Initialize services after app is ready
@@ -1888,6 +2030,16 @@ if (!gotTheLock) {
       serviceIntegration = new ServiceIntegration();
       await serviceIntegration.initialize();
       logger.info('[MAIN] Service integration initialized successfully');
+      
+      // Resume any incomplete organize batches (best-effort)
+      try {
+        const incompleteBatches = serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() || [];
+        if (incompleteBatches.length > 0) {
+          logger.warn(`[RESUME] Found ${incompleteBatches.length} incomplete organize batch(es). They will resume when a new organize request starts.`);
+        }
+      } catch (resumeErr) {
+        logger.warn('[RESUME] Failed to check incomplete batches:', resumeErr.message);
+      }
       
       // Verify AI models on startup
       const ModelVerifier = require('./services/ModelVerifier');
@@ -1906,6 +2058,8 @@ if (!gotTheLock) {
       }
       
       createWindow();
+      // Fire-and-forget resume of incomplete batches shortly after window is ready
+      setTimeout(() => { resumeIncompleteBatches(); }, 500);
       
       // Load Ollama config
       await loadOllamaConfig();
@@ -2235,8 +2389,20 @@ logger.debug('[DEBUG] Process should stay alive. If you see this and the app clo
 // Analysis History handlers
 ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async (event, options = {}) => {
   try {
-    const limit = options.limit || 50;
-    return await serviceIntegration?.analysisHistory?.getRecentAnalysis(limit) || [];
+    const { all = false, limit, offset = 0 } = options || {};
+    if (all || limit === 'all') {
+      const full = await serviceIntegration?.analysisHistory?.getRecentAnalysis(Number.MAX_SAFE_INTEGER) || [];
+      if (offset > 0) {
+        return full.slice(offset);
+      }
+      return full;
+    }
+    const effLimit = typeof limit === 'number' && limit > 0 ? limit : 50;
+    if (offset > 0) {
+      const interim = await serviceIntegration?.analysisHistory?.getRecentAnalysis(effLimit + offset) || [];
+      return interim.slice(offset, offset + effLimit);
+    }
+    return await serviceIntegration?.analysisHistory?.getRecentAnalysis(effLimit) || [];
   } catch (error) {
     logger.error('Failed to get analysis history:', error);
     return [];

@@ -2208,131 +2208,140 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', { current: 0, total: files.length });
     actions.setPhaseData('currentAnalysisFile', '');
     const results = [];
+    const concurrency = Math.max(1, Math.min(Number(settings.maxConcurrentAnalysis) || 3, 8));
     
     try {
       addNotification(`Starting AI analysis of ${files.length} files...`, 'info');
       
-      // Process files with better error handling and progress tracking
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.name || file.path.split(/[/\\]/).pop();
-        
-        // Update progress BEFORE starting analysis
-        setCurrentAnalysisFile(fileName);
-        setAnalysisProgress({ current: i, total: files.length });
-        actions.setPhaseData('currentAnalysisFile', fileName);
-        actions.setPhaseData('analysisProgress', { current: i, total: files.length });
-        
-        // Update file state to analyzing
-        updateFileState(file.path, 'analyzing', { fileName });
-        
-        // Allow UI to paint without adding artificial per-file latency
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        addNotification(`Analyzing file ${i + 1}/${files.length}: ${fileName}`, 'info');
-        
-        try {
-          // Use existing file stats if available, avoid additional API calls
-          const fileInfo = {
-            ...file,
-            size: file.size || 0,
-            created: file.created,
-            modified: file.modified
-          };
-          
-          console.log(`[ANALYSIS-DEBUG] Starting analysis for: ${fileName}`);
-          console.log(`[ANALYSIS-DEBUG] File path: ${file.path}`);
-          console.log(`[ANALYSIS-DEBUG] File size: ${fileInfo.size} bytes`);
-          
-          // Perform AI analysis with timeout
-          const analysisPromise = window.electronAPI.files.analyze(file.path);
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), 180000)
-          );
-          
-          const analysis = await Promise.race([analysisPromise, timeoutPromise]);
-          
-          console.log(`[ANALYSIS-DEBUG] Raw analysis result for ${fileName}:`, analysis);
-          
-          if (analysis && !analysis.error) {
-            // Apply naming convention to suggested name
-            const enhancedAnalysis = {
-              ...analysis,
-              suggestedName: generatePreviewName(analysis.suggestedName || fileName),
-              namingConvention: {
-                convention: namingConvention,
-                dateFormat,
-                caseConvention,
-                separator
-              }
+      // Process files with concurrency
+      let index = 0;
+      const worker = async () => {
+        while (true) {
+          const i = index++;
+          if (i >= files.length) break;
+
+          const file = files[i];
+          const fileName = file.name || file.path.split(/[/\\]/).pop();
+
+          // Update progress BEFORE starting analysis
+          setCurrentAnalysisFile(fileName);
+          setAnalysisProgress({ current: i, total: files.length });
+          actions.setPhaseData('currentAnalysisFile', fileName);
+          actions.setPhaseData('analysisProgress', { current: i, total: files.length });
+
+          // Update file state to analyzing
+          updateFileState(file.path, 'analyzing', { fileName });
+
+          // Allow UI to paint without adding artificial per-file latency
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          addNotification(`Analyzing file ${i + 1}/${files.length}: ${fileName}`, 'info');
+
+          try {
+            // Use existing file stats if available, avoid additional API calls
+            const fileInfo = {
+              ...file,
+              size: file.size || 0,
+              created: file.created,
+              modified: file.modified,
             };
-            
+
+            console.log(`[ANALYSIS-DEBUG] Starting analysis for: ${fileName}`);
+            console.log(`[ANALYSIS-DEBUG] File path: ${file.path}`);
+            console.log(`[ANALYSIS-DEBUG] File size: ${fileInfo.size} bytes`);
+
+            // Perform AI analysis with timeout
+            const analysisPromise = window.electronAPI.files.analyze(file.path);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), 180000)
+            );
+
+            const analysis = await Promise.race([analysisPromise, timeoutPromise]);
+
+            console.log(`[ANALYSIS-DEBUG] Raw analysis result for ${fileName}:`, analysis);
+
+            if (analysis && !analysis.error) {
+              // Apply naming convention to suggested name
+              const enhancedAnalysis = {
+                ...analysis,
+                suggestedName: generatePreviewName(analysis.suggestedName || fileName),
+                namingConvention: {
+                  convention: namingConvention,
+                  dateFormat,
+                  caseConvention,
+                  separator,
+                },
+              };
+
+              const result = {
+                ...fileInfo,
+                analysis: enhancedAnalysis,
+                status: 'analyzed',
+                analyzedAt: new Date().toISOString(),
+              };
+
+              results.push(result);
+
+              // Update file state to ready
+              updateFileState(file.path, 'ready', {
+                analysis: enhancedAnalysis,
+                analyzedAt: new Date().toISOString(),
+              });
+
+              addNotification(`✓ Analysis complete for: ${fileName}`, 'success');
+            } else {
+              console.error('Analysis failed for file:', fileName, analysis?.error);
+
+              const result = {
+                ...fileInfo,
+                analysis: null,
+                error: analysis?.error || 'Analysis failed',
+                status: 'failed',
+                analyzedAt: new Date().toISOString(),
+              };
+
+              results.push(result);
+
+              // Update file state to error
+              updateFileState(file.path, 'error', {
+                error: analysis?.error || 'Analysis failed',
+                analyzedAt: new Date().toISOString(),
+              });
+
+              addNotification(`⚠️ Analysis failed for: ${fileName}`, 'warning');
+            }
+          } catch (error) {
+            console.error('Error analyzing file:', fileName, error);
+
             const result = {
-              ...fileInfo,
-              analysis: enhancedAnalysis,
-              status: 'analyzed',
-              analyzedAt: new Date().toISOString()
-            };
-            
-            results.push(result);
-            
-            // Update file state to ready
-            updateFileState(file.path, 'ready', { 
-              analysis: enhancedAnalysis,
-              analyzedAt: new Date().toISOString()
-            });
-            
-            addNotification(`✓ Analysis complete for: ${fileName}`, 'success');
-          } else {
-            console.error('Analysis failed for file:', fileName, analysis?.error);
-            
-            const result = {
-              ...fileInfo,
+              ...file,
               analysis: null,
-              error: analysis?.error || 'Analysis failed',
+              error: error.message,
               status: 'failed',
-              analyzedAt: new Date().toISOString()
+              analyzedAt: new Date().toISOString(),
             };
-            
+
             results.push(result);
-            
+
             // Update file state to error
-            updateFileState(file.path, 'error', { 
-              error: analysis?.error || 'Analysis failed',
-              analyzedAt: new Date().toISOString()
+            updateFileState(file.path, 'error', {
+              error: error.message,
+              analyzedAt: new Date().toISOString(),
             });
-            
-            addNotification(`⚠️ Analysis failed for: ${fileName}`, 'warning');
+
+            addNotification(`❌ Error analyzing: ${fileName}`, 'error');
           }
-        } catch (error) {
-          console.error('Error analyzing file:', fileName, error);
-          
-          const result = {
-            ...file,
-            analysis: null,
-            error: error.message,
-            status: 'failed',
-            analyzedAt: new Date().toISOString()
-          };
-          
-          results.push(result);
-          
-          // Update file state to error
-          updateFileState(file.path, 'error', { 
-            error: error.message,
-            analyzedAt: new Date().toISOString()
-          });
-          
-          addNotification(`❌ Error analyzing: ${fileName}`, 'error');
+
+          // Update progress AFTER processing each file
+          setAnalysisProgress((prev) => ({ current: Math.min(files.length, prev.current + 1), total: files.length }));
+          actions.setPhaseData('analysisProgress', { current: Math.min(files.length, i + 1), total: files.length });
+          // Yield back to the event loop
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        
-        // Update progress AFTER processing each file
-        setAnalysisProgress({ current: i + 1, total: files.length });
-        actions.setPhaseData('analysisProgress', { current: i + 1, total: files.length });
-        
-        // Yield back to the event loop
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
+      };
+
+      const workers = Array.from({ length: concurrency }, () => worker());
+      await Promise.all(workers);
       
       setAnalysisResults(results);
       
@@ -2848,7 +2857,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
     try {
       const [stats, history] = await Promise.all([
         window.electronAPI.analysisHistory.getStatistics(),
-        window.electronAPI.analysisHistory.get({ limit: 50 })
+        window.electronAPI.analysisHistory.get({ all: true })
       ]);
       
       setAnalysisStats(stats);
@@ -2865,7 +2874,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
     if (!searchQuery.trim()) return;
     
     try {
-      const results = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 50 });
+      const results = await window.electronAPI.analysisHistory.search(searchQuery, { limit: 200 });
       setHistoryData(results);
     } catch (error) {
       console.error('Search failed:', error);

@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { Ollama } = require('ollama');
 const SettingsService = require('../services/SettingsService');
+const { buildOllamaOptions } = require('../services/PerformanceService');
 const sharp = require('sharp');
 
 // App configuration for image analysis - Optimized for speed
@@ -68,12 +69,20 @@ If you cannot determine a field, omit it from the JSON. Do not make up informati
 Analyze this image:`;
 
     const client = await getOllamaClient();
-    const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    let model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    // Validate selected model is vision-capable; fallback if likely a text-only/embedding model
+    const lower = String(model).toLowerCase();
+    const isVision = lower.includes('llava') || lower.includes('vision') || lower.includes('gemma3') || lower.includes('moondream') || lower.includes('bakllava');
+    if (!isVision) {
+      model = AppConfig.ai.imageAnalysis.defaultModel;
+    }
+    const perfOptions = await buildOllamaOptions('vision');
     const response = await client.generate({
       model,
       prompt,
       images: [imageBase64],
       options: {
+        ...perfOptions,
         temperature: AppConfig.ai.imageAnalysis.temperature,
         num_predict: AppConfig.ai.imageAnalysis.maxTokens,
       },
@@ -273,11 +282,13 @@ async function extractTextFromImage(filePath) {
 
     const client = await getOllamaClient();
     const model = (await settingsServiceImg.getSettings()).visionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const perfOptions = await buildOllamaOptions('vision');
     const response = await client.generate({
       model,
       prompt,
       images: [imageBase64],
       options: {
+        ...perfOptions,
         temperature: 0.1, // Lower temperature for text extraction
         num_predict: 2000,
       },

@@ -234,9 +234,12 @@ class ModelVerifier {
 
     // Test embeddings model
     try {
+      const { buildOllamaOptions } = require('./PerformanceService');
+      const perfOptions = await buildOllamaOptions('embeddings');
       const embeddingTest = await this.ollama.embeddings({
         model: 'mxbai-embed-large',
-        prompt: 'test'
+        prompt: 'test',
+        options: { ...perfOptions }
       });
       
       tests.push({

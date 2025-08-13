@@ -15,7 +15,7 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
 
     for (const batch of incomplete) {
       const total = batch.operations.length;
-      for (let i = 0; i < total; i++) {
+      for (let i = 0; i < total; i += 1) {
         const op = batch.operations[i];
         if (op.status === 'done') {
           const win = getMainWindow?.();

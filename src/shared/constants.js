@@ -69,9 +69,8 @@ const IPC_CHANNELS = {
   ANALYSIS: {
     ANALYZE_DOCUMENT: 'analyze-document',
     ANALYZE_IMAGE: 'analyze-image',
-    ANALYZE_AUDIO: 'analyze-audio',
-    EXTRACT_IMAGE_TEXT: 'extract-text-from-image',
-    TRANSCRIBE_AUDIO: 'transcribe-audio'
+    EXTRACT_IMAGE_TEXT: 'extract-text-from-image'
+    
   },
   
   // Settings
@@ -195,7 +194,6 @@ const SHORTCUTS = {
 // File size limits
 const LIMITS = {
   MAX_FILE_SIZE: 100 * 1024 * 1024, // 100MB
-  MAX_BATCH_SIZE: 50,
   MAX_PATH_LENGTH: 260,
   MAX_FILENAME_LENGTH: 255
 };
@@ -255,6 +253,17 @@ const PROCESSING_LIMITS = {
   RETRY_ATTEMPTS: 3
 };
 
+// Renderer/UI specific constants
+const UI_WORKFLOW = {
+  RESTORE_MAX_AGE_MS: 60 * 60 * 1000, // 1 hour
+  SAVE_DEBOUNCE_MS: 1000 // 1s
+};
+
+const RENDERER_LIMITS = {
+  FILE_STATS_BATCH_SIZE: 25,
+  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000 // 3 minutes
+};
+
 // CommonJS exports for Node.js compatibility (main process)
 module.exports = {
   PHASES,
@@ -279,5 +288,7 @@ module.exports = {
   ALL_SUPPORTED_EXTENSIONS,
   DEFAULT_AI_MODELS,
   FILE_SIZE_LIMITS,
-  PROCESSING_LIMITS
+  PROCESSING_LIMITS,
+  UI_WORKFLOW,
+  RENDERER_LIMITS
 }; 

@@ -1,0 +1,75 @@
+import React from 'react';
+import { PHASES } from '../../shared/constants';
+import { usePhase } from '../contexts/PhaseContext';
+import Button from '../components/ui/Button';
+
+function WelcomePhase() {
+  const { actions } = usePhase();
+
+  return (
+    <div className="container-narrow text-center py-fib-34 animate-slide-up">
+      <div className="mb-fib-21">
+        <header role="banner">
+          <h1 id="welcome-heading" className="heading-primary text-center" aria-level="1">
+            <span className="animate-float inline-block" role="img" aria-label="rocket">🚀</span> Welcome to{' '}
+            <span className="text-gradient inline-block">StratoSort</span>
+          </h1>
+        </header>
+        <p className="text-lg text-system-gray-600 mb-fib-21 leading-relaxed">
+          AI-powered file organization that learns your preferences and automatically sorts your files into smart folders.
+        </p>
+      </div>
+
+      <div className="space-y-fib-13" role="navigation" aria-label="Main actions">
+        <Button 
+          onClick={() => actions.advancePhase(PHASES.DISCOVER)}
+          variant="primary"
+          className="text-lg px-fib-21 py-fib-13"
+          aria-describedby="organize-help"
+        >
+          <span role="img" aria-label="folder">🗂️</span> Organize My Files Now
+        </Button>
+        <div id="organize-help" className="text-xs text-system-gray-500 mt-fib-3">
+          Start organizing files immediately with AI-powered analysis.
+        </div>
+        
+        <Button 
+          onClick={() => actions.advancePhase(PHASES.SETUP)}
+          variant="secondary"
+          className="text-lg px-fib-21 py-fib-13"
+          aria-describedby="setup-help"
+        >
+          <span role="img" aria-label="settings">⚙️</span> Setup Configuration First
+        </Button>
+        <div id="setup-help" className="text-xs text-system-gray-500 mt-fib-3">
+          Configure smart folders and AI settings before organizing files.
+        </div>
+      </div>
+
+      <div className="mt-fib-21 card-enhanced">
+        <h3 className="heading-tertiary text-center">How StratoSort Works:</h3>
+        <div className="grid md:grid-cols-3 gap-fib-13 text-sm text-system-gray-600">
+          <div className="text-center p-fib-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
+            <div className="text-3xl mb-fib-5 animate-bounce-subtle">🔍</div>
+            <strong className="text-system-gray-700">Discover</strong><br/>
+            <span className="text-muted">Select files or scan folders</span>
+          </div>
+          <div className="text-center p-fib-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
+            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{animationDelay: '0.1s'}}>🧠</div>
+            <strong className="text-system-gray-700">Analyze</strong><br/>
+            <span className="text-muted">AI analyzes content & suggests organization</span>
+          </div>
+          <div className="text-center p-fib-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
+            <div className="text-3xl mb-fib-5 animate-bounce-subtle" style={{animationDelay: '0.2s'}}>📂</div>
+            <strong className="text-system-gray-700">Organize</strong><br/>
+            <span className="text-muted">Review suggestions & auto-organize files</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default WelcomePhase;
+
+

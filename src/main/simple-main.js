@@ -77,6 +77,13 @@ function createWindow() {
 
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
+const registerFilesIpc = require('./ipc/files');
+const registerSmartFoldersIpc = require('./ipc/smartFolders');
+const registerUndoRedoIpc = require('./ipc/undoRedo');
+const registerAnalysisHistoryIpc = require('./ipc/analysisHistory');
+const registerSystemIpc = require('./ipc/system');
+const registerOllamaIpc = require('./ipc/ollama');
+const registerAnalysisIpc = require('./ipc/analysis');
 
 // NOTE: Old handle-file-selection handler removed - using IPC_CHANNELS.FILES.SELECT instead
 
@@ -1851,6 +1858,21 @@ if (!gotTheLock) {
         }
       }
       
+      // Register IPC groups now that services and state are ready
+      const getMainWindow = () => mainWindow;
+      const getServiceIntegration = () => serviceIntegration;
+      const getCustomFolders = () => customFolders;
+      const setCustomFolders = (folders) => { customFolders = folders; };
+
+      // Grouped IPC registration
+      registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration });
+      registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders });
+      registerUndoRedoIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
+      registerAnalysisHistoryIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
+      registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration });
+      registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel });
+      registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, serviceIntegration, getCustomFolders });
+
       createWindow();
       // Fire-and-forget resume of incomplete batches shortly after window is ready
       setTimeout(() => { resumeIncompleteBatches(); }, 500);

@@ -1,7 +1,115 @@
 const path = require('path');
 const fs = require('fs').promises;
+const { app } = require('electron');
 
 function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration }) {
+  // Select files (and folders scanned shallowly)
+  ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
+    logger.info('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
+    const mainWindow = getMainWindow();
+    logger.info('[MAIN-FILE-SELECT] mainWindow exists?', !!mainWindow);
+    logger.info('[MAIN-FILE-SELECT] mainWindow visible?', mainWindow?.isVisible());
+    logger.info('[MAIN-FILE-SELECT] mainWindow focused?', mainWindow?.isFocused());
+    try {
+      if (mainWindow && !mainWindow.isFocused()) {
+        logger.info('[MAIN-FILE-SELECT] Focusing window before dialog...');
+        mainWindow.focus();
+      }
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        if (!mainWindow.isFocused()) mainWindow.focus();
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      const result = await dialog.showOpenDialog(mainWindow || null, {
+        properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
+        title: 'Select Files to Organize',
+        buttonLabel: 'Select Files',
+        filters: [
+          { name: 'All Supported Files', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'zip', 'rar', '7z', 'tar', 'gz'] },
+          { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
+          { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'] },
+          { name: 'Archives', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      logger.info('[MAIN-FILE-SELECT] Dialog closed, result:', result);
+      if (result.canceled || !result.filePaths.length) return { success: false, files: [] };
+      logger.info(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
+      const allFiles = [];
+      const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.zip', '.rar', '.7z', '.tar', '.gz'];
+      const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
+        if (depth > maxDepth) return [];
+        try {
+          const items = await fs.readdir(folderPath, { withFileTypes: true });
+          const foundFiles = [];
+          for (const item of items) {
+            const itemPath = path.join(folderPath, item.name);
+            if (item.isFile()) {
+              const ext = path.extname(item.name).toLowerCase();
+              if (supportedExts.includes(ext)) foundFiles.push(itemPath);
+            } else if (item.isDirectory() && !item.name.startsWith('.') && !item.name.startsWith('node_modules')) {
+              const subFiles = await scanFolder(itemPath, depth + 1, maxDepth);
+              foundFiles.push(...subFiles);
+            }
+          }
+          return foundFiles;
+        } catch (error) {
+          logger.warn(`[FILE-SELECTION] Error scanning folder ${folderPath}:`, error.message);
+          return [];
+        }
+      };
+      for (const selectedPath of result.filePaths) {
+        try {
+          const stats = await fs.stat(selectedPath);
+          if (stats.isFile()) {
+            const ext = path.extname(selectedPath).toLowerCase();
+            if (supportedExts.includes(ext)) {
+              allFiles.push(selectedPath);
+              logger.info(`[FILE-SELECTION] Added file: ${path.basename(selectedPath)}`);
+            }
+          } else if (stats.isDirectory()) {
+            logger.info(`[FILE-SELECTION] Scanning folder: ${selectedPath}`);
+            const folderFiles = await scanFolder(selectedPath);
+            allFiles.push(...folderFiles);
+            logger.info(`[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${path.basename(selectedPath)}`);
+          }
+        } catch (error) {
+          logger.warn(`[FILE-SELECTION] Error processing ${selectedPath}:`, error.message);
+        }
+      }
+      const uniqueFiles = [...new Set(allFiles)];
+      logger.info(`[FILE-SELECTION] Total files collected: ${uniqueFiles.length} (${allFiles.length - uniqueFiles.length} duplicates removed)`);
+      return { success: true, files: uniqueFiles, summary: { totalSelected: result.filePaths.length, filesFound: uniqueFiles.length, duplicatesRemoved: allFiles.length - uniqueFiles.length } };
+    } catch (error) {
+      logger.error('[MAIN-FILE-SELECT] Failed to select files:', error);
+      return { success: false, error: error.message, files: [] };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
+    try {
+      const result = await dialog.showOpenDialog(getMainWindow() || null, {
+        properties: ['openDirectory', 'dontAddToRecent'],
+        title: 'Select Directory to Scan',
+        buttonLabel: 'Select Directory'
+      });
+      if (result.canceled || !result.filePaths.length) return { success: false, folder: null };
+      return { success: true, folder: result.filePaths[0] };
+    } catch (error) {
+      logger.error('[IPC] Directory selection failed:', error);
+      return { success: false, folder: null, error: error.message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, async () => {
+    try { return app.getPath('documents'); } catch (error) { logger.error('Failed to get documents path:', error); return null; }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
+    try { const stats = await fs.stat(filePath); return { size: stats.size, isDirectory: stats.isDirectory(), isFile: stats.isFile(), modified: stats.mtime, created: stats.birthtime }; }
+    catch (error) { logger.error('Failed to get file stats:', error); return null; }
+  });
   ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, basePath, folderName) => {
     try {
       const folderPath = path.join(basePath, folderName);
@@ -168,6 +276,38 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EACCES' || error.code === 'EPERM') { errorCode = 'PERMISSION_DENIED'; userMessage = 'Permission denied'; }
       else if (error.code === 'EEXIST') { errorCode = 'FILE_EXISTS'; userMessage = 'Destination file already exists'; }
       return { success: false, error: userMessage, errorCode, details: error.message };
+    }
+  });
+
+  // Delete empty folder
+  ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
+    try {
+      const normalizedPath = path.resolve(fullPath);
+      try {
+        const stats = await fs.stat(normalizedPath);
+        if (!stats.isDirectory()) {
+          return { success: false, error: 'Path is not a directory', code: 'NOT_DIRECTORY' };
+        }
+      } catch (statError) {
+        if (statError.code === 'ENOENT') {
+          return { success: true, message: 'Folder already deleted or does not exist', existed: false };
+        }
+        throw statError;
+      }
+      const contents = await fs.readdir(normalizedPath);
+      if (contents.length > 0) {
+        return { success: false, error: `Directory not empty - contains ${contents.length} items`, code: 'NOT_EMPTY', itemCount: contents.length };
+      }
+      await fs.rmdir(normalizedPath);
+      logger.info('[FILE-OPS] Deleted folder:', normalizedPath);
+      return { success: true, path: normalizedPath, message: 'Folder deleted successfully' };
+    } catch (error) {
+      logger.error('[FILE-OPS] Error deleting folder:', error);
+      let userMessage = 'Failed to delete folder';
+      if (error.code === 'EACCES' || error.code === 'EPERM') userMessage = 'Permission denied - check folder permissions';
+      else if (error.code === 'ENOTEMPTY') userMessage = 'Directory not empty - contains files or subfolders';
+      else if (error.code === 'EBUSY') userMessage = 'Directory is in use by another process';
+      return { success: false, error: userMessage, details: error.message, code: error.code };
     }
   });
 }

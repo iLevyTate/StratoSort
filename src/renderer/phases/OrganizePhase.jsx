@@ -46,6 +46,23 @@ function OrganizePhase() {
     loadSmartFoldersIfMissing();
   }, []);
 
+  // Subscribe to main process progress events for batch organize
+  useEffect(() => {
+    const cleanup = window.electronAPI?.events?.onOperationProgress?.((payload) => {
+      try {
+        if (payload && payload.type === 'batch_organize') {
+          const next = {
+            current: typeof payload.current === 'number' ? payload.current : 0,
+            total: typeof payload.total === 'number' ? payload.total : 0,
+            currentFile: payload.currentFile || ''
+          };
+          setBatchProgress(next);
+        }
+      } catch {}
+    });
+    return () => { if (typeof cleanup === 'function') cleanup(); };
+  }, []);
+
   useEffect(() => {
     const loadPersistedData = () => {
       const persistedStates = phaseData.fileStates || {};
@@ -131,35 +148,77 @@ function OrganizePhase() {
   const handleOrganizeFiles = async () => {
     try {
       setIsOrganizing(true);
-      const results = [];
       const filesToProcess = unprocessedFiles.filter(f => f.analysis);
       setBatchProgress({ current: 0, total: filesToProcess.length, currentFile: '' });
-      for (let i = 0; i < filesToProcess.length; i++) {
-        const file = filesToProcess[i];
-        const edits = editingFiles[i] || {};
-        const fileWithEdits = getFileWithEdits(file, i);
+      if (filesToProcess.length === 0) {
+        addNotification('No files to organize', 'warning');
+        return;
+      }
+
+      // Build operations for main process
+      const operations = filesToProcess.map((file, index) => {
+        const edits = editingFiles[index] || {};
+        const fileWithEdits = getFileWithEdits(file, index);
         const currentCategory = edits.category || fileWithEdits.analysis?.category;
         const smartFolder = findSmartFolderForCategory(currentCategory);
         const destinationDir = smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
         const newName = edits.suggestedName || fileWithEdits.analysis?.suggestedName || file.name;
-        setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: file.name });
-        // Simulate operation success; wire to electron API if desired
-        results.push({
-          originalPath: file.path,
-          path: `${destinationDir}/${newName}`,
-          originalName: file.name,
-          newName,
-          smartFolder: smartFolder?.name || currentCategory || 'Uncategorized',
-          organizedAt: new Date().toISOString()
-        });
-        // Brief yield to keep UI responsive
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise(r => setTimeout(r, 0));
+        const destinationPath = `${destinationDir}/${newName}`;
+        return { type: 'move', source: file.path, destination: destinationPath };
+      });
+
+      let executedResults = null;
+      await executeAction({
+        type: 'batch_operation',
+        description: `Organize ${filesToProcess.length} files`,
+        execute: async () => {
+          const resp = await window.electronAPI.files.performOperation({ type: 'batch_organize', operations });
+          executedResults = resp;
+          return resp;
+        },
+        undo: async () => {
+          const results = executedResults?.results || [];
+          const reverseOps = results.filter(r => r && r.success).map(r => ({ type: 'move', source: r.destination, destination: r.source }));
+          if (reverseOps.length === 0) return { success: true, results: [] };
+          return await window.electronAPI.files.performOperation({ type: 'batch_organize', operations: reverseOps });
+        },
+        redo: async () => {
+          return await window.electronAPI.files.performOperation({ type: 'batch_organize', operations });
+        }
+      });
+
+      const response = executedResults;
+
+      if (!response || response.success !== true) {
+        const errorMsg = response && response.summary ? response.summary : 'Unknown error during organization';
+        addNotification(`Organization completed with issues: ${errorMsg}`, 'warning');
       }
-      setOrganizedFiles(prev => [...prev, ...results]);
-      markFilesAsProcessed(results.map(r => r.originalPath));
-      actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...results]);
-      addNotification(`Organized ${results.length} files`, 'success');
+
+      // Map results into UI-friendly structure
+      const nowIso = new Date().toISOString();
+      const completed = (response?.results || []).filter(r => r && r.success);
+      const organized = completed.map(r => {
+        const newPath = r.destination;
+        const newName = (newPath || '').split(/[\\/]/).pop() || '';
+        const originalName = (r.source || '').split(/[\\/]/).pop() || '';
+        return {
+          originalPath: r.source,
+          path: newPath,
+          originalName,
+          newName,
+          smartFolder: '',
+          organizedAt: nowIso
+        };
+      });
+
+      if (organized.length > 0) {
+        setOrganizedFiles(prev => [...prev, ...organized]);
+        markFilesAsProcessed(organized.map(r => r.originalPath));
+        actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...organized]);
+        addNotification(`Organized ${organized.length} files`, 'success');
+      } else {
+        addNotification('No files were organized', 'warning');
+      }
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');
     } finally {

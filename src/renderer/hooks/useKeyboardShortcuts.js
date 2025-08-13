@@ -6,33 +6,21 @@ import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constant
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
-  const { executeAction } = useUndoRedo();
+  const { undo, redo } = useUndoRedo();
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const handleKeyDown = async (event) => {
       // Ctrl/Cmd + Z for Undo
       if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
-          try {
-            addNotification('Use Ctrl+Z in organize phase for undo', 'info', 2000);
-          } catch (error) {
-            console.error('Undo shortcut failed:', error);
-          }
-        }
+        try { await undo(); } catch (error) { console.error('Undo shortcut failed:', error); }
       }
 
       // Ctrl/Cmd + Shift + Z for Redo
       if ((event.ctrlKey || event.metaKey) && event.key === 'z' && event.shiftKey) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
-          try {
-            addNotification('Use Ctrl+Shift+Z in organize phase for redo', 'info', 2000);
-          } catch (error) {
-            console.error('Redo shortcut failed:', error);
-          }
-        }
+        try { await redo(); } catch (error) { console.error('Redo shortcut failed:', error); }
       }
 
       // Ctrl/Cmd + , for Settings
@@ -80,7 +68,7 @@ export function useKeyboardShortcuts() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [actions, currentPhase, executeAction, addNotification, showSettings]);
+  }, [actions, currentPhase, undo, redo, addNotification, showSettings]);
 }
 
 

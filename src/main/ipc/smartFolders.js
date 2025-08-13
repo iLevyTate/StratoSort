@@ -1,7 +1,8 @@
 const path = require('path');
 const fs = require('fs').promises;
+const { Ollama } = require('ollama');
 
-function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders }) {
+function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders, buildOllamaOptions, getOllamaModel, scanDirectory }) {
   ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
     const customFolders = getCustomFolders();
     logger.info('[SMART-FOLDERS] Getting Smart Folders for UI:', customFolders.length);
@@ -18,6 +19,53 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
     const customFolders = getCustomFolders();
     logger.info('[SMART-FOLDERS] Getting Custom Folders for UI:', customFolders.length);
     return customFolders;
+  });
+
+  // Smart folder matching using embeddings/LLM with fallbacks
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, async (event, payload) => {
+    try {
+      const { text, smartFolders = [] } = payload || {};
+      if (!text || !Array.isArray(smartFolders) || smartFolders.length === 0) {
+        return { success: false, error: 'Invalid input for SMART_FOLDERS.MATCH' };
+      }
+
+      try {
+        const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+        const perfOptions = await buildOllamaOptions('embeddings');
+        const queryEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: text, options: { ...perfOptions } });
+        const scored = [];
+        for (const folder of smartFolders) {
+          const folderText = [folder.name, folder.description].filter(Boolean).join(' - ');
+          const folderEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: folderText, options: { ...perfOptions } });
+          const score = cosineSimilarity(queryEmbedding.embedding, folderEmbedding.embedding);
+          scored.push({ folder, score });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        const best = scored[0];
+        return { success: true, folder: best.folder, score: best.score, method: 'embeddings' };
+      } catch (e) {
+        try {
+          const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+          const genPerf = await buildOllamaOptions('text');
+          const prompt = `You are ranking folders for organizing a file. Given this description:\n"""${text}"""\nFolders:\n${smartFolders.map((f, i) => `${i + 1}. ${f.name} - ${f.description || ''}`).join('\n')}\nReturn JSON: { "index": <1-based best folder index>, "reason": "..." }`;
+          const resp = await ollama.generate({ model: getOllamaModel() || 'llama3.2:latest', prompt, format: 'json', options: { ...genPerf, temperature: 0.1, num_predict: 200 } });
+          const parsed = JSON.parse(resp.response);
+          const idx = Math.max(1, Math.min(smartFolders.length, parseInt(parsed.index, 10)));
+          return { success: true, folder: smartFolders[idx - 1], reason: parsed.reason, method: 'llm' };
+        } catch (llmErr) {
+          const scored = smartFolders.map(f => {
+            const textLower = text.toLowerCase();
+            const hay = [f.name, f.description].filter(Boolean).join(' ').toLowerCase();
+            let score = 0; textLower.split(/\W+/).forEach(w => { if (w && hay.includes(w)) score += 1; });
+            return { folder: f, score };
+          }).sort((a, b) => b.score - a.score);
+          return { success: true, folder: scored[0]?.folder || smartFolders[0], method: 'fallback' };
+        }
+      }
+    } catch (error) {
+      logger.error('[SMART_FOLDERS.MATCH] Failed:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
@@ -149,8 +197,40 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       return { success: false, error: error.message, errorCode: 'DELETE_FAILED' };
     }
   });
+
+  // Scan folder structure
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath) => {
+    try {
+      logger.info('[FOLDER-SCAN] Scanning folder structure:', rootPath);
+      // Reuse existing scanner (shallow aggregation is done in renderer today)
+      const items = await scanDirectory(rootPath);
+      // Flatten file-like items with basic filtering similar to prior inline implementation
+      const flatten = (nodes) => {
+        const out = [];
+        for (const n of nodes) {
+          if (n.type === 'file') out.push({ name: n.name, path: n.path, type: 'file', size: n.size });
+          if (Array.isArray(n.children)) out.push(...flatten(n.children));
+        }
+        return out;
+      };
+      const files = flatten(items);
+      logger.info('[FOLDER-SCAN] Found', files.length, 'supported files');
+      return { success: true, files };
+    } catch (error) {
+      logger.error('[FOLDER-SCAN] Error scanning folder structure:', error);
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 module.exports = registerSmartFoldersIpc;
+
+// Local utility
+function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
 
 

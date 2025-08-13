@@ -1,34 +1,24 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
-const path = require('path');
-const fs = require('fs').promises;
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 // const { performance } = require('perf_hooks'); // no longer used
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
 const { logger } = require('../shared/logger');
 
-// Import error handling system
-const { 
-  AnalysisError, 
-  ModelMissingError, 
-  FileProcessingError,
-  OllamaConnectionError 
-} = require('./errors/AnalysisError');
+// Import error handling system (not needed directly in this file)
 
 const { scanDirectory } = require('./folderScanner');
-const { getOrganizationSuggestions } = require('./llmService');
+// const { getOrganizationSuggestions } = require('./llmService'); // not used currently
 const {
   getOllama,
   getOllamaModel,
   getOllamaVisionModel,
   setOllamaModel,
   setOllamaVisionModel,
-  getOllamaHost,
   setOllamaHost,
   loadOllamaConfig,
-  getOllamaConfigPath
 } = require('./ollamaUtils');
-const ModelManager = require('./services/ModelManager');
+// const ModelManager = require('./services/ModelManager'); // not used currently
 const { buildOllamaOptions } = require('./services/PerformanceService');
 const SettingsService = require('./services/SettingsService');
 
@@ -54,7 +44,7 @@ let serviceIntegration;
 let settingsService;
 
 // Custom folders helpers
-const { getCustomFoldersPath, loadCustomFolders, saveCustomFolders } = require('./core/customFolders');
+const { loadCustomFolders, saveCustomFolders } = require('./core/customFolders');
 
 // System monitoring and analytics
 const systemAnalytics = require('./core/systemAnalytics');
@@ -164,7 +154,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
+  app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
     // Someone tried to run a second instance, focus our window instead
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -326,80 +316,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Keep the process alive for debugging
 logger.debug('[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.');
 
-// Analysis History handlers
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET, async (event, options = {}) => {
-  try {
-    const { all = false, limit, offset = 0 } = options || {};
-    if (all || limit === 'all') {
-      const full = await serviceIntegration?.analysisHistory?.getRecentAnalysis(Number.MAX_SAFE_INTEGER) || [];
-      if (offset > 0) {
-        return full.slice(offset);
-      }
-      return full;
-    }
-    const effLimit = typeof limit === 'number' && limit > 0 ? limit : 50;
-    if (offset > 0) {
-      const interim = await serviceIntegration?.analysisHistory?.getRecentAnalysis(effLimit + offset) || [];
-      return interim.slice(offset, offset + effLimit);
-    }
-    return await serviceIntegration?.analysisHistory?.getRecentAnalysis(effLimit) || [];
-  } catch (error) {
-    logger.error('Failed to get analysis history:', error);
-    return [];
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, async (event, query = '', options = {}) => {
-  try {
-    return await serviceIntegration?.analysisHistory?.searchAnalysis(query, options) || [];
-  } catch (error) {
-    logger.error('Failed to search analysis history:', error);
-    return [];
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, async (event, filePath) => {
-  try {
-    return await serviceIntegration?.analysisHistory?.getAnalysisByPath(filePath) || null;
-  } catch (error) {
-    logger.error('Failed to get file analysis history:', error);
-    return null;
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR, async () => {
-  try {
-    await serviceIntegration?.analysisHistory?.createDefaultStructures();
-    return { success: true };
-  } catch (error) {
-    logger.error('Failed to clear analysis history:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, async (event, format = 'json') => {
-  try {
-    const history = await serviceIntegration?.analysisHistory?.getRecentAnalysis(10000) || [];
-    if (format === 'json') {
-      return { success: true, data: JSON.stringify(history, null, 2) };
-    }
-    // Future: handle csv or other formats
-    return { success: true, data: history };
-  } catch (error) {
-    logger.error('Failed to export analysis history:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-// System metrics handler
-ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_METRICS, async () => {
-  try {
-    return await systemAnalytics.collectMetrics();
-  } catch (error) {
-    logger.error('Failed to collect system metrics:', error);
-    return {};
-  }
-});
+// All Analysis History and System metrics handlers are registered via ./ipc/* modules
 
 // Audio analysis handler REMOVED - audio analysis disabled
 // ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {

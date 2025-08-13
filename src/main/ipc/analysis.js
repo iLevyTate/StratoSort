@@ -1,11 +1,12 @@
 const path = require('path');
 const { performance } = require('perf_hooks');
 
-function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, serviceIntegration, getCustomFolders }) {
+function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, getServiceIntegration, getCustomFolders }) {
   ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) => {
     try {
       const startTime = performance.now();
       logger.info(`[IPC-ANALYSIS] Starting document analysis for: ${filePath}`);
+      const serviceIntegration = getServiceIntegration && getServiceIntegration();
       try { await serviceIntegration?.processingState?.markAnalysisStart(filePath); } catch {}
       const customFolders = getCustomFolders().filter(f => !f.isDefault || f.path);
       const folderCategories = customFolders.map(f => ({ name: f.name, description: f.description || '', id: f.id }));
@@ -23,6 +24,7 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
     } catch (error) {
       logger.error(`[IPC] Document analysis failed for ${filePath}:`, error);
       systemAnalytics.recordFailure(error);
+      const serviceIntegration = getServiceIntegration && getServiceIntegration();
       try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
       return { error: error.message, suggestedName: path.basename(filePath, path.extname(filePath)), category: 'documents', keywords: [], confidence: 0 };
     }
@@ -31,6 +33,7 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
   ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
     try {
       logger.info(`[IPC] Starting image analysis for: ${filePath}`);
+      const serviceIntegration = getServiceIntegration && getServiceIntegration();
       try { await serviceIntegration?.processingState?.markAnalysisStart(filePath); } catch {}
       const customFolders = getCustomFolders().filter(f => !f.isDefault || f.path);
       const folderCategories = customFolders.map(f => ({ name: f.name, description: f.description || '', id: f.id }));
@@ -46,6 +49,7 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
       return result;
     } catch (error) {
       logger.error(`[IPC] Image analysis failed for ${filePath}:`, error);
+      const serviceIntegration = getServiceIntegration && getServiceIntegration();
       try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
       return { error: error.message, suggestedName: path.basename(filePath, path.extname(filePath)), category: 'images', keywords: [], confidence: 0 };
     }

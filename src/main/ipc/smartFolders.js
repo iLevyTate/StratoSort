@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs').promises;
-const { Ollama } = require('ollama');
+const { getOllama: getOllamaClient } = require('../ollamaUtils');
 const { enhanceSmartFolderWithLLM } = require('../services/SmartFoldersLLMService');
 
 function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders, buildOllamaOptions, getOllamaModel, scanDirectory }) {
@@ -31,7 +31,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       }
 
       try {
-        const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+        const ollama = getOllamaClient();
         const perfOptions = await buildOllamaOptions('embeddings');
         const queryEmbedding = await ollama.embeddings({ model: 'mxbai-embed-large', prompt: text, options: { ...perfOptions } });
         const scored = [];
@@ -46,7 +46,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
         return { success: true, folder: best.folder, score: best.score, method: 'embeddings' };
       } catch (e) {
         try {
-          const ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+          const ollama = getOllamaClient();
           const genPerf = await buildOllamaOptions('text');
           const prompt = `You are ranking folders for organizing a file. Given this description:\n"""${text}"""\nFolders:\n${smartFolders.map((f, i) => `${i + 1}. ${f.name} - ${f.description || ''}`).join('\n')}\nReturn JSON: { "index": <1-based best folder index>, "reason": "..." }`;
           const resp = await ollama.generate({ model: getOllamaModel() || 'llama3.2:latest', prompt, format: 'json', options: { ...genPerf, temperature: 0.1, num_predict: 200 } });
@@ -115,7 +115,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       const folderIndex = customFolders.findIndex(f => f.id === folderId);
       if (folderIndex === -1) return { success: false, error: 'Folder not found', errorCode: 'FOLDER_NOT_FOUND' };
       if (updatedFolder.name) {
-        const illegalChars = /[<>:"|?*\x00-\x1f]/g;
+        const illegalChars = /[<>:"|?*\x00-\x1F]/g;
         if (illegalChars.test(updatedFolder.name)) {
           return { success: false, error: 'Folder name contains invalid characters. Please avoid: < > : " | ? *', errorCode: 'INVALID_FOLDER_NAME_CHARS' };
         }
@@ -123,7 +123,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
         if (existingFolder) return { success: false, error: `A smart folder with name "${updatedFolder.name}" already exists`, errorCode: 'FOLDER_NAME_EXISTS' };
       }
       if (updatedFolder.path) {
-        try {
+       try {
           const normalizedPath = path.resolve(updatedFolder.path.trim());
           const parentDir = path.dirname(normalizedPath);
           const parentStats = await fs.stat(parentDir);
@@ -218,7 +218,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       try {
         const parentStats = await fs.stat(parentDir);
         if (!parentStats.isDirectory()) return { success: false, error: `Parent directory "${parentDir}" is not a directory`, errorCode: 'PARENT_NOT_DIRECTORY' };
-        const tempFile = path.join(parentDir, `.stratotest_${Date.now()}`);
+         const tempFile = path.join(parentDir, `.stratotest_${Date.now()}`);
         try { await fs.writeFile(tempFile, 'test'); await fs.unlink(tempFile); } catch { return { success: false, error: `No write permission in parent directory "${parentDir}"`, errorCode: 'PARENT_NOT_WRITABLE' }; }
       } catch { return { success: false, error: `Parent directory "${parentDir}" does not exist or is not accessible`, errorCode: 'PARENT_NOT_ACCESSIBLE' }; }
 

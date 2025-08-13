@@ -38,7 +38,7 @@ function registerAllIpc({
   registerAnalysisHistoryIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
   registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration });
   registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel });
-  registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, serviceIntegration: getServiceIntegration(), getCustomFolders });
+  registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, getServiceIntegration, getCustomFolders });
   registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel });
 }
 

@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { app } = require('electron');
+const { SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_ARCHIVE_EXTENSIONS, ACTION_TYPES } = require('../../shared/constants');
 
 function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration }) {
   // Select files (and folders scanned shallowly)
@@ -25,19 +26,31 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
         properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
         title: 'Select Files to Organize',
         buttonLabel: 'Select Files',
-        filters: [
-          { name: 'All Supported Files', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'zip', 'rar', '7z', 'tar', 'gz'] },
-          { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
-          { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'] },
-          { name: 'Archives', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
+        filters: (() => {
+          const stripDot = (exts) => exts.map((e) => e.startsWith('.') ? e.slice(1) : e);
+          const docs = stripDot([...SUPPORTED_DOCUMENT_EXTENSIONS, '.txt', '.md', '.rtf']);
+          const images = stripDot(SUPPORTED_IMAGE_EXTENSIONS);
+          const archives = stripDot(SUPPORTED_ARCHIVE_EXTENSIONS);
+          const allSupported = Array.from(new Set([...docs, ...images, ...archives]));
+          return [
+            { name: 'All Supported Files', extensions: allSupported },
+            { name: 'Documents', extensions: docs },
+            { name: 'Images', extensions: images },
+            { name: 'Archives', extensions: archives },
+            { name: 'All Files', extensions: ['*'] }
+          ];
+        })()
       });
       logger.info('[MAIN-FILE-SELECT] Dialog closed, result:', result);
       if (result.canceled || !result.filePaths.length) return { success: false, files: [] };
       logger.info(`[FILE-SELECTION] Selected ${result.filePaths.length} items`);
       const allFiles = [];
-      const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.zip', '.rar', '.7z', '.tar', '.gz'];
+      const supportedExts = Array.from(new Set([
+        ...SUPPORTED_DOCUMENT_EXTENSIONS,
+        ...SUPPORTED_IMAGE_EXTENSIONS,
+        ...SUPPORTED_ARCHIVE_EXTENSIONS,
+        '.txt', '.md', '.rtf'
+      ]));
       const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
         if (depth > maxDepth) return [];
         try {
@@ -169,6 +182,12 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       switch (operation.type) {
         case 'move':
           await fs.rename(operation.source, operation.destination);
+          try {
+            await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.FILE_MOVE, {
+              originalPath: operation.source,
+              newPath: operation.destination
+            });
+          } catch {}
           return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
         case 'copy':
           await fs.copyFile(operation.source, operation.destination);
@@ -184,7 +203,7 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
           try {
             const svc = getServiceIntegration();
             const batch = await svc?.processingState?.createOrLoadOrganizeBatch(batchId, operation.operations);
-            for (let i = 0; i < batch.operations.length; i++) {
+            for (let i = 0; i < batch.operations.length; i += 1) {
               const op = batch.operations[i];
               if (op.status === 'done') { results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move', resumed: true }); successCount++; continue; }
               try {
@@ -212,6 +231,10 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
               }
             }
             await getServiceIntegration()?.processingState?.completeOrganizeBatch(batchId);
+            try {
+              const undoOps = batch.operations.map(op => ({ type: 'move', originalPath: op.source, newPath: op.destination }));
+              await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.BATCH_OPERATION, { operations: undoOps });
+            } catch {}
           } catch {}
           return { success: successCount > 0, results, successCount, failCount, summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`, batchId };
         }

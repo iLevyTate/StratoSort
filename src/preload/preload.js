@@ -22,8 +22,6 @@ const ALLOWED_CHANNELS = {
 
 const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
-  'analysis-progress',
-  'analysis-error',
   'operation-progress',
   'app:error'
 ];
@@ -226,7 +224,7 @@ class SecureIPCManager {
    * Cleanup all active listeners
    */
   cleanup() {
-    for (const [key, { channel, callback }] of this.activeListeners) {
+    for (const [_key, { channel, callback }] of this.activeListeners) {
       ipcRenderer.removeListener(channel, callback);
     }
     this.activeListeners.clear();
@@ -342,8 +340,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Event Listeners (with automatic cleanup)
   events: {
-    onAnalysisProgress: (callback) => secureIPC.safeOn('analysis-progress', callback),
-    onAnalysisError: (callback) => secureIPC.safeOn('analysis-error', callback),
     onOperationProgress: (callback) => secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback)
   },

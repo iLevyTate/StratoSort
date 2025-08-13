@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron')
 const path = require('path');
 const fs = require('fs').promises;
 const { performance } = require('perf_hooks');
+const { Ollama } = require('ollama');
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
@@ -29,6 +30,7 @@ const {
   getOllamaConfigPath
 } = require('./ollamaUtils');
 const ModelManager = require('./services/ModelManager');
+const { buildOllamaOptions } = require('./services/PerformanceService');
 const SettingsService = require('./services/SettingsService');
 
 // Import service integration
@@ -98,185 +100,20 @@ async function saveCustomFolders(folders) {
 }
 
 // System monitoring and analytics
-const systemAnalytics = {
-  startTime: Date.now(),
-  processedFiles: 0,
-  successfulOperations: 0,
-  failedOperations: 0,
-  totalProcessingTime: 0,
-  errors: [],
-  ollamaHealth: { status: 'unknown', lastCheck: null },
+const systemAnalytics = require('./core/systemAnalytics');
 
-  recordProcessingTime(duration) {
-    this.totalProcessingTime += duration;
-    this.processedFiles++;
-  },
-
-  recordSuccess() {
-    this.successfulOperations++;
-  },
-
-  recordFailure(error) {
-    this.failedOperations++;
-    this.errors.push({
-      timestamp: Date.now(),
-      message: error.message || error.toString(),
-      stack: error.stack
-    });
-    // Keep only last 100 errors
-    if (this.errors.length > 100) {
-      this.errors = this.errors.slice(-100);
-    }
-  },
-
-  async collectMetrics() {
-    const uptime = Date.now() - this.startTime;
-    const avgProcessingTime = this.processedFiles > 0 ? this.totalProcessingTime / this.processedFiles : 0;
-    
-    // Basic system metrics
-    const metrics = {
-      uptime,
-      processedFiles: this.processedFiles,
-      successfulOperations: this.successfulOperations,
-      failedOperations: this.failedOperations,
-      avgProcessingTime: Math.round(avgProcessingTime),
-      errorRate: this.processedFiles > 0 ? (this.failedOperations / this.processedFiles) * 100 : 0,
-      recentErrors: this.errors.slice(-10),
-      ollamaHealth: this.ollamaHealth
-    };
-
-    // Try to get basic Node.js process metrics
-    try {
-      const memUsage = process.memoryUsage();
-      metrics.memory = {
-        used: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
-        total: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
-        rss: Math.round(memUsage.rss / 1024 / 1024) // MB
-      };
-    } catch (error) {
-      logger.warn('Could not collect memory metrics:', error.message);
-    }
-
-    return metrics;
-  },
-
-  getFailureRate() {
-    return this.processedFiles > 0 ? (this.failedOperations / this.processedFiles) * 100 : 0;
-  },
-
-  destroy() {
-    // Cleanup analytics data
-    this.errors = [];
-    logger.info('[ANALYTICS] System analytics cleaned up');
-  }
-};
-
-// Create the browser window
+// Window creation
+const createMainWindow = require('./core/createWindow');
 function createWindow() {
   logger.debug('[DEBUG] createWindow() called');
-  
-  // Prevent creating multiple windows
   if (mainWindow && !mainWindow.isDestroyed()) {
     logger.debug('[DEBUG] Window already exists, focusing...');
     mainWindow.focus();
     return;
   }
-  
-  logger.debug('[DEBUG] Creating new window...');
-  
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: false,
-      enableRemoteModule: false,
-      preload: path.join(__dirname, '../preload/preload.js'),
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      experimentalFeatures: false,
-      // Production optimizations
-      backgroundThrottling: false,
-      devTools: isDev, // Only enable dev tools in development
-      // GPU acceleration settings
-      hardwareAcceleration: true,
-      enableWebGL: true
-    },
-    icon: path.join(__dirname, '../../assets/stratosort-logo.png'),
-    show: false,
-    titleBarStyle: 'default',
-    autoHideMenuBar: !isDev // Hide menu bar in production
-  });
-  
-  logger.debug('[DEBUG] BrowserWindow created');
-
-  // Load the app
-  if (isDev) {
-    // Try to load from webpack dev server, fallback to built files
-    mainWindow.loadURL('http://localhost:3000').catch((error) => {
-      logger.info('Development server not available:', error.message);
-      logger.info('Loading from built files instead...');
-      const distPath = path.join(__dirname, '../../dist/index.html');
-      mainWindow.loadFile(distPath).catch((fileError) => {
-        logger.error('Failed to load from built files, trying original:', fileError);
-        mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-      });
-    });
-    // Only open dev tools in development mode if explicitly requested
-    if (process.env.FORCE_DEV_TOOLS === 'true') {
-      mainWindow.webContents.openDevTools();
-    }
-  } else {
-    // In production, load from built files
-    const distPath = path.join(__dirname, '../../dist/index.html');
-    mainWindow.loadFile(distPath).catch((error) => {
-      logger.error('Failed to load from dist, falling back:', error);
-      mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-    });
-  }
-
-  // Set additional security headers
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
-        ]
-      }
-    });
-  });
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus(); // Ensure window is focused
-    logger.info('✅ StratoSort window ready and focused');
-    logger.debug('[DEBUG] Window state:', {
-      isVisible: mainWindow.isVisible(),
-      isFocused: mainWindow.isFocused(),
-      isMinimized: mainWindow.isMinimized()
-    });
-  });
-
+  mainWindow = createMainWindow();
   mainWindow.on('closed', () => {
     mainWindow = null;
-  });
-
-  // Handle external links
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    const allowedDomains = [
-      'https://github.com',
-      'https://docs.github.com',
-      'https://microsoft.com',
-      'https://docs.microsoft.com',
-      'https://ollama.ai'
-    ];
-    
-    if (allowedDomains.some(domain => url.startsWith(domain))) {
-      shell.openExternal(url);
-    }
-    return { action: 'deny' };
   });
 }
 

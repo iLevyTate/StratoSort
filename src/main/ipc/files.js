@@ -279,6 +279,30 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
     }
   });
 
+  // Open folder
+  ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
+    try {
+      if (!folderPath || typeof folderPath !== 'string') {
+        return { success: false, error: 'Invalid folder path provided', errorCode: 'INVALID_PATH' };
+      }
+      const normalizedPath = path.resolve(folderPath);
+      try {
+        const stats = await fs.stat(normalizedPath);
+        if (!stats.isDirectory()) {
+          return { success: false, error: 'Path is not a directory', errorCode: 'NOT_A_DIRECTORY' };
+        }
+      } catch (accessError) {
+        return { success: false, error: 'Folder not found or inaccessible', errorCode: 'FOLDER_NOT_FOUND', details: accessError.message };
+      }
+      await shell.openPath(normalizedPath);
+      logger.info('[FILE-OPS] Opened folder:', normalizedPath);
+      return { success: true, message: 'Folder opened successfully', openedPath: normalizedPath };
+    } catch (error) {
+      logger.error('[FILE-OPS] Error opening folder:', error);
+      return { success: false, error: 'Failed to open folder', errorCode: 'OPEN_FAILED', details: error.message };
+    }
+  });
+
   // Delete empty folder
   ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
     try {

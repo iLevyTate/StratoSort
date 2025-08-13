@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { Ollama } = require('ollama');
+const { enhanceSmartFolderWithLLM } = require('../services/SmartFoldersLLMService');
 
 function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders, buildOllamaOptions, getOllamaModel, scanDirectory }) {
   ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
@@ -195,6 +196,83 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
     } catch (error) {
       logger.error('[ERROR] Failed to delete smart folder:', error);
       return { success: false, error: error.message, errorCode: 'DELETE_FAILED' };
+    }
+  });
+
+  // Create/add new smart folder with LLM enhancement
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
+    try {
+      if (!folder || typeof folder !== 'object') return { success: false, error: 'Invalid folder data provided', errorCode: 'INVALID_FOLDER_DATA' };
+      if (!folder.name || typeof folder.name !== 'string' || !folder.name.trim()) return { success: false, error: 'Folder name is required and must be a non-empty string', errorCode: 'INVALID_FOLDER_NAME' };
+      if (!folder.path || typeof folder.path !== 'string' || !folder.path.trim()) return { success: false, error: 'Folder path is required and must be a non-empty string', errorCode: 'INVALID_FOLDER_PATH' };
+
+      const illegalChars = /[<>:"|?*\x00-\x1f]/g;
+      if (illegalChars.test(folder.name)) return { success: false, error: 'Folder name contains invalid characters. Please avoid: < > : " | ? *', errorCode: 'INVALID_FOLDER_NAME_CHARS' };
+
+      const customFolders = getCustomFolders();
+      const existingFolder = customFolders.find(f => f.name.toLowerCase() === folder.name.trim().toLowerCase() || path.resolve(f.path) === path.resolve(folder.path.trim()));
+      if (existingFolder) return { success: false, error: `A smart folder with name "${existingFolder.name}" or path "${existingFolder.path}" already exists`, errorCode: 'FOLDER_ALREADY_EXISTS' };
+
+      const normalizedPath = path.resolve(folder.path.trim());
+      const parentDir = path.dirname(normalizedPath);
+      try {
+        const parentStats = await fs.stat(parentDir);
+        if (!parentStats.isDirectory()) return { success: false, error: `Parent directory "${parentDir}" is not a directory`, errorCode: 'PARENT_NOT_DIRECTORY' };
+        const tempFile = path.join(parentDir, `.stratotest_${Date.now()}`);
+        try { await fs.writeFile(tempFile, 'test'); await fs.unlink(tempFile); } catch { return { success: false, error: `No write permission in parent directory "${parentDir}"`, errorCode: 'PARENT_NOT_WRITABLE' }; }
+      } catch { return { success: false, error: `Parent directory "${parentDir}" does not exist or is not accessible`, errorCode: 'PARENT_NOT_ACCESSIBLE' }; }
+
+      let llmEnhancedData = {};
+      try { const llmAnalysis = await enhanceSmartFolderWithLLM(folder, customFolders, getOllamaModel); if (llmAnalysis && !llmEnhancedData.error) llmEnhancedData = llmAnalysis; } catch (e) { logger.warn('[SMART-FOLDERS] LLM enhancement failed, continuing with basic data:', e.message); }
+
+      const newFolder = {
+        id: Date.now().toString(),
+        name: folder.name.trim(),
+        path: normalizedPath,
+        description: llmEnhancedData.enhancedDescription || folder.description?.trim() || `Smart folder for ${folder.name.trim()}`,
+        keywords: llmEnhancedData.suggestedKeywords || [],
+        category: llmEnhancedData.suggestedCategory || 'general',
+        isDefault: folder.isDefault || false,
+        createdAt: new Date().toISOString(),
+        semanticTags: llmEnhancedData.semanticTags || [],
+        relatedFolders: llmEnhancedData.relatedFolders || [],
+        confidenceScore: llmEnhancedData.confidence || 0.8,
+        usageCount: 0,
+        lastUsed: null
+      };
+
+      let directoryCreated = false; let directoryExisted = false;
+      try {
+        const existingStats = await fs.stat(normalizedPath);
+        if (existingStats.isDirectory()) { directoryExisted = true; }
+        else { return { success: false, error: 'Path exists but is not a directory', errorCode: 'PATH_NOT_DIRECTORY' }; }
+      } catch (statError) {
+        if (statError.code === 'ENOENT') {
+          try {
+            await fs.mkdir(normalizedPath, { recursive: true });
+            const stats = await fs.stat(normalizedPath);
+            if (!stats.isDirectory()) throw new Error('Created path is not a directory');
+            directoryCreated = true;
+          } catch (dirError) { return { success: false, error: 'Failed to create directory', errorCode: 'DIRECTORY_CREATION_FAILED', details: dirError.message }; }
+        } else { return { success: false, error: 'Failed to access directory path', errorCode: 'PATH_ACCESS_FAILED', details: statError.message }; }
+      }
+
+      const originalFolders = [...customFolders];
+      try {
+        customFolders.push(newFolder);
+        setCustomFolders(customFolders);
+        await saveCustomFolders(customFolders);
+        return { success: true, folder: newFolder, folders: customFolders, message: directoryCreated ? 'Smart folder created successfully' : 'Smart folder added (directory already existed)', directoryCreated, directoryExisted, llmEnhanced: !!llmEnhancedData.enhancedDescription };
+      } catch (saveError) {
+        setCustomFolders(originalFolders);
+        if (directoryCreated && !directoryExisted) {
+          try { await fs.rmdir(normalizedPath); } catch {}
+        }
+        return { success: false, error: 'Failed to save configuration, changes rolled back', errorCode: 'CONFIG_SAVE_FAILED', details: saveError.message };
+      }
+    } catch (error) {
+      logger.error('[ERROR] Failed to add smart folder:', error);
+      return { success: false, error: 'Failed to add smart folder', errorCode: 'ADD_FOLDER_FAILED', details: error.message };
     }
   });
 

@@ -77,13 +77,7 @@ function createWindow() {
 
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
-const registerFilesIpc = require('./ipc/files');
-const registerSmartFoldersIpc = require('./ipc/smartFolders');
-const registerUndoRedoIpc = require('./ipc/undoRedo');
-const registerAnalysisHistoryIpc = require('./ipc/analysisHistory');
-const registerSystemIpc = require('./ipc/system');
-const registerOllamaIpc = require('./ipc/ollama');
-const registerAnalysisIpc = require('./ipc/analysis');
+const { registerAllIpc } = require('./ipc');
 
 // NOTE: Old handle-file-selection handler removed - using IPC_CHANNELS.FILES.SELECT instead
 
@@ -1360,14 +1354,28 @@ if (!gotTheLock) {
       const getCustomFolders = () => customFolders;
       const setCustomFolders = (folders) => { customFolders = folders; };
 
-      // Grouped IPC registration
-      registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration });
-      registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders });
-      registerUndoRedoIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
-      registerAnalysisHistoryIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
-      registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration });
-      registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel });
-      registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, serviceIntegration, getCustomFolders });
+      // Grouped IPC registration (single entry)
+      registerAllIpc({
+        ipcMain,
+        IPC_CHANNELS,
+        logger,
+        dialog,
+        shell,
+        systemAnalytics,
+        getMainWindow,
+        getServiceIntegration,
+        getCustomFolders,
+        setCustomFolders,
+        saveCustomFolders,
+        analyzeDocumentFile,
+        analyzeImageFile,
+        tesseract,
+        getOllama,
+        getOllamaModel,
+        getOllamaVisionModel,
+        buildOllamaOptions,
+        scanDirectory,
+      });
 
       createWindow();
       // Fire-and-forget resume of incomplete batches shortly after window is ready
@@ -1621,69 +1629,7 @@ ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
   }
 });
 
-// Enhanced LLM integration for smart folder optimization
-async function enhanceSmartFolderWithLLM(folderData, existingFolders) {
-  try {
-    logger.info('[LLM-ENHANCEMENT] Analyzing smart folder for optimization:', folderData.name);
-    
-    // Build context about existing folders
-    const existingFolderContext = existingFolders.map(f => ({
-      name: f.name,
-      description: f.description,
-      keywords: f.keywords || [],
-      category: f.category || 'general'
-    }));
-
-    const prompt = `You are an expert file organization system. Analyze this new smart folder and provide enhancements based on existing folder structure.
-
-NEW FOLDER:
-Name: "${folderData.name}"
-Path: "${folderData.path}"
-Description: "${folderData.description || ''}"
-
-EXISTING FOLDERS:
-${existingFolderContext.map(f => `- ${f.name}: ${f.description} (Category: ${f.category})`).join('\n')}
-
-Please provide a JSON response with the following enhancements:
-{
-  "improvedDescription": "enhanced description",
-  "suggestedKeywords": ["keyword1", "keyword2"],
-  "organizationTips": "tips for better organization",
-  "confidence": 0.8
-}`;
-
-    const response = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: getOllamaModel(),
-        prompt: prompt,
-        stream: false,
-        format: 'json',
-        options: { 
-          temperature: 0.3, 
-          num_predict: 500 
-        }
-      })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const enhancement = JSON.parse(data.response);
-      
-      // Validate the response structure
-      if (enhancement && typeof enhancement === 'object') {
-        logger.info('[LLM-ENHANCEMENT] Successfully enhanced smart folder:', enhancement.reasoning);
-        return enhancement;
-      }
-    }
-    
-    return { error: 'Invalid LLM response format' };
-  } catch (error) {
-    logger.error('[LLM-ENHANCEMENT] Failed to enhance smart folder:', error.message);
-    return { error: error.message };
-  }
-}
+// SmartFolders LLM enhancement moved to services/SmartFoldersLLMService.js
 
 // Error handling
 logger.info('✅ StratoSort main process initialized');

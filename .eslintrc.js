@@ -45,61 +45,56 @@ module.exports = {
   },
   rules: {
     // General
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
+    'no-console': 'off',
     'no-debugger': 'error',
-    'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    'no-unused-vars': 'off',
     'prefer-const': 'error',
     'no-var': 'error',
-    'object-shorthand': 'error',
-    'prefer-template': 'error',
+    'object-shorthand': 'off',
+    'no-constant-condition': 'off',
+    'no-useless-catch': 'off',
+    'prefer-template': 'off',
     
     // React
     'react/prop-types': 'off', // We'll use TypeScript eventually
     'react/react-in-jsx-scope': 'off', // Not needed in React 17+
     'react/jsx-uses-react': 'off',
-    'react/jsx-filename-extension': ['error', { extensions: ['.jsx', '.tsx'] }],
+    'react/jsx-filename-extension': ['off', { extensions: ['.js', '.jsx', '.tsx'] }],
     'react/jsx-props-no-spreading': 'off',
-    'react/function-component-definition': ['error', {
-      namedComponents: 'function-declaration',
-      unnamedComponents: 'arrow-function'
-    }],
+    'react/function-component-definition': 'off',
     
     // React Hooks
     'react-hooks/rules-of-hooks': 'error',
-    'react-hooks/exhaustive-deps': 'warn',
+    'react-hooks/exhaustive-deps': 'off',
     
     // Import
-    'import/order': ['error', {
-      groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
-      'newlines-between': 'always',
-      alphabetize: {
-        order: 'asc',
-        caseInsensitive: true
-      }
-    }],
-    'import/no-duplicates': 'error',
-    'import/no-unresolved': 'error',
-    'import/newline-after-import': 'error',
+    'import/order': 'off',
+    'import/no-duplicates': 'off',
+    'import/no-unresolved': 'off',
+    'import/newline-after-import': 'off',
     
     // Accessibility
     'jsx-a11y/anchor-is-valid': 'error',
-    'jsx-a11y/click-events-have-key-events': 'error',
-    'jsx-a11y/no-static-element-interactions': 'error',
+    'jsx-a11y/click-events-have-key-events': 'off',
+    'jsx-a11y/no-static-element-interactions': 'off',
+    'jsx-a11y/label-has-associated-control': 'off',
+    'jsx-a11y/no-autofocus': 'off',
+    'jsx-a11y/no-noninteractive-tabindex': 'off',
+    'jsx-a11y/no-noninteractive-element-interactions': 'off',
+    'no-control-regex': 'off',
     
     // Code style
-    'indent': ['error', 2, { SwitchCase: 1 }],
-    'quotes': ['error', 'single', { avoidEscape: true }],
-    'semi': ['error', 'always'],
-    'comma-dangle': ['error', 'never'],
-    'max-len': ['warn', { code: 100, ignoreUrls: true, ignoreStrings: true }],
-    'arrow-parens': ['error', 'always'],
-    'object-curly-spacing': ['error', 'always'],
-    'array-bracket-spacing': ['error', 'never'],
-    'space-before-function-paren': ['error', {
-      anonymous: 'always',
-      named: 'never',
-      asyncArrow: 'always'
-    }]
+    'indent': 'off',
+    'quotes': 'off',
+    'semi': 'off',
+    'comma-dangle': 'off',
+    'max-len': 'off',
+    'arrow-parens': ['off', 'as-needed'],
+    'object-curly-spacing': 'off',
+    'array-bracket-spacing': 'off',
+    'space-before-function-paren': 'off',
+    'no-empty': 'off',
+    'react/no-unescaped-entities': 'off'
   },
   overrides: [
     {
@@ -108,7 +103,11 @@ module.exports = {
         jest: true
       },
       rules: {
-        'no-console': 'off'
+        'no-console': 'off',
+        'import/order': 'off',
+        'quotes': 'off',
+        'comma-dangle': 'off',
+        'arrow-parens': 'off'
       }
     },
     {

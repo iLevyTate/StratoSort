@@ -59,19 +59,9 @@ class Logger {
 
   async writeToFile(formattedMessage) {
     if (!this.enableFile || !this.logFile) return;
-    
     try {
-      // Use dynamic import for fs to work in both main and renderer
-      if (typeof window !== 'undefined') {
-        // Renderer process - use electron API if available
-        if (window.electronAPI && window.electronAPI.logger) {
-          await window.electronAPI.logger.write(formattedMessage);
-        }
-      } else {
-        // Main process - use fs directly
-        const fs = require('fs').promises;
-        await fs.appendFile(this.logFile, formattedMessage + '\n');
-      }
+      const fs = require('fs').promises;
+      await fs.appendFile(this.logFile, formattedMessage + '\n');
     } catch (error) {
       console.error('Failed to write to log file:', error);
     }

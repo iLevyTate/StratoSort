@@ -3,111 +3,112 @@ const path = require('path');
 
 describe('StratoSort React App', () => {
   describe('Phase System', () => {
-    test('defines all required phases', () => {
-      const expectedPhases = ['welcome', 'setup', 'discover', 'organize', 'complete'];
-      
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
-        'utf8'
+    test('defines all required phases (via shared constants)', () => {
+      const { PHASES } = require('../src/shared/constants');
+      const phases = Object.values(PHASES);
+      expect(phases).toEqual(
+        expect.arrayContaining(['welcome', 'setup', 'discover', 'organize', 'complete'])
       );
-      
-      expectedPhases.forEach(phase => {
-        expect(appContent.toLowerCase()).toContain(phase);
-      });
     });
 
-    test('defines phase transitions correctly', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
-        'utf8'
-      );
-      
-      expect(appContent).toContain('PHASE_TRANSITIONS');
-      ['WELCOME','SETUP','DISCOVER','ORGANIZE','COMPLETE'].forEach(p => {
-        const regex = new RegExp(`PHASES\\.${p}`);
-        expect(regex.test(appContent)).toBe(true);
+    test('defines phase transitions correctly (via shared constants)', () => {
+      const { PHASES, PHASE_TRANSITIONS } = require('../src/shared/constants');
+      // Sanity: every phase has a transitions entry that is an array
+      Object.values(PHASES).forEach((phase) => {
+        expect(Array.isArray(PHASE_TRANSITIONS[phase])).toBe(true);
       });
+      // Spot check a few expected transitions of the workflow
+      expect(PHASE_TRANSITIONS[PHASES.WELCOME]).toEqual(
+        expect.arrayContaining([PHASES.SETUP, PHASES.DISCOVER])
+      );
+      expect(PHASE_TRANSITIONS[PHASES.DISCOVER]).toEqual(
+        expect.arrayContaining([PHASES.ORGANIZE, PHASES.SETUP])
+      );
+      expect(PHASE_TRANSITIONS[PHASES.ORGANIZE]).toEqual(
+        expect.arrayContaining([PHASES.COMPLETE, PHASES.DISCOVER])
+      );
     });
   });
 
   describe('Component Structure', () => {
-    test('defines all required phase components', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
-        'utf8'
-      );
-      
-      const requiredComponents = [
-        'WelcomePhase',
-        'SetupPhase', 
-        'DiscoverPhase',
-        'OrganizePhase',
-        'CompletePhase'
+    test('phase component files exist', () => {
+      const phaseFiles = [
+        '../src/renderer/phases/WelcomePhase.jsx',
+        '../src/renderer/phases/SetupPhase.jsx',
+        '../src/renderer/phases/DiscoverPhase.jsx',
+        '../src/renderer/phases/OrganizePhase.jsx',
+        '../src/renderer/phases/CompletePhase.jsx'
       ];
-      
-      requiredComponents.forEach(component => {
-        const regex = new RegExp(`(function|const|class)\\s+${component}\\b`);
-        expect(regex.test(appContent)).toBe(true);
+      phaseFiles.forEach(rel => {
+        const filePath = path.join(__dirname, rel);
+        expect(fs.existsSync(filePath)).toBe(true);
       });
     });
 
-    test('defines system components', () => {
+    test('system components are wired', () => {
       const appContent = fs.readFileSync(
         path.join(__dirname, '../src/renderer/App.js'), 
         'utf8'
       );
-      
-      const systemComponents = [
-        'NotificationProvider',
-        'SystemMonitoring',
-        'NavigationBar',
-        'ProgressIndicator',
-        'UndoRedoToolbar'
-      ];
-      
-      systemComponents.forEach(component => {
-        expect(appContent).toContain(component);
+      // These should appear in App.js wiring (providers now wrapped by AppProviders). SystemMonitoring removed per UX.
+      ;['AppProviders','NavigationBar','ProgressIndicator'].forEach((c) => {
+        expect(appContent).toContain(c);
       });
+      // Undo/Redo toolbar lives in its own file; ensure it exists there
+      const undoContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx'),
+        'utf8'
+      );
+      expect(undoContent).toContain('UndoRedoToolbar');
     });
   });
 
   describe('File Processing', () => {
     test('drag and drop functionality is implemented', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+      const discoverContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/phases/DiscoverPhase.jsx'),
         'utf8'
       );
-      
-      expect(appContent).toContain('useDragAndDrop');
-      expect(appContent).toContain('handleDragEnter');
-      expect(appContent).toContain('handleDragLeave');
-      expect(appContent).toContain('handleDrop');
+      // Discover should use the hook
+      expect(discoverContent).toContain('useDragAndDrop');
+      // The hook should implement the handlers
+      const hookContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/hooks/useDragAndDrop.js'),
+        'utf8'
+      );
+      expect(hookContent).toContain('handleDragEnter');
+      expect(hookContent).toContain('handleDragLeave');
+      expect(hookContent).toContain('handleDrop');
     });
 
-    test('file analysis supports multiple file types', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+    test('file analysis supports multiple file types (via DiscoverPhase)', () => {
+      const discoverContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/phases/DiscoverPhase.jsx'),
         'utf8'
       );
-      
-      expect(appContent).toContain('getFileType');
-      expect(appContent).toContain('analyzeFiles');
-      expect(appContent).toContain('pdf');
-      expect(appContent).toContain('txt');
-      expect(appContent).toContain('docx');
+      expect(discoverContent).toContain('getFileType');
+      expect(discoverContent).toContain('analyzeFiles');
+      expect(discoverContent.toLowerCase()).toContain('pdf');
+      expect(discoverContent.toLowerCase()).toContain('txt');
+      expect(discoverContent.toLowerCase()).toContain('docx');
     });
   });
 
   describe('Undo/Redo System', () => {
     test('undo/redo system is imported and used', () => {
-      const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'), 
+      // Providers are wrapped in AppProviders
+      const providersContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/components/AppProviders.jsx'),
         'utf8'
       );
-      
-      expect(appContent).toContain('UndoRedoProvider');
-      expect(appContent).toContain('useUndoRedo');
-      expect(appContent).toContain('UndoRedoToolbar');
+      expect(providersContent).toContain('UndoRedoProvider');
+      expect(providersContent).toContain('NotificationProvider');
+      const undoContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx'),
+        'utf8'
+      );
+      expect(undoContent).toContain('useUndoRedo');
+      expect(undoContent).toContain('UndoRedoToolbar');
     });
 
     test('undo/redo component file exists', () => {

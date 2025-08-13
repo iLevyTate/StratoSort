@@ -17,9 +17,7 @@ const ALLOWED_CHANNELS = {
   UNDO_REDO: Object.values(IPC_CHANNELS.UNDO_REDO),
   ANALYSIS_HISTORY: Object.values(IPC_CHANNELS.ANALYSIS_HISTORY),
 
-  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM),
-  // Renderer still needs basic file-action helpers that are not request/response pairs
-  FILE_ACTIONS: ['open-file', 'reveal-file', 'copy-file', 'open-folder']
+  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM)
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -252,6 +250,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT_DIRECTORY),
     getDocumentsPath: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH),
     createFolder: (fullPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, fullPath),
+    normalizePath: (p) => {
+      try {
+        if (typeof p !== 'string') return p;
+        return path.normalize(p);
+      } catch {
+        return p;
+      }
+    },
     getStats: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILE_STATS, filePath),
     getDirectoryContents: (dirPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
     organize: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch_organize', operations }),

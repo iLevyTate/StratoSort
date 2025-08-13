@@ -167,15 +167,38 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
 
-  // Pre-flight checks for AI-first operation
+  // Pre-flight checks for AI-first operation (graceful fallback if Ollama unavailable)
   try {
     const connectionCheck = await modelVerifier.checkOllamaConnection();
     if (!connectionCheck.connected) {
-      throw new Error(`Ollama connection failed: ${connectionCheck.error}`);
+      console.warn(`[ANALYSIS-FALLBACK] Ollama unavailable (${connectionCheck.error}). Using filename-based analysis for ${fileName}.`);
+      const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
+      const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
+      return {
+        purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
+        project: fileName.replace(fileExtension, ''),
+        category: intelligentCategory,
+        date: new Date().toISOString().split('T')[0],
+        keywords: intelligentKeywords,
+        confidence: 65,
+        suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
+        extractionMethod: 'filename_fallback'
+      };
     }
   } catch (error) {
     console.error('Pre-flight verification failed:', error.message);
-    throw error;
+    const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
+    const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
+    return {
+      purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
+      project: fileName.replace(fileExtension, ''),
+      category: intelligentCategory,
+      date: new Date().toISOString().split('T')[0],
+      keywords: intelligentKeywords,
+      confidence: 65,
+      suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
+      extractionMethod: 'filename_fallback'
+    };
   }
 
   try {
@@ -418,17 +441,19 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
 
   } catch (error) {
     console.error(`Error processing document ${filePath}:`, error.message);
-    
-    // Re-throw operational errors with context
-    if (error.isOperational) {
-      throw error;
-    }
-    
-    // Wrap unexpected errors
-    throw new FileProcessingError('DOCUMENT_ANALYSIS_FAILURE', fileName, {
-      originalError: error.message,
-      suggestion: 'Unexpected error during document processing'
-    });
+    // Graceful fallback to filename-based analysis on any failure
+    const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
+    const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
+    return {
+      purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
+      project: fileName.replace(fileExtension, ''),
+      category: intelligentCategory,
+      date: new Date().toISOString().split('T')[0],
+      keywords: intelligentKeywords,
+      confidence: 60,
+      suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_'),
+      extractionMethod: 'filename_fallback'
+    };
   }
 }
 

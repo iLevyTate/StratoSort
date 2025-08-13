@@ -62,7 +62,7 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
-        'global': 'globalThis'
+        global: 'globalThis'
       }),
       new webpack.ProvidePlugin({
         process: 'process/browser',

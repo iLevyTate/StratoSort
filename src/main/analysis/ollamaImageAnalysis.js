@@ -1,47 +1,41 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { Ollama } = require('ollama');
-const { getOllamaVisionModel, loadOllamaConfig } = require('../ollamaUtils');
+const sharp = require('sharp');
+const { getOllamaVisionModel, loadOllamaConfig, getOllamaClient } = require('../ollamaUtils');
+const { AI_DEFAULTS, SUPPORTED_IMAGE_EXTENSIONS } = require('../../shared/constants');
+const { normalizeAnalysisResult } = require('./utils');
+const { getIntelligentCategory: getIntelligentImageCategory, getIntelligentKeywords: getIntelligentImageKeywords, safeSuggestedName } = require('./fallbackUtils');
 
 // App configuration for image analysis - Optimized for speed
-const AppConfig = {
-  ai: {
-    imageAnalysis: {
-      defaultModel: 'llava:latest', // Dedicated vision model for image analysis
-      defaultHost: 'http://127.0.0.1:11434',
-      timeout: 120000, // Reduced to 2 minutes with dedicated vision model
-      temperature: 0.2,
-      maxTokens: 1000,
-    }
-  }
-};
+const AppConfig = { ai: { imageAnalysis: {
+  defaultModel: AI_DEFAULTS.IMAGE.MODEL,
+  defaultHost: AI_DEFAULTS.IMAGE.HOST,
+  timeout: 120000,
+  temperature: AI_DEFAULTS.IMAGE.TEMPERATURE,
+  maxTokens: AI_DEFAULTS.IMAGE.MAX_TOKENS,
+} } };
 
 // Initialize Ollama client
-let ollamaClient = null;
-async function getOllamaClient() {
-  if (!ollamaClient) {
-    const cfg = await loadOllamaConfig();
-    const host = cfg?.host || AppConfig.ai.imageAnalysis.defaultHost;
-    ollamaClient = new Ollama({ host });
-  }
-  return ollamaClient;
-}
+// Use shared client from ollamaUtils
 
 async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolders = []) {
   try {
-    console.log(`Analyzing image content with Ollama model: ${AppConfig.ai.imageAnalysis.defaultModel}`);
+    const { logger } = require('../../shared/logger');
+    logger.info(`Analyzing image content with Ollama`, { model: AppConfig.ai.imageAnalysis.defaultModel });
     
     // Build folder categories string for the prompt (include descriptions)
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
-      const validFolders = smartFolders.filter(f => 
-        f && f.name && typeof f.name === 'string' && f.name.trim().length > 0
-      );
-      
+      const validFolders = smartFolders
+        .filter(f => f && typeof f.name === 'string' && f.name.trim().length > 0)
+        .slice(0, 10)
+        .map(f => ({
+          name: f.name.trim().slice(0, 50),
+          description: (f.description || '').trim().slice(0, 140)
+        }));
       if (validFolders.length > 0) {
         const folderListDetailed = validFolders
-          .slice(0, 10)
-          .map((f, i) => `${i + 1}. "${f.name.trim()}" — ${f.description ? f.description.trim() : 'no description provided'}`)
+          .map((f, i) => `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`)
           .join('\n');
         
         folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the IMAGE CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
@@ -90,7 +84,7 @@ Analyze this image:`;
             parsedJson.date = new Date(parsedJson.date).toISOString().split('T')[0];
           } catch (e) {
             delete parsedJson.date;
-            console.warn('Ollama returned an invalid date for image, omitting.');
+            logger.warn('Ollama returned an invalid date for image, omitting.');
           }
         }
         
@@ -110,7 +104,7 @@ Analyze this image:`;
           has_text: Boolean(parsedJson.has_text),
         };
       } catch (e) {
-        console.error('Error parsing Ollama JSON response for image:', e.message);
+        logger.error('Error parsing Ollama JSON response for image', { error: e.message });
         return { 
           error: 'Failed to parse image analysis from Ollama.', 
           keywords: [],
@@ -125,7 +119,8 @@ Analyze this image:`;
       confidence: 60
     };
   } catch (error) {
-    console.error('Error calling Ollama API for image:', error.message);
+    const { logger } = require('../../shared/logger');
+    logger.error('Error calling Ollama API for image', { error: error.message });
     
     // Specific handling for zero-length image error
     if (error.message.includes('zero length image')) {
@@ -145,12 +140,13 @@ Analyze this image:`;
 }
 
 async function analyzeImageFile(filePath, smartFolders = []) {
-  console.log(`Analyzing image file: ${filePath}`);
+  const { logger } = require('../../shared/logger');
+  logger.info(`Analyzing image file`, { path: filePath });
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
 
   // Check if file extension is supported (include SVG by rasterizing via sharp)
-  const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
+  const supportedExtensions = SUPPORTED_IMAGE_EXTENSIONS;
   if (!supportedExtensions.includes(fileExtension)) {
     return {
       error: `Unsupported image format: ${fileExtension}`,
@@ -165,7 +161,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     // First, check if file exists and has content
     const stats = await fs.stat(filePath);
     if (stats.size === 0) {
-      console.error(`Image file is empty: ${filePath}`);
+      logger.error(`Image file is empty`, { path: filePath });
       return {
         error: 'Image file is empty (0 bytes)',
         category: 'error',
@@ -174,7 +170,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       };
     }
     
-    console.log(`Image file size: ${stats.size} bytes`);
+    logger.debug(`Image file size`, { bytes: stats.size });
 
     // Read and encode image as base64
     let imageBuffer = await fs.readFile(filePath);
@@ -187,7 +183,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
           .resize({ width: 1280, withoutEnlargement: true })
           .toBuffer();
       } catch (svgErr) {
-        console.error(`Failed to rasterize SVG ${filePath}:`, svgErr.message);
+        logger.error(`Failed to rasterize SVG`, { path: filePath, error: svgErr.message });
         return {
           error: 'Failed to process SVG image',
           category: 'error',
@@ -199,7 +195,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     
     // Validate buffer is not empty
     if (imageBuffer.length === 0) {
-      console.error(`Image buffer is empty after reading: ${filePath}`);
+      logger.error(`Image buffer is empty after reading`, { path: filePath });
       return {
         error: 'Image buffer is empty after reading',
         category: 'error',
@@ -208,12 +204,12 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       };
     }
     
-    console.log(`Image buffer size: ${imageBuffer.length} bytes`);
+    logger.debug(`Image buffer size`, { bytes: imageBuffer.length });
     const imageBase64 = imageBuffer.toString('base64');
     
     // Validate base64 encoding
     if (!imageBase64 || imageBase64.length === 0) {
-      console.error(`Image base64 encoding failed: ${filePath}`);
+      logger.error(`Image base64 encoding failed`, { path: filePath });
       return {
         error: 'Image base64 encoding failed',
         category: 'error',
@@ -222,19 +218,20 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       };
     }
     
-    console.log(`Base64 length: ${imageBase64.length} characters`);
+    logger.debug(`Base64 length`, { chars: imageBase64.length });
 
     // Analyze with Ollama
     const analysis = await analyzeImageWithOllama(imageBase64, fileName, smartFolders);
     
     if (analysis && !analysis.error) {
-      return {
-        ...analysis,
-        keywords: Array.isArray(analysis.keywords) ? analysis.keywords : [],
-        category: analysis.category || 'image',
-        content_type: analysis.content_type || 'unknown',
-        suggestedName: analysis.suggestedName || fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_')
-      };
+      return normalizeAnalysisResult(
+        {
+          ...analysis,
+          content_type: analysis.content_type || 'unknown',
+          suggestedName: analysis.suggestedName || safeSuggestedName(fileName, fileExtension)
+        },
+        { category: 'image', keywords: [] }
+      );
     }
     
     // Fallback analysis if Ollama fails
@@ -295,85 +292,7 @@ async function extractTextFromImage(filePath) {
   }
 }
 
-// Intelligent fallback analysis for images
-function getIntelligentImageCategory(fileName, extension) {
-  const lowerFileName = fileName.toLowerCase();
-  
-  // Screenshot patterns
-  if (lowerFileName.includes('screenshot') || lowerFileName.includes('screen') ||
-      lowerFileName.includes('capture') || lowerFileName.startsWith('shot_')) {
-    return 'screenshot';
-  }
-  
-  // Document scan patterns
-  if (lowerFileName.includes('scan') || lowerFileName.includes('receipt') ||
-      lowerFileName.includes('invoice') || lowerFileName.includes('document')) {
-    return 'document_scan';
-  }
-  
-  // Diagram/chart patterns
-  if (lowerFileName.includes('chart') || lowerFileName.includes('diagram') ||
-      lowerFileName.includes('graph') || lowerFileName.includes('flow')) {
-    return 'diagram';
-  }
-  
-  // Profile/avatar patterns
-  if (lowerFileName.includes('profile') || lowerFileName.includes('avatar') ||
-      lowerFileName.includes('headshot') || lowerFileName.includes('portrait')) {
-    return 'profile';
-  }
-  
-  // Logo/icon patterns
-  if (lowerFileName.includes('logo') || lowerFileName.includes('icon') ||
-      lowerFileName.includes('brand') || lowerFileName.includes('symbol')) {
-    return 'logo';
-  }
-  
-  // File extension based categorization
-  const extensionCategories = {
-    '.png': 'image',
-    '.jpg': 'photo',
-    '.jpeg': 'photo',
-    '.gif': 'animated',
-    '.bmp': 'image',
-    '.webp': 'image',
-    '.tiff': 'image'
-  };
-  
-  return extensionCategories[extension] || 'image';
-}
-
-function getIntelligentImageKeywords(fileName, extension) {
-  const category = getIntelligentImageCategory(fileName, extension);
-  const lowerFileName = fileName.toLowerCase();
-  
-  const baseKeywords = {
-    'screenshot': ['screenshot', 'capture', 'interface'],
-    'document_scan': ['scan', 'document', 'text'],
-    'diagram': ['diagram', 'chart', 'visual'],
-    'profile': ['profile', 'person', 'portrait'],
-    'logo': ['logo', 'brand', 'design'],
-    'photo': ['photo', 'picture', 'image'],
-    'animated': ['animated', 'gif', 'motion'],
-    'image': ['image', 'visual', 'graphic']
-  };
-  
-  let keywords = baseKeywords[category] || ['image', 'visual'];
-  
-  // Add filename-based keywords
-  if (lowerFileName.includes('work')) keywords.push('work');
-  if (lowerFileName.includes('personal')) keywords.push('personal');
-  if (lowerFileName.includes('project')) keywords.push('project');
-  if (lowerFileName.includes('design')) keywords.push('design');
-  if (lowerFileName.includes('mockup')) keywords.push('mockup');
-  
-  // Add extension-based keyword
-  if (extension) {
-    keywords.push(extension.replace('.', ''));
-  }
-  
-  return keywords.slice(0, 7); // Limit to 7 keywords
-}
+// Fallback image helpers sourced from fallbackUtils
 
 module.exports = {
   analyzeImageFile,

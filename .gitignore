@@ -75,3 +75,6 @@ docs/.doctrees/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml 
+
+# Project data and local artifacts
+Documents/

@@ -34,10 +34,10 @@ function ProgressIndicator() {
   };
 
   return (
-    <div className="bg-surface-secondary/50 border-b border-border-light px-fib-21 py-fib-8 backdrop-blur-sm">
+    <div className="bg-surface-secondary/50 border-b border-border-light px-21 py-8 backdrop-blur-sm">
       <div className="container-enhanced">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-fib-8">
+          <div className="flex items-center gap-8">
             <span className="text-2xl">{metadata.icon}</span>
             <div>
               <div className="font-semibold text-system-gray-900">{metadata.title}</div>
@@ -46,7 +46,7 @@ function ProgressIndicator() {
             {getPersistKeysForPhase().length > 0 && (
               <div className="relative" onBlur={() => setTimeout(() => setShowPhaseMenu(false), 100)} tabIndex={0}>
                 <button
-                  className="p-fib-5 text-system-gray-500 hover:text-system-gray-700 rounded"
+                  className="p-5 text-system-gray-500 hover:text-system-gray-700 rounded"
                   aria-haspopup="menu"
                   aria-expanded={showPhaseMenu}
                   title="Phase sections"
@@ -57,7 +57,7 @@ function ProgressIndicator() {
                   </svg>
                 </button>
                 {showPhaseMenu && (
-                  <div className="absolute right-0 mt-2 bg-white border border-system-gray-200 rounded-md shadow-lg z-50 min-w-[140px]">
+                  <div className="absolute right-0 mt-2 bg-white border border-system-gray-200 rounded-md shadow-lg z-50 min-w-36">
                     <button className="nav-item" onClick={() => { applyPhaseExpandCollapse(true); setShowPhaseMenu(false); }}>
                       Expand all
                     </button>
@@ -69,8 +69,8 @@ function ProgressIndicator() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-fib-13">
-            <div className="flex items-center gap-fib-8">
+          <div className="flex items-center gap-13">
+            <div className="flex items-center gap-8">
               <div className="text-sm text-system-gray-600">{metadata.progress}%</div>
               <div className="w-32 h-2 bg-system-gray-200 rounded-full overflow-hidden">
                 <div className="h-full bg-stratosort-blue transition-all duration-500" style={{ width: `${metadata.progress}%` }} />

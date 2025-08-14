@@ -479,20 +479,18 @@ function DiscoverPhase() {
       lockStatus: analysisLockRef.current
     });
     
-    // Prevent multiple simultaneous analysis calls
+    // Prevent multiple simultaneous analysis calls (silent)
     if (analysisLockRef.current || globalAnalysisActive) {
       console.log('[ANALYSIS] Analysis already in progress, skipping duplicate call', {
         lockRef: analysisLockRef.current,
         globalState: globalAnalysisActive
       });
-      addNotification('Analysis already in progress', 'warning', 3000, 'analysis-status');
       return;
     }
     
-    // Additional check: prevent analysis if UI shows it's already running
+    // Additional check: prevent analysis if UI shows it's already running (silent)
     if (isAnalyzing) {
       console.log('[ANALYSIS] UI shows analysis already in progress, skipping call');
-      addNotification('Analysis already in progress', 'warning', 3000, 'analysis-status');
       return;
     }
     
@@ -504,13 +502,13 @@ function DiscoverPhase() {
     // Small delay to ensure lock is properly established
     await new Promise(resolve => setTimeout(resolve, 10));
     
-    // Set a timeout to release the lock after 10 minutes (safety measure)
+    // Set a timeout to release the lock after 5 minutes (safety measure)
     const lockTimeout = setTimeout(() => {
       if (analysisLockRef.current) {
         console.warn('[ANALYSIS] Analysis lock timeout reached, forcing release');
         analysisLockRef.current = false;
       }
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 5 * 60 * 1000); // 5 minutes
     
     // Force reset any existing analysis state to ensure clean start
     if (isAnalyzing || analysisProgress.total > 0) {
@@ -841,11 +839,11 @@ function DiscoverPhase() {
 
   return (
     <div className="w-full">
-      <div className="mb-fib-21 text-center">
+      <div className="mb-21 text-center">
         <h2 className="heading-primary">🔍 Discover & Analyze</h2>
         <p className="text-lg text-system-gray-600 leading-relaxed">Select files or scan a folder, then let StratoSort analyze and prepare them for organization.</p>
       </div>
-      <div className="flex items-center justify-center gap-fib-8 -mt-fib-8 mb-fib-13">
+      <div className="flex items-center justify-center gap-8 -mt-8 mb-13">
         <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['discover-naming','discover-selection','discover-dnd','discover-results']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true')); window.dispatchEvent(new Event('storage')); } catch {} }}>Expand all</button>
         <span className="text-system-gray-300">•</span>
         <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['discover-naming','discover-selection','discover-dnd','discover-results']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false')); window.dispatchEvent(new Event('storage')); } catch {} }}>Collapse all</button>
@@ -935,9 +933,9 @@ function DiscoverPhase() {
           <AnalysisProgress progress={analysisProgress} currentFile={currentAnalysisFile} />
           {/* Add reset button if analysis appears stuck */}
           {analysisProgress.lastActivity && (Date.now() - analysisProgress.lastActivity) > 2 * 60 * 1000 && (
-            <div className="mt-fib-8 p-fib-8 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="mt-8 p-8 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-fib-5">
+                <div className="flex items-center gap-5">
                   <span className="text-amber-600">⚠️</span>
                   <span className="text-sm text-amber-800">
                     Analysis appears to be stuck. Last activity: {new Date(analysisProgress.lastActivity).toLocaleTimeString()}
@@ -945,7 +943,7 @@ function DiscoverPhase() {
                 </div>
                 <button
                   onClick={resetAnalysisState}
-                  className="px-fib-8 py-fib-5 text-sm bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                  className="px-8 py-5 text-sm bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
                   title="Reset stuck analysis state"
                 >
                   Reset Analysis

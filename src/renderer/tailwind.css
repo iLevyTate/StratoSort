@@ -13,8 +13,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
   
-  /* Enhanced focus styles for accessibility */
-  *:focus {
+  /* Enhanced focus styles for accessibility (focus-visible on interactive controls) */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
     @apply outline-none ring-2 ring-stratosort-blue/50 ring-offset-2 ring-offset-surface-primary;
   }
   
@@ -32,14 +37,16 @@
 @layer components {
   /* Modern Form Components */
   .form-input-enhanced {
-    @apply w-full px-fib-13 py-fib-8 border border-border-light rounded-lg bg-surface-primary text-system-gray-700 placeholder-system-gray-400;
+    padding: 8px 13px;
+    @apply w-full border border-border-light rounded-lg bg-surface-primary text-system-gray-700 placeholder-system-gray-400;
     @apply focus:ring-2 focus:ring-stratosort-blue/20 focus:border-stratosort-blue focus:bg-surface-primary;
     @apply transition-all duration-200 shadow-xs hover:shadow-sm hover:border-border-medium;
     @apply disabled:bg-system-gray-50 disabled:text-system-gray-400 disabled:cursor-not-allowed;
   }
 
   .form-textarea-enhanced {
-    @apply form-input-enhanced resize-y min-h-[80px];
+    min-height: 80px;
+    @apply form-input-enhanced resize-y;
   }
   
   /* Enhanced Floating Label Component */
@@ -48,21 +55,23 @@
   }
   
   .floating-label {
-    @apply absolute left-fib-13 top-1/2 transform -translate-y-1/2 bg-white px-fib-3 text-system-gray-500 text-base font-normal pointer-events-none transition-all duration-300 z-10;
-    @apply rounded-sm shadow-sm;
+    left: 13px;
+    padding: 0 3px;
+    @apply absolute top-1/2 transform -translate-y-1/2 bg-white text-system-gray-500 text-base font-normal pointer-events-none transition-all duration-300 z-10 rounded-sm shadow-sm;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
   
   .floating-label-input:focus + .floating-label,
   .floating-label-input:not(:placeholder-shown) + .floating-label {
-    @apply top-0 text-xs font-semibold text-stratosort-blue scale-95 -translate-y-1/2;
-    @apply bg-white/90 shadow-md px-fib-5;
+    padding: 0 5px;
+    @apply top-0 text-xs font-semibold text-stratosort-blue scale-95 -translate-y-1/2 bg-white/90 shadow-md;
   }
   
   /* Enhanced textarea variant */
   .floating-label-textarea {
-    @apply form-input-enhanced min-h-fib-89 resize-y leading-relaxed;
+    min-height: 89px;
+    @apply form-input-enhanced resize-y leading-relaxed;
     transition: height 0.2s ease-out, border-color 0.2s, box-shadow 0.2s;
   }
   
@@ -75,7 +84,9 @@
   
   /* Enhanced Button Components */
   .btn-enhanced {
-    @apply inline-flex items-center justify-center gap-fib-5 px-fib-21 py-fib-8 rounded-lg font-medium text-base transition-all duration-200 cursor-pointer select-none relative overflow-hidden;
+    gap: 5px;
+    padding: 8px 21px;
+    @apply inline-flex items-center justify-center rounded-lg font-medium text-base transition-all duration-200 cursor-pointer select-none relative overflow-hidden;
     @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
     font-feature-settings: "kern" 1, "liga" 1;
     text-rendering: optimizeLegibility;
@@ -99,7 +110,7 @@
   }
 
   /* Modern Typography Classes */
-  .text-display {
+  .display-heading {
     @apply text-display font-bold tracking-tight text-system-gray-900;
   }
 
@@ -146,11 +157,14 @@
   
   /* Modern Button Components */
   .btn-base {
-    @apply inline-flex items-center justify-center gap-fib-5 px-fib-13 py-fib-8 rounded-lg font-medium text-sm;
+    gap: 5px;
+    padding: 8px 13px;
+    @apply inline-flex items-center justify-center rounded-lg font-medium text-sm;
     @apply transition-all duration-200 cursor-pointer select-none relative overflow-hidden;
     @apply focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
-    @apply transform hover:scale-[1.02] active:scale-[0.98];
   }
+  .btn-base:hover { transform: scale(1.02); }
+  .btn-base:active { transform: scale(0.98); }
 
   .btn-primary {
     @apply btn-base bg-stratosort-blue hover:bg-stratosort-dark-blue text-white shadow-sm hover:shadow-stratosort;
@@ -178,36 +192,13 @@
     @apply focus:ring-stratosort-blue;
   }
   
-  /* Modern Card Components */
-  .card-enhanced {
-    @apply bg-surface-primary rounded-xl p-fib-21 shadow-sm border border-border-light;
-    @apply hover:shadow-md hover:border-border-medium transition-all duration-200;
-    @apply backdrop-blur-sm;
-  }
+  /* Modern Card Components - moved to utilities in Card.jsx */
   
-  .card-interactive {
-    @apply card-enhanced cursor-pointer hover:scale-[1.02] hover:shadow-lg;
-    @apply active:scale-[0.98] transition-transform duration-150;
-  }
-  
-  .card-success {
-    @apply bg-gradient-to-br from-emerald-50 to-green-50 border-stratosort-success/30 rounded-xl p-fib-21;
-    @apply shadow-sm ring-1 ring-stratosort-success/10;
-  }
-  
-  .card-error {
-    @apply bg-gradient-to-br from-red-50 to-rose-50 border-stratosort-accent/30 rounded-xl p-fib-21;
-    @apply shadow-sm ring-1 ring-stratosort-accent/10;
-  }
-  
-  .card-warning {
-    @apply bg-gradient-to-br from-amber-50 to-yellow-50 border-stratosort-warning/30 rounded-xl p-fib-21;
-    @apply shadow-sm ring-1 ring-stratosort-warning/10;
-  }
+  /* card variants defined in Card.jsx using utilities */
   
   /* Enhanced Toast Notifications - Less Invasive */
   .toast-enhanced {
-    @apply bg-white/90 border border-system-gray-200/60 rounded-lg px-fib-8 py-fib-5 shadow-md transform translate-x-full transition-all duration-200;
+    @apply px-8 py-5 bg-white/90 border border-system-gray-200/60 rounded-lg shadow-md transform translate-x-full transition-all duration-200;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     max-width: 320px;
@@ -238,7 +229,8 @@
 
   /* Enhanced Tooltip (unified with toast aesthetics) */
   .tooltip-enhanced {
-    @apply fixed z-[2147483646] pointer-events-none select-none text-system-gray-800 text-xs px-fib-5 py-fib-3 rounded-md shadow-md border border-system-gray-200/60 bg-white/90;
+    padding: 3px 5px;
+    @apply fixed z-max pointer-events-none select-none text-system-gray-800 text-xs rounded-md shadow-md border border-system-gray-200/60 bg-white/90;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     opacity: 0;
@@ -268,7 +260,8 @@
   
   /* Enhanced Progress Components */
   .progress-enhanced {
-    @apply relative bg-system-gray-100 rounded-full overflow-hidden h-fib-5;
+    height: 5px;
+    @apply relative bg-system-gray-100 rounded-full overflow-hidden;
   }
   
   .progress-bar-enhanced {
@@ -280,18 +273,12 @@
     @apply relative;
   }
   
-  .input-icon {
-    @apply absolute left-fib-8 top-1/2 transform -translate-y-1/2 text-system-gray-400 pointer-events-none z-10;
-  }
+  .input-icon { left: 8px; @apply absolute top-1/2 transform -translate-y-1/2 text-system-gray-400 pointer-events-none z-10; }
   
-  .input-with-icon .form-input-enhanced {
-    @apply pl-fib-34;
-  }
+  .input-with-icon .form-input-enhanced { padding-left: 34px; }
   
   /* Status Badges */
-  .status-badge {
-    @apply inline-flex items-center px-fib-5 py-fib-2 rounded-full text-xs font-semibold uppercase tracking-wide;
-  }
+  .status-badge { padding: 2px 5px; @apply inline-flex items-center rounded-full text-xs font-semibold uppercase tracking-wide; }
   
   .status-pending {
     @apply text-system-orange font-semibold;
@@ -310,18 +297,14 @@
   }
   
   /* Enhanced Navigation */
-  .nav-item {
-    @apply block w-full text-left px-fib-13 py-fib-8 text-sm text-system-gray-700 hover:bg-system-gray-100 rounded-md transition-colors duration-200;
-  }
+  .nav-item { padding: 8px 13px; @apply block w-full text-left text-sm text-system-gray-700 hover:bg-system-gray-100 rounded-md transition-colors duration-200; }
   
   .nav-item.active {
     @apply bg-stratosort-blue text-white hover:bg-stratosort-blue/90;
   }
   
   /* Enhanced Hint and Tooltip System */
-  .input-hint {
-    @apply text-xs text-system-gray-500 mt-fib-3 transition-all duration-200 opacity-0 transform translate-y-fib-2;
-  }
+  .input-hint { margin-top: 3px; transform: translateY(2px); @apply text-xs text-system-gray-500 transition-all duration-200 opacity-0; }
   
   .floating-label-input:focus ~ .input-hint,
   .floating-label-input:not(:placeholder-shown) ~ .input-hint {
@@ -337,9 +320,7 @@
   }
   
   /* Dynamic character counter */
-  .char-counter {
-    @apply text-xs text-system-gray-400 text-right mt-fib-2 transition-colors duration-200;
-  }
+  .char-counter { margin-top: 2px; @apply text-xs text-system-gray-400 text-right transition-colors duration-200; }
   
   .char-counter.warning {
     @apply text-system-orange;
@@ -350,18 +331,13 @@
   }
   
   /* Responsive suggestion dropdown */
-  .suggestion-dropdown {
-    @apply absolute top-full left-0 right-0 bg-white border border-system-gray-200 rounded-lg shadow-lg mt-fib-2 z-20 max-h-fib-144 overflow-y-auto;
-    @apply opacity-0 scale-95 transform translate-y-fib-2 transition-all duration-200 pointer-events-none;
-  }
+  .suggestion-dropdown { margin-top: 2px; max-height: 144px; transform: translateY(2px); @apply absolute top-full left-0 right-0 bg-white border border-system-gray-200 rounded-lg shadow-lg z-20 opacity-0 scale-95 transition-all duration-200 pointer-events-none overflow-y-auto; }
   
   .suggestion-dropdown.show {
     @apply opacity-100 scale-100 translate-y-0 pointer-events-auto;
   }
   
-  .suggestion-item {
-    @apply px-fib-13 py-fib-8 hover:bg-system-gray-50 cursor-pointer transition-colors duration-150 border-b border-system-gray-100 last:border-b-0;
-  }
+  .suggestion-item { padding: 8px 13px; @apply hover:bg-system-gray-50 cursor-pointer transition-colors duration-150 border-b border-system-gray-100 last:border-b-0; }
   
   .suggestion-item:hover {
     @apply bg-stratosort-blue/5 text-stratosort-blue;
@@ -434,9 +410,8 @@ select:focus {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .card-enhanced {
-    @apply border-2 border-system-gray-400;
-  }
+  /* High-contrast adjustments for cards now rely on utility composition */
+  .hc-border-strong { @apply border-2 border-system-gray-400; }
   
   .btn-primary,
   .btn-secondary,
@@ -452,17 +427,9 @@ select:focus {
 }
 
 /* Enhanced Typography */
-.heading-primary {
-  @apply text-3xl font-bold text-system-gray-800 mb-fib-8 tracking-tight;
-}
-
-.heading-secondary {
-  @apply text-xl font-semibold text-system-gray-700 mb-fib-5 tracking-tight;
-}
-
-.heading-tertiary {
-  @apply text-lg font-medium text-system-gray-700 mb-fib-3;
-}
+  .heading-primary { margin-bottom: theme('spacing.8'); @apply text-3xl font-bold text-system-gray-800 tracking-tight; }
+  .heading-secondary { margin-bottom: theme('spacing.5'); @apply text-xl font-semibold text-system-gray-700 tracking-tight; }
+  .heading-tertiary { margin-bottom: theme('spacing.3'); @apply text-lg font-medium text-system-gray-700; }
 
 .text-muted {
   @apply text-system-gray-500;
@@ -511,33 +478,19 @@ select:focus {
 }
 
 /* Layout Helpers */
-.container-enhanced {
-  @apply max-w-5xl mx-auto px-fib-21;
-}
-
-.container-centered {
-  @apply max-w-4xl mx-auto px-fib-21;
-}
-
-.container-narrow {
-  @apply max-w-2xl mx-auto px-fib-21;
-}
+  .container-enhanced { padding-left: theme('spacing.21'); padding-right: theme('spacing.21'); @apply max-w-5xl mx-auto; }
+  .container-centered { padding-left: theme('spacing.21'); padding-right: theme('spacing.21'); @apply max-w-4xl mx-auto; }
+  .container-narrow { padding-left: theme('spacing.21'); padding-right: theme('spacing.21'); @apply max-w-2xl mx-auto; }
 
 .content-centered {
   @apply flex flex-col items-center justify-start min-h-screen;
 }
 
-.main-content-wrapper {
-  @apply w-full max-w-5xl mx-auto px-fib-21;
-}
+  .main-content-wrapper { padding-left: theme('spacing.21'); padding-right: theme('spacing.21'); @apply w-full max-w-5xl mx-auto; }
 
-.grid-enhanced {
-  @apply grid gap-fib-13;
-}
+  .grid-enhanced { gap: theme('spacing.13'); @apply grid; }
 
-.flex-enhanced {
-  @apply flex items-center gap-fib-8;
-}
+  .flex-enhanced { gap: theme('spacing.8'); @apply flex items-center; }
 
 /* Animation Classes */
 .fade-in {
@@ -548,18 +501,7 @@ select:focus {
   @apply animate-slide-up duration-300;
 }
 
-/* Screen Reader Only - Accessibility */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* Use Tailwind's built-in sr-only utilities instead of redefining */
 
 /* Skip to content link */
 .skip-link {
@@ -579,21 +521,13 @@ select:focus {
 }
 
 /* Error and Success States */
-  .error-state {
-    @apply bg-system-red/10 border-system-red/20 text-system-red p-fib-8 rounded-md;
-  }
+  .error-state { @apply bg-system-red/10 border-system-red/20 text-system-red p-8 rounded-md; }
 
-  .success-state {
-    @apply bg-system-green/10 border-system-green/20 text-system-green p-fib-8 rounded-md;
-  }
+  .success-state { @apply bg-system-green/10 border-system-green/20 text-system-green p-8 rounded-md; }
 
-  .warning-state {
-    @apply bg-system-orange/10 border-system-orange/20 text-system-orange p-fib-8 rounded-md;
-  }
+  .warning-state { @apply bg-system-orange/10 border-system-orange/20 text-system-orange p-8 rounded-md; }
 
-  .info-state {
-    @apply bg-stratosort-blue/10 border-stratosort-blue/20 text-stratosort-blue p-fib-8 rounded-md;
-  }
+  .info-state { @apply bg-stratosort-blue/10 border-stratosort-blue/20 text-stratosort-blue p-8 rounded-md; }
 
 /* Modern Utility Classes */
 .glass-card {
@@ -604,9 +538,7 @@ select:focus {
   @apply bg-gradient-to-br from-stratosort-blue/5 via-surface-primary to-stratosort-light-blue/5;
 }
 
-.status-dot {
-  @apply w-fib-8 h-fib-8 rounded-full;
-}
+  .status-dot { width: 8px; height: 8px; @apply rounded-full; }
 
 .status-dot.success {
   @apply bg-stratosort-success shadow-sm ring-2 ring-stratosort-success/20;
@@ -772,17 +704,11 @@ select:focus {
 }
 
 /* ===== MODERN LAYOUT COMPONENTS ===== */
-.layout-container {
-  @apply max-w-7xl mx-auto px-fib-21 sm:px-fib-34;
-}
+.layout-container { @apply max-w-7xl mx-auto; padding-left: theme('spacing.21'); padding-right: theme('spacing.21'); }
 
-.layout-section {
-  @apply py-fib-55 sm:py-fib-89;
-}
+.layout-section { padding-top: theme('spacing.55'); padding-bottom: theme('spacing.55'); }
 
-.layout-grid {
-  @apply grid gap-fib-21;
-}
+.layout-grid { gap: theme('spacing.21'); @apply grid; }
 
 .layout-flex-center {
   @apply flex items-center justify-center;
@@ -792,9 +718,7 @@ select:focus {
   @apply flex items-center justify-between;
 }
 
-.layout-stack {
-  @apply space-y-fib-13;
-}
+.layout-stack { @apply space-y-13; }
 
 /* ===== INTERACTIVE STATES ===== */
 .interactive-scale {
@@ -810,34 +734,13 @@ select:focus {
 }
 
 /* ===== ENHANCED STATUS COMPONENTS ===== */
-.status-success {
-  @apply bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-fib-8 py-fib-3 text-small font-medium;
-}
-
-.status-error {
-  @apply bg-red-50 text-red-800 border border-red-200 rounded-full px-fib-8 py-fib-3 text-small font-medium;
-}
-
-.status-warning {
-  @apply bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-fib-8 py-fib-3 text-small font-medium;
-}
-
-.status-info {
-  @apply bg-blue-50 text-blue-800 border border-blue-200 rounded-full px-fib-8 py-fib-3 text-small font-medium;
-}
+  .status-success { padding: 3px 8px; @apply bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-small font-medium; }
+  .status-error { padding: 3px 8px; @apply bg-red-50 text-red-800 border border-red-200 rounded-full text-small font-medium; }
+  .status-warning { padding: 3px 8px; @apply bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-small font-medium; }
+  .status-info { padding: 3px 8px; @apply bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-small font-medium; }
 
 /* ===== MODERN CARD VARIANTS ===== */
-.card-hero {
-  @apply glass-medium rounded-2xl p-fib-34 shadow-2xl border border-white/30;
-}
-
-.card-compact {
-  @apply card-enhanced p-fib-13;
-}
-
-.card-elevated {
-  @apply card-enhanced shadow-lg hover:shadow-xl;
-}
+  /* hero/compact/elevated moved to Card.jsx */
 
 /* ===== ENHANCED BUTTON VARIANTS ===== */
 .btn-ghost-minimal {
@@ -858,7 +761,7 @@ select:focus {
   .interactive-glow,
   .interactive-lift,
   .btn-enhanced,
-  .card-interactive {
+  .interactive-card-reset {
     @apply transition-none hover:scale-100 hover:shadow-none hover:translate-y-0;
   }
   
@@ -879,9 +782,7 @@ select:focus {
     @apply bg-white border-system-gray-900 backdrop-blur-none;
   }
   
-  .card-enhanced {
-    @apply border-system-gray-900;
-  }
+  .hc-card-border { @apply border-system-gray-900; }
   
   .btn-primary {
     @apply bg-system-gray-900 text-white border-2 border-system-gray-900;

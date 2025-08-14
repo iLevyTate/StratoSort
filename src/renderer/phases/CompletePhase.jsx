@@ -9,12 +9,12 @@ function CompletePhase() {
   const organizedFiles = phaseData.organizedFiles || [];
 
   return (
-    <div className="container-narrow py-fib-34">
-      <div className="text-center mb-fib-21">
-        <div className="text-6xl mb-fib-13">✅</div>
-        <h2 className="heading-primary mb-fib-8">Organization Complete!</h2>
+    <div className="container-narrow py-34">
+      <div className="text-center mb-21">
+        <div className="text-6xl mb-13">✅</div>
+        <h2 className="heading-primary mb-8">Organization Complete!</h2>
         <p className="text-lg text-system-gray-600">Successfully organized {organizedFiles.length} files using AI-powered analysis.</p>
-        <div className="flex items-center justify-center gap-fib-8 mt-fib-8">
+        <div className="flex items-center justify-center gap-8 mt-8">
           <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['complete-summary','complete-next-steps']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true')); window.dispatchEvent(new Event('storage')); } catch {} }}>
             Expand all
           </button>
@@ -27,7 +27,7 @@ function CompletePhase() {
 
       {organizedFiles.length > 0 && (
         <Collapsible title="Organization Summary" defaultOpen persistKey="complete-summary">
-          <div className="space-y-fib-5">
+          <div className="space-y-5">
             {organizedFiles.slice(0, 5).map((file, index) => (
               <div key={index} className="text-sm">
                 <span className="text-system-gray-600">✓</span> {file.originalName || `File ${index + 1}`} → {file.newLocation || 'Organized'}
@@ -41,12 +41,12 @@ function CompletePhase() {
       )}
 
       <Collapsible title="Next Steps" defaultOpen persistKey="complete-next-steps">
-        <div className="flex flex-col gap-fib-13">
-          <div className="flex gap-fib-8">
+        <div className="flex flex-col gap-13">
+          <div className="flex gap-8">
             <Button onClick={() => actions.advancePhase(PHASES.ORGANIZE)} variant="secondary" className="flex-1">← Back to Organization</Button>
             <Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="outline" className="flex-1">← Back to Discovery</Button>
           </div>
-          <Button onClick={() => actions.resetWorkflow()} variant="primary" className="px-fib-34 py-fib-13">🚀 Start New Organization Session</Button>
+          <Button onClick={() => actions.resetWorkflow()} variant="primary" className="px-34 py-13">🚀 Start New Organization Session</Button>
         </div>
       </Collapsible>
     </div>

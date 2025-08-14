@@ -77,22 +77,25 @@ const Toast = ({
       onKeyDown={handleKeyDown}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-fib-5">
-          <span className="text-sm flex-shrink-0 opacity-80" aria-hidden="true">
+        <div className="flex items-center gap-5">
+          <span className="text-lg md:text-xl flex-shrink-0 opacity-90" aria-hidden="true">
             {getSeverityIcon()}
           </span>
           <div className="flex-1">
-            <div className="text-xs font-normal leading-tight opacity-90">
+            <div className="text-xs md:text-sm font-normal leading-tight opacity-90">
               {message}
             </div>
           </div>
         </div>
         <button
           onClick={handleClose}
-          className="ml-fib-5 text-current opacity-50 hover:opacity-80 p-fib-1 rounded hover:bg-black/5 transition-all duration-150"
+          className="ml-5 inline-flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-md text-current opacity-80 hover:opacity-100 hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stratosort-blue/40 transition-colors"
           aria-label="Close notification"
+          title="Close"
         >
-          <span className="text-sm leading-none">×</span>
+          <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
         </button>
       </div>
     </div>
@@ -132,33 +135,50 @@ export const ToastContainer = ({ toasts = [], onRemoveToast, onClearAll }) => {
 
   return (
     <div aria-live="polite" aria-label="Notifications" className="z-40 pointer-events-none" style={containerStyle()}>
-      {/* Controls */}
-      <div className="pointer-events-auto mb-fib-5 flex items-center gap-fib-5 bg-white/80 backdrop-blur border border-system-gray-200 rounded px-fib-5 py-fib-3 shadow-sm">
-        <button onClick={toggleCollapsed} className="text-xs text-system-gray-700 hover:text-system-gray-900">{collapsed ? 'Expand' : 'Minimize'}</button>
-        <span className="text-system-gray-300">•</span>
-        <button onClick={() => onClearAll?.()} className="text-xs text-system-gray-700 hover:text-system-gray-900">Clear</button>
-        <span className="text-system-gray-300">•</span>
-        <label className="text-xs text-system-gray-700">Position</label>
-        <select value={position} onChange={(e) => updatePosition(e.target.value)} className="text-xs border border-system-gray-200 rounded px-fib-3 py-fib-1 bg-white">
-          <option value="top-right">Top Right</option>
-          <option value="top-left">Top Left</option>
-          <option value="bottom-right">Bottom Right</option>
-          <option value="bottom-left">Bottom Left</option>
-        </select>
+      {/* Toggle Icon */}
+      <div className="pointer-events-auto mb-4 flex items-center justify-end">
+        <button
+          onClick={toggleCollapsed}
+          className="relative inline-flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full bg-white/90 border border-system-gray-200 text-system-gray-700 hover:bg-white shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stratosort-blue/40"
+          aria-label={collapsed ? 'Open notifications' : 'Close notifications'}
+          aria-expanded={!collapsed}
+          aria-controls="toast-panel"
+          title={collapsed ? 'Open notifications' : 'Close notifications'}
+        >
+          {collapsed ? (
+            // Bell icon
+            <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 22a2 2 0 002-2H10a2 2 0 002 2z" />
+              <path fillRule="evenodd" d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9a1 1 0 001 1h16a1 1 0 001-1c0-2-3-2-3-9z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            // Close icon
+            <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          )}
+          {toasts.length > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-5 px-1 rounded-full bg-stratosort-blue text-white text-[10px] leading-5 text-center">
+              {toasts.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Toasts */}
-      {!collapsed && toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto mb-fib-5">
-          <Toast
-            message={toast.message}
-            severity={toast.severity || toast.type}
-            duration={toast.duration}
-            show={toast.show !== false}
-            onClose={() => onRemoveToast?.(toast.id)}
-          />
-        </div>
-      ))}
+      <div id="toast-panel" aria-hidden={collapsed}>
+        {!collapsed && toasts.map((toast) => (
+          <div key={toast.id} className="pointer-events-auto mb-5">
+            <Toast
+              message={toast.message}
+              severity={toast.severity || toast.type}
+              duration={toast.duration}
+              show={toast.show !== false}
+              onClose={() => onRemoveToast?.(toast.id)}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

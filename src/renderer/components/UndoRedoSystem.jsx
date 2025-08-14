@@ -483,11 +483,11 @@ export function UndoRedoToolbar({ className = '' }) {
   );
 
   return (
-    <div className={`flex items-center space-x-1 ${className}`}>
+    <div className={`flex items-center space-x-5 ${className}`}>
       <button
         onClick={undo}
         disabled={!canUndo}
-        className={`p-2 rounded-lg transition-colors border
+        className={`p-8 rounded-lg transition-colors border
           ${!canUndo 
             ? 'text-gray-300 cursor-not-allowed border-transparent' 
             : isImportantOperation
@@ -497,7 +497,7 @@ export function UndoRedoToolbar({ className = '' }) {
         `}
         title={lastAction ? `⚠️ Undo: ${getActionDescription(lastAction)}${isImportantOperation ? ' (Will ask for confirmation)' : ''}` : 'Nothing to undo'}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
         </svg>
       </button>
@@ -506,7 +506,7 @@ export function UndoRedoToolbar({ className = '' }) {
         onClick={redo}
         disabled={!canRedo}
         className={`
-          p-2 rounded-lg transition-colors
+          p-8 rounded-lg transition-colors
           ${canRedo 
             ? 'text-gray-700 hover:bg-gray-100 hover:text-gray-900' 
             : 'text-gray-300 cursor-not-allowed'
@@ -514,19 +514,21 @@ export function UndoRedoToolbar({ className = '' }) {
         `}
         title={nextAction ? `Redo: ${getActionDescription(nextAction)}` : 'Nothing to redo'}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
         </svg>
       </button>
       
       <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="hidden md:block w-px h-6 bg-gray-300" />
       
       <button
         onClick={() => setIsHistoryVisible(true)}
-        className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+        className="p-8 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
         title="View action history"
+        aria-label="View action history"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </button>

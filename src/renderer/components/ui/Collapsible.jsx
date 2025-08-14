@@ -49,11 +49,11 @@ export default function Collapsible({
   }, [storageKey]);
 
   return (
-    <section className={`card-enhanced mb-fib-21 ${className}`}>
+    <section className={`bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 hover:shadow-md hover:border-border-medium transition-all duration-200 backdrop-blur-sm mb-21 ${className}`}>
       <div className="flex items-center justify-between">
         <button
           type="button"
-          className="flex items-center gap-fib-8 py-fib-8 focus:outline-none"
+          className="flex items-center gap-8 py-8 focus:outline-none"
           aria-expanded={isOpen}
           aria-controls={contentId}
           onClick={toggle}
@@ -68,7 +68,7 @@ export default function Collapsible({
           </svg>
           <h3 className="heading-tertiary m-0">{title}</h3>
         </button>
-        <div className="flex items-center gap-fib-8">
+        <div className="flex items-center gap-8">
           {/* Expand/Collapse control when persistKey is present */}
           {persistKey ? (
             <button
@@ -82,13 +82,13 @@ export default function Collapsible({
               {isOpen ? 'Collapse' : 'Expand'}
             </button>
           ) : null}
-          {actions ? <div className="flex items-center gap-fib-8">{actions}</div> : null}
+          {actions ? <div className="flex items-center gap-8">{actions}</div> : null}
         </div>
       </div>
 
       <div
         id={contentId}
-        className={`transition-all duration-200 ${isOpen ? 'mt-fib-13' : 'h-0 overflow-hidden'}`}
+        className={`transition-all duration-200 ${isOpen ? 'mt-13' : 'h-0 overflow-hidden'}`}
       >
         {isOpen ? children : null}
       </div>

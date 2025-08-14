@@ -112,7 +112,7 @@ const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-max flex items-center justify-center p-fib-13 animate-modal-backdrop"
+      className="fixed inset-0 z-max flex items-center justify-center p-13 animate-modal-backdrop"
       onClick={handleOverlayClick}
     >
       {/* Backdrop */}
@@ -134,7 +134,7 @@ const Modal = ({
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-fib-21 border-b border-system-gray-200">
+          <div className="flex items-center justify-between p-21 border-b border-system-gray-200">
             {title && (
               <h2 id="modal-title" className="text-xl font-semibold text-system-gray-900">
                 {title}
@@ -143,7 +143,7 @@ const Modal = ({
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="p-fib-5 text-system-gray-400 hover:text-system-gray-600 hover:bg-system-gray-100 rounded-md transition-colors"
+                className="p-5 text-system-gray-400 hover:text-system-gray-600 hover:bg-system-gray-100 rounded-md transition-colors"
                 aria-label="Close modal"
               >
                 <span className="text-xl leading-none">×</span>

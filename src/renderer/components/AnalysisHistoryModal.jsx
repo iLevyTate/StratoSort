@@ -51,52 +51,52 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-fib-21 max-h-[90vh] overflow-hidden">
-        <div className="p-fib-21 border-b border-system-gray-200">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-21 max-h-[90vh] overflow-hidden">
+        <div className="p-21 border-b border-system-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-system-gray-900">📊 Analysis History & Statistics</h2>
             <button onClick={onClose} className="text-system-gray-500 hover:text-system-gray-700">✕</button>
           </div>
-          <div className="flex mt-fib-13 border-b border-system-gray-200">
-            <button onClick={() => setSelectedTab('statistics')} className={`px-fib-13 py-fib-8 text-sm font-medium border-b-2 ${selectedTab === 'statistics' ? 'border-stratosort-blue text-stratosort-blue' : 'border-transparent text-system-gray-500 hover:text-system-gray-700'}`}>
+          <div className="flex mt-13 border-b border-system-gray-200">
+            <button onClick={() => setSelectedTab('statistics')} className={`px-13 py-8 text-sm font-medium border-b-2 ${selectedTab === 'statistics' ? 'border-stratosort-blue text-stratosort-blue' : 'border-transparent text-system-gray-500 hover:text-system-gray-700'}`}>
               📈 Statistics
             </button>
-            <button onClick={() => setSelectedTab('history')} className={`px-fib-13 py-fib-8 text-sm font-medium border-b-2 ${selectedTab === 'history' ? 'border-stratosort-blue text-stratosort-blue' : 'border-transparent text-system-gray-500 hover:text-system-gray-700'}`}>
+            <button onClick={() => setSelectedTab('history')} className={`px-13 py-8 text-sm font-medium border-b-2 ${selectedTab === 'history' ? 'border-stratosort-blue text-stratosort-blue' : 'border-transparent text-system-gray-500 hover:text-system-gray-700'}`}>
               📋 History
             </button>
           </div>
         </div>
-        <div className="p-fib-21 overflow-y-auto max-h-[70vh]">
+        <div className="p-21 overflow-y-auto max-h-[70vh]">
           {isLoading ? (
-            <div className="text-center py-fib-21">
-              <div className="animate-spin w-fib-21 h-fib-21 border-3 border-stratosort-blue border-t-transparent rounded-full mx-auto mb-fib-8"></div>
+            <div className="text-center py-21">
+              <div className="animate-spin w-21 h-21 border-3 border-stratosort-blue border-t-transparent rounded-full mx-auto mb-8"></div>
               <p>Loading analysis data...</p>
             </div>
           ) : (
             <>
               {selectedTab === 'statistics' && analysisStats && (
-                <div className="space-y-fib-21">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-fib-13">
-                    <div className="card-enhanced text-center">
+                <div className="space-y-21">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-13">
+                    <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
                       <div className="text-2xl font-bold text-stratosort-blue">{analysisStats.totalFiles || 0}</div>
                       <div className="text-sm text-system-gray-600">Total Files</div>
                     </div>
-                    <div className="card-enhanced text-center">
+                    <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
                       <div className="text-2xl font-bold text-green-600">{Math.round(analysisStats.averageConfidence || 0)}%</div>
                       <div className="text-sm text-system-gray-600">Avg Confidence</div>
                     </div>
-                    <div className="card-enhanced text-center">
+                    <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
                       <div className="text-2xl font-bold text-purple-600">{analysisStats.categoriesCount || 0}</div>
                       <div className="text-sm text-system-gray-600">Categories</div>
                     </div>
-                    <div className="card-enhanced text-center">
+                    <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
                       <div className="text-2xl font-bold text-orange-600">{Math.round(analysisStats.averageProcessingTime || 0)}ms</div>
                       <div className="text-sm text-system-gray-600">Avg Time</div>
                     </div>
                   </div>
-                  <div className="card-enhanced">
-                    <h3 className="font-semibold mb-fib-8">📤 Export Options</h3>
-                    <div className="flex gap-fib-8">
+                  <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
+                    <h3 className="font-semibold mb-8">📤 Export Options</h3>
+                    <div className="flex gap-8">
                       <Button onClick={() => exportHistory('json')} variant="outline" className="text-sm">Export JSON</Button>
                       <Button onClick={() => exportHistory('csv')} variant="outline" className="text-sm">Export CSV</Button>
                     </div>
@@ -104,26 +104,26 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                 </div>
               )}
               {selectedTab === 'history' && (
-                <div className="space-y-fib-13">
-                  <div className="flex gap-fib-8">
+                <div className="space-y-13">
+                  <div className="flex gap-8">
                     <Input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search analysis history..." className="flex-1" onKeyDown={(e) => e.key === 'Enter' && searchHistory()} />
                     <Button onClick={searchHistory} variant="primary">Search</Button>
                     <Button onClick={loadAnalysisData} variant="outline">Reset</Button>
                   </div>
-                  <div className="space-y-fib-8">
+                  <div className="space-y-8">
                     {historyData.map((entry, index) => (
-                      <div key={index} className="card-enhanced">
+                      <div key={index} className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="font-medium text-system-gray-900">{entry.fileName || 'Unknown File'}</div>
-                            <div className="text-sm text-system-gray-600 mt-fib-3">
+                            <div className="text-sm text-system-gray-600 mt-3">
                               <span className="text-stratosort-blue">{entry.category || 'Uncategorized'}</span>
-                              {entry.confidence && <span className="ml-fib-8">Confidence: {entry.confidence}%</span>}
+                              {entry.confidence && <span className="ml-8">Confidence: {entry.confidence}%</span>}
                             </div>
                             {entry.keywords && entry.keywords.length > 0 && (
-                              <div className="flex flex-wrap gap-fib-3 mt-fib-5">
+                              <div className="flex flex-wrap gap-3 mt-5">
                                 {entry.keywords.slice(0, 5).map((keyword, i) => (
-                                  <span key={i} className="text-xs bg-stratosort-blue/10 text-stratosort-blue px-fib-3 py-fib-1 rounded-full">{keyword}</span>
+                                  <span key={i} className="text-xs bg-stratosort-blue/10 text-stratosort-blue px-3 py-1 rounded-full">{keyword}</span>
                                 ))}
                               </div>
                             )}
@@ -133,7 +133,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                       </div>
                     ))}
                     {historyData.length === 0 && (
-                      <div className="text-center py-fib-21 text-system-gray-500">No analysis history found</div>
+                      <div className="text-center py-21 text-system-gray-500">No analysis history found</div>
                     )}
                   </div>
                 </div>

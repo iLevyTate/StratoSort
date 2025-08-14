@@ -213,15 +213,15 @@ function OrganizePhase() {
   // The rest of Organize UI (lists, bulk ops, progress) should be moved here as needed.
   return (
     <div className="w-full">
-      <div className="mb-fib-21">
+      <div className="mb-21">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="heading-primary mb-fib-8">📂 Review & Organize</h2>
+            <h2 className="heading-primary mb-8">📂 Review & Organize</h2>
             <p className="text-lg text-system-gray-600 leading-relaxed">Review AI suggestions and organize your files into smart folders.</p>
-            {isAnalysisRunning && (
-              <div className="mt-fib-13 p-fib-13 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-fib-8">
-                  <div className="animate-spin w-fib-13 h-fib-13 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+              {isAnalysisRunning && (
+                <div className="mt-13 p-13 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-8">
+                    <div className="animate-spin w-13 h-13 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                   <div className="text-sm font-medium text-blue-700">Analysis continuing in background: {analysisProgressFromDiscover.current}/{analysisProgressFromDiscover.total} files</div>
                 </div>
               </div>
@@ -258,13 +258,13 @@ function OrganizePhase() {
       )}
       <Collapsible title="Files Ready for Organization" defaultOpen persistKey="organize-ready-list">
         {unprocessedFiles.length === 0 ? (
-          <div className="text-center py-fib-21">
-            <div className="text-4xl mb-fib-13">{processedFiles.length > 0 ? '✅' : '📭'}</div>
+          <div className="text-center py-21">
+            <div className="text-4xl mb-13">{processedFiles.length > 0 ? '✅' : '📭'}</div>
             <p className="text-system-gray-500 italic">{processedFiles.length > 0 ? 'All files have been organized! Check the results below.' : 'No files ready for organization yet.'}</p>
-            {processedFiles.length === 0 && (<Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="primary" className="mt-fib-13">← Go Back to Select Files</Button>)}
+            {processedFiles.length === 0 && (<Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="primary" className="mt-13">← Go Back to Select Files</Button>)}
           </div>
         ) : (
-          <div className="space-y-fib-8">
+          <div className="space-y-8">
             {unprocessedFiles.map((file, index) => {
               const fileWithEdits = getFileWithEdits(file, index);
               const currentCategory = editingFiles[index]?.category || fileWithEdits.analysis?.category;
@@ -293,10 +293,10 @@ function OrganizePhase() {
       </Collapsible>
       {processedFiles.length > 0 && (
         <Collapsible title="✅ Previously Organized Files" defaultOpen={false} persistKey="organize-history">
-          <div className="space-y-fib-5 max-h-64 overflow-y-auto">
+          <div className="space-y-5 max-h-64 overflow-y-auto">
             {processedFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between p-fib-8 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-fib-8">
+              <div key={index} className="flex items-center justify-between p-8 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex items-center gap-8">
                   <span className="text-green-600">✅</span>
                   <div>
                     <div className="text-sm font-medium text-system-gray-900">{file.originalName} → {file.newName}</div>
@@ -311,12 +311,12 @@ function OrganizePhase() {
       )}
       {unprocessedFiles.length > 0 && (
         <Collapsible title="Ready to Organize" defaultOpen persistKey="organize-action">
-          <p className="text-system-gray-600 mb-fib-13">StratoSort will move and rename <strong>{unprocessedFiles.filter(f => f.analysis).length} files</strong> according to AI suggestions.</p>
-          <p className="text-xs text-system-gray-500 mb-fib-13">💡 Don't worry - you can undo this operation if needed</p>
+          <p className="text-system-gray-600 mb-13">StratoSort will move and rename <strong>{unprocessedFiles.filter(f => f.analysis).length} files</strong> according to AI suggestions.</p>
+          <p className="text-xs text-system-gray-500 mb-13">💡 Don't worry - you can undo this operation if needed</p>
           {isOrganizing ? (
             <OrganizeProgress isOrganizing={isOrganizing} batchProgress={batchProgress} />
           ) : (
-            <Button onClick={handleOrganizeFiles} variant="success" className="text-lg px-fib-21 py-fib-13" disabled={unprocessedFiles.filter(f => f.analysis).length === 0}>✨ Organize Files Now</Button>
+            <Button onClick={handleOrganizeFiles} variant="success" className="text-lg px-21 py-13" disabled={unprocessedFiles.filter(f => f.analysis).length === 0}>✨ Organize Files Now</Button>
           )}
         </Collapsible>
       )}

@@ -38,9 +38,9 @@ function SystemMonitoring() {
   }
 
   return (
-    <div className="space-y-fib-8">
+    <div className="space-y-8">
       <h4 className="font-medium text-system-gray-700">📊 System Status</h4>
-      <div className="grid grid-cols-2 gap-fib-8 text-sm">
+      <div className="grid grid-cols-2 gap-8 text-sm">
         <div>
           <span className="text-system-gray-600">CPU:</span>
           <span className="ml-2 font-medium">{systemMetrics.cpu?.toFixed(1) || 0}%</span>

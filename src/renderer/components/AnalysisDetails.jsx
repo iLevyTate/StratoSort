@@ -12,7 +12,7 @@ const AnalysisDetails = React.memo(function AnalysisDetails({ analysis, options 
   const displayHasText = typeof analysis.has_text === 'boolean' ? analysis.has_text : (typeof analysis.hasText === 'boolean' ? analysis.hasText : undefined);
 
   return (
-    <div className="space-y-fib-3">
+    <div className="space-y-3">
       {showName && analysis.suggestedName && (
         <div className="text-sm text-system-gray-700">
           <strong>Suggested Name:</strong>{' '}

@@ -14,7 +14,6 @@ class ModelVerifier {
     this.essentialModels = [
       DEFAULT_AI_MODELS.TEXT_ANALYSIS, // llama3.2:latest (2GB)
       DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // llava:latest (4.7GB)
-      DEFAULT_AI_MODELS.AUDIO_ANALYSIS, // dimavz/whisper-tiny:latest (44MB)
       'mxbai-embed-large' // For semantic search
     ];
     this.recommendedModels = [
@@ -100,13 +99,9 @@ class ModelVerifier {
       }
     }
 
-    // Special check for Whisper models
+    // Special check for Whisper models (optional while audio disabled)
     const whisperVariants = ['whisper', 'whisper:base', 'whisper:small', 'whisper:medium', 'whisper:large'];
-    const hasWhisper = whisperVariants.some(variant => 
-      installedModelNames.some(installed => 
-        installed === variant.toLowerCase() || installed.startsWith('whisper')
-      )
-    );
+    const hasWhisper = installedModelNames.some(installed => installed.startsWith('whisper'));
 
     console.log(`[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`);
     console.log(`[ModelVerifier] Whisper available: ${hasWhisper}`);

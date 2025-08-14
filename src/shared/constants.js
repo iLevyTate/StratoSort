@@ -213,7 +213,8 @@ const SUPPORTED_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx', '.pptx'
 
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
 
-const SUPPORTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+// Audio temporarily disabled; keep list for potential future re-enable
+const SUPPORTED_AUDIO_EXTENSIONS = [];
 
 const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv'];
 
@@ -233,8 +234,25 @@ const ALL_SUPPORTED_EXTENSIONS = [
 const DEFAULT_AI_MODELS = {
   TEXT_ANALYSIS: 'llama3.2:latest',        // 2.0GB - Fastest text model
   IMAGE_ANALYSIS: 'llava:latest',          // 4.7GB - Vision capable model  
-  AUDIO_ANALYSIS: 'dimavz/whisper-tiny:latest', // 44MB - Fastest audio model
+  // AUDIO_ANALYSIS removed while audio features are disabled
   FALLBACK_MODELS: ['llama3.2:latest', 'gemma3:4b', 'llama3', 'mistral', 'phi3']
+};
+
+// AI defaults centralized for analyzers
+const AI_DEFAULTS = {
+  TEXT: {
+    MODEL: 'llama3.2:latest',
+    HOST: 'http://127.0.0.1:11434',
+    MAX_CONTENT_LENGTH: 12000,
+    TEMPERATURE: 0.1,
+    MAX_TOKENS: 800,
+  },
+  IMAGE: {
+    MODEL: 'llava:latest',
+    HOST: 'http://127.0.0.1:11434',
+    TEMPERATURE: 0.2,
+    MAX_TOKENS: 1000,
+  }
 };
 
 // File size limits
@@ -287,6 +305,7 @@ module.exports = {
   SUPPORTED_ARCHIVE_EXTENSIONS,
   ALL_SUPPORTED_EXTENSIONS,
   DEFAULT_AI_MODELS,
+  AI_DEFAULTS,
   FILE_SIZE_LIMITS,
   PROCESSING_LIMITS,
   UI_WORKFLOW,

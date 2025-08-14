@@ -63,7 +63,6 @@ function DiscoverPhase() {
         hasResumedRef.current = true;
         addNotification(`Resuming analysis of ${remaining.length} files...`, 'info');
         // Kick off analysis for remaining files only
-        // eslint-disable-next-line no-floating-promises
         analyzeFiles(remaining);
       } else {
         hasResumedRef.current = true;

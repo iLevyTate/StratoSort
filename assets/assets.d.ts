@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/naming-convention
 type Styles = Record<string, string>;
 
 declare module '*.svg' {

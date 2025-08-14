@@ -1,5 +1,5 @@
 const { Ollama } = require('ollama');
-const { buildOllamaOptions } = require('./services/PerformanceService');
+// const { buildOllamaOptions } = require('./services/PerformanceService');
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
@@ -159,12 +159,15 @@ async function saveOllamaConfig(config) {
 
 module.exports = {
   getOllama,
+  // Backwards-compatible alias for modules expecting a client getter
+  getOllamaClient: getOllama,
   getOllamaModel,
   getOllamaVisionModel,
   setOllamaModel,
   setOllamaVisionModel,
   getOllamaHost,
   setOllamaHost,
+  getOllamaConfigPath,
   loadOllamaConfig,
   saveOllamaConfig,
 }; 

@@ -1,0 +1,7 @@
+release/**
+dist/**
+coverage/**
+**/*.min.js
+**/*.bundle.js
+**/*.map
+assets/**

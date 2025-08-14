@@ -1,51 +1,16 @@
-const { Ollama } = require('ollama');
 const { logger } = require('../shared/logger');
 const { buildOllamaOptions } = require('./services/PerformanceService');
-const { DEFAULT_AI_MODELS } = require('../shared/constants');
-
-// Initialize Ollama instance
-let ollamaInstance = null;
-let selectedModel = DEFAULT_AI_MODELS.TEXT_ANALYSIS;
-
-/**
- * Get or create Ollama instance
- */
-function getOllama() {
-  if (!ollamaInstance) {
-    const host = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-    ollamaInstance = new Ollama({ host });
-    logger.info('Ollama instance initialized', { host });
-  }
-  return ollamaInstance;
-}
-
-/**
- * Get the currently selected Ollama model
- */
-function getOllamaModel() {
-  return selectedModel;
-}
-
-/**
- * Set the selected Ollama model
- */
-function setOllamaModel(modelName) {
-  selectedModel = modelName;
-  logger.info('Ollama model updated', { model: modelName });
-}
+const { getOllama: getOllamaClient, getOllamaModel, setOllamaModel } = require('./ollamaUtils');
 
 /**
  * Test if Ollama is available and the model is working
  */
 async function testOllamaConnection() {
   try {
-    const ollama = getOllama();
-    const response = await ollama.generate({
-      model: selectedModel,
-      prompt: 'Hello',
-      options: { num_predict: 1 }
-    });
-    return { success: true, model: selectedModel };
+    const ollama = getOllamaClient();
+    const model = getOllamaModel();
+    await ollama.generate({ model, prompt: 'Hello', options: { num_predict: 1 } });
+    return { success: true, model };
   } catch (error) {
     logger.error('Ollama connection test failed', { error: error.message });
     return { success: false, error: error.message };
@@ -101,7 +66,7 @@ function simplifyDirectoryStructure(structure, maxDepth = 3, currentDepth = 0) {
  * @returns {Promise<Object>} An object containing the LLM's suggestions.
  */
 async function getOrganizationSuggestions(directoryStructure) {
-  const ollama = getOllama();
+  const ollama = getOllamaClient();
   const model = getOllamaModel();
 
   if (!ollama || !model) {
@@ -115,25 +80,12 @@ async function getOrganizationSuggestions(directoryStructure) {
   const prompt = formatPromptForLLM(directoryStructure);
 
   try {
-    logger.info('Sending organization request to LLM', { 
-      model, 
-      structureSize: directoryStructure.length 
-    });
+    logger.info('Sending organization request to LLM', { model });
     
     const startTime = Date.now();
     
     const perfOptions = await buildOllamaOptions('text');
-    const response = await ollama.generate({
-      model: model,
-      prompt: prompt,
-      format: 'json',
-      options: {
-        ...perfOptions,
-        temperature: 0.3, // Lower temperature for more consistent suggestions
-        num_predict: 1000,
-        stop: ['\n\n', '###']
-      }
-    });
+    const response = await ollama.generate({ model, prompt, format: 'json', options: { ...perfOptions, temperature: 0.3, num_predict: 1000, stop: ['\n\n', '###'] } });
 
     const duration = Date.now() - startTime;
     logger.performance('LLM organization suggestions', duration, { model });
@@ -145,12 +97,10 @@ async function getOrganizationSuggestions(directoryStructure) {
     // Parse the JSON response
     let suggestions;
     try {
-      const parsedResponse = JSON.parse(response.response);
+    const parsedResponse = JSON.parse(response.response);
       suggestions = parsedResponse.suggestions || parsedResponse;
     } catch (parseError) {
-      logger.warn('Failed to parse LLM JSON response, using text parsing', { 
-        error: parseError.message 
-      });
+      logger.warn('Failed to parse LLM JSON response, using text parsing', { error: parseError.message });
       suggestions = parseTextResponse(response.response);
     }
 
@@ -165,16 +115,9 @@ async function getOrganizationSuggestions(directoryStructure) {
     };
 
   } catch (error) {
-    logger.error('Error getting suggestions from LLM', { 
-      error: error.message,
-      model 
-    });
+    logger.error('Error getting suggestions from LLM', { error: error.message, model });
     
-    return {
-      error: error.message || 'Failed to get suggestions from LLM',
-      suggestions: [],
-      fallbackSuggestions: getFallbackSuggestions(directoryStructure)
-    };
+    return { error: error.message || 'Failed to get suggestions from LLM', suggestions: [], fallbackSuggestions: getFallbackSuggestions(directoryStructure) };
   }
 }
 
@@ -245,7 +188,7 @@ function getFallbackSuggestions(directoryStructure) {
 module.exports = { 
   getOrganizationSuggestions, 
   formatPromptForLLM,
-  getOllama,
+  getOllama: getOllamaClient,
   getOllamaModel,
   setOllamaModel,
   testOllamaConnection

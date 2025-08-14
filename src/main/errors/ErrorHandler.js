@@ -42,7 +42,7 @@ class ErrorHandler {
     });
 
     // Handle unhandled promise rejections
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', (reason, _promise) => {
       this.handleCriticalError('Unhandled Promise Rejection', reason);
     });
 

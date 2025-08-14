@@ -5,6 +5,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useConfirmDialog, useDragAndDrop } from '../hooks';
 import { Collapsible, Button, Input, Select } from '../components/ui';
 import AnalysisDetails from '../components/AnalysisDetails';
+import AnalysisHistoryModal from '../components/AnalysisHistoryModal';
 import { NamingSettings, SelectionControls, DragAndDropZone, AnalysisResultsList, AnalysisProgress } from '../components/discover';
 
 function DiscoverPhase() {
@@ -27,6 +28,8 @@ function DiscoverPhase() {
 
   const [fileStates, setFileStates] = useState({});
   const hasResumedRef = useRef(false);
+  const analysisLockRef = useRef(false); // Add analysis lock to prevent multiple simultaneous calls
+  const [globalAnalysisActive, setGlobalAnalysisActive] = useState(false); // Global analysis state
 
   useEffect(() => {
     const persistedResults = phaseData.analysisResults || [];
@@ -46,9 +49,28 @@ function DiscoverPhase() {
     setSeparator(persistedNaming.separator || '-');
     if (persistedResults.length > 0) setAnalysisResults(persistedResults);
     if (persistedIsAnalyzing) {
-      setIsAnalyzing(true);
-      setAnalysisProgress(persistedProgress);
-      setCurrentAnalysisFile(persistedCurrent);
+      // Check if analysis state is actually valid (not stuck)
+      const lastActivity = persistedProgress.lastActivity || Date.now();
+      const timeSinceActivity = Date.now() - lastActivity;
+      const isStuck = timeSinceActivity > 2 * 60 * 1000; // 2 minutes
+      
+      if (isStuck) {
+        console.log('[ANALYSIS] Detected stuck analysis state on mount, resetting...');
+        // Don't restore stuck analysis state
+        actions.setPhaseData('isAnalyzing', false);
+        actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+        actions.setPhaseData('currentAnalysisFile', '');
+        
+        // Clear any stuck localStorage state
+        try {
+          localStorage.removeItem('stratosort_workflow_state');
+        } catch {}
+      } else {
+        // Analysis state is valid, restore it
+        setIsAnalyzing(true);
+        setAnalysisProgress(persistedProgress);
+        setCurrentAnalysisFile(persistedCurrent);
+      }
     }
   }, [phaseData]);
 
@@ -61,7 +83,7 @@ function DiscoverPhase() {
       });
       if (remaining.length > 0) {
         hasResumedRef.current = true;
-        addNotification(`Resuming analysis of ${remaining.length} files...`, 'info');
+        addNotification(`Resuming analysis of ${remaining.length} files...`, 'info', 3000, 'analysis-resume');
         // Kick off analysis for remaining files only
         analyzeFiles(remaining);
       } else {
@@ -71,7 +93,53 @@ function DiscoverPhase() {
         setIsAnalyzing(false);
       }
     }
-  }, [phaseData.isAnalyzing, selectedFiles, fileStates]);
+    
+    // Auto-reset stuck analysis state after 5 minutes of inactivity
+    if (phaseData.isAnalyzing && !hasResumedRef.current) {
+      const lastActivity = phaseData.analysisProgress?.lastActivity || Date.now();
+      const timeSinceActivity = Date.now() - lastActivity;
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (timeSinceActivity > fiveMinutes) {
+        console.log('[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity');
+        addNotification('Detected stuck analysis state - auto-resetting', 'warning', 5000, 'analysis-auto-reset');
+        actions.setPhaseData('isAnalyzing', false);
+        actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+        actions.setPhaseData('currentAnalysisFile', '');
+        setIsAnalyzing(false);
+        setAnalysisProgress({ current: 0, total: 0 });
+        setCurrentAnalysisFile('');
+        
+        // Clear any stuck localStorage state
+        try {
+          localStorage.removeItem('stratosort_workflow_state');
+        } catch {}
+      }
+    }
+    
+    // Additional check: if we're analyzing but have no progress for 2+ minutes, reset
+    if (phaseData.isAnalyzing && phaseData.analysisProgress?.current === 0 && phaseData.analysisProgress?.total > 0) {
+      const lastActivity = phaseData.analysisProgress?.lastActivity || Date.now();
+      const timeSinceActivity = Date.now() - lastActivity;
+      const twoMinutes = 2 * 60 * 1000;
+      
+      if (timeSinceActivity > twoMinutes) {
+        console.log('[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes');
+        addNotification('Analysis stalled with no progress - auto-resetting', 'warning', 5000, 'analysis-stalled');
+        actions.setPhaseData('isAnalyzing', false);
+        actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+        actions.setPhaseData('currentAnalysisFile', '');
+        setIsAnalyzing(false);
+        setAnalysisProgress({ current: 0, total: 0 });
+        setCurrentAnalysisFile('');
+        
+        // Clear any stuck localStorage state
+        try {
+          localStorage.removeItem('stratosort_workflow_state');
+        } catch {}
+      }
+    }
+  }, [phaseData.isAnalyzing, selectedFiles, fileStates, phaseData.analysisProgress]);
 
   const updateFileState = (filePath, state, metadata = {}) => {
     try {
@@ -145,12 +213,43 @@ function DiscoverPhase() {
 
   const handleFileDrop = async (files) => {
     if (files && files.length > 0) {
-      addNotification(`Processing ${files.length} dropped files...`, 'info');
-      const enhancedFiles = files.map(file => ({ ...file, source: 'drag_drop', droppedAt: new Date().toISOString() }));
-      setSelectedFiles(enhancedFiles);
-      actions.setPhaseData('selectedFiles', enhancedFiles);
+      // Get existing file paths to prevent duplicates
+      const existingPaths = new Set(selectedFiles.map(f => f.path));
+      
+      // Filter out files that are already selected
+      const newFiles = files.filter(file => !existingPaths.has(file.path));
+      
+      if (newFiles.length === 0) {
+        addNotification('All dropped files are already in the queue', 'info', 2000, 'duplicate-files');
+        return;
+      }
+      
+      if (newFiles.length < files.length) {
+        const duplicateCount = files.length - newFiles.length;
+        addNotification(`Skipped ${duplicateCount} duplicate files already in queue`, 'info', 2000, 'duplicate-files');
+      }
+      
+      const enhancedFiles = newFiles.map(file => ({ ...file, source: 'drag_drop', droppedAt: new Date().toISOString() }));
+      
+      // Update file states for new files only
       enhancedFiles.forEach(file => updateFileState(file.path, 'pending'));
-      addNotification(`Dropped ${files.length} files for analysis`, 'success');
+      
+      // Merge with existing files, avoiding duplicates
+      const allFiles = [...selectedFiles, ...enhancedFiles];
+      const uniqueFiles = allFiles.filter((file, index, self) => 
+        index === self.findIndex(f => f.path === file.path)
+      );
+      
+      setSelectedFiles(uniqueFiles);
+      actions.setPhaseData('selectedFiles', uniqueFiles);
+      
+      // Use batch notification for multiple files
+      if (enhancedFiles.length > 1) {
+        addNotification(`Added ${enhancedFiles.length} new files for analysis`, 'success', 2500, 'files-added');
+      } else {
+        addNotification(`Added ${enhancedFiles.length} new file for analysis`, 'success', 2500, 'files-added');
+      }
+      
       await analyzeFiles(enhancedFiles);
     }
   };
@@ -203,27 +302,60 @@ function DiscoverPhase() {
   const handleFileSelection = async () => {
     try {
       setIsScanning(true);
-      addNotification('Opening file picker...', 'info');
       const result = await window.electronAPI.files.select();
       if (result?.success && result?.files?.length > 0) {
         const { files, summary } = result;
-        let message = `Found ${files.length} supported files`;
-        if (summary?.totalSelected > 1) message += ` from ${summary.totalSelected} selected items`;
-        if (summary?.duplicatesRemoved > 0) message += ` (${summary.duplicatesRemoved} duplicates removed)`;
-        addNotification(message, 'success');
-        files.forEach(filePath => updateFileState(filePath, 'pending'));
-        const fileObjects = await getBatchFileStats(files);
+        
+        // Get existing file paths to prevent duplicates
+        const existingPaths = new Set(selectedFiles.map(f => f.path));
+        
+        // Filter out files that are already selected
+        const newFiles = files.filter(filePath => !existingPaths.has(filePath));
+        
+        if (newFiles.length === 0) {
+          addNotification('All selected files are already in the queue', 'info', 2000, 'duplicate-files');
+          return;
+        }
+        
+        if (newFiles.length < files.length) {
+          const duplicateCount = files.length - newFiles.length;
+          addNotification(`Skipped ${duplicateCount} duplicate files already in queue`, 'info', 2000, 'duplicate-files');
+        }
+        
+        // Update file states for new files only
+        newFiles.forEach(filePath => updateFileState(filePath, 'pending'));
+        
+        const fileObjects = await getBatchFileStats(newFiles);
         const enhancedFiles = fileObjects.map(file => ({ ...file, source: 'file_selection' }));
-        setSelectedFiles(enhancedFiles);
-        actions.setPhaseData('selectedFiles', enhancedFiles);
+        
+        // Merge with existing files, avoiding duplicates
+        const allFiles = [...selectedFiles, ...enhancedFiles];
+        const uniqueFiles = allFiles.filter((file, index, self) => 
+          index === self.findIndex(f => f.path === file.path)
+        );
+        
+        setSelectedFiles(uniqueFiles);
+        actions.setPhaseData('selectedFiles', uniqueFiles);
+        
         const failedFiles = fileObjects.filter(f => !f.success);
-        if (failedFiles.length > 0) addNotification(`Warning: ${failedFiles.length} files had issues loading metadata`, 'warning');
+        if (failedFiles.length > 0) {
+          addNotification(`Warning: ${failedFiles.length} files had issues loading metadata`, 'warning', 3000, 'file-issues');
+        }
+        
+        // Use batch notification for multiple files
+        if (enhancedFiles.length > 1) {
+          addNotification(`Added ${enhancedFiles.length} new files for analysis`, 'success', 2500, 'files-added');
+        } else {
+          addNotification(`Added ${enhancedFiles.length} new file for analysis`, 'success', 2500, 'files-added');
+        }
+        
+        // Only analyze the new files
         await analyzeFiles(enhancedFiles);
       } else {
-        addNotification('No files selected', 'info');
+        addNotification('No files selected', 'info', 2000, 'file-selection');
       }
     } catch (error) {
-      addNotification(`Error selecting files: ${error.message}`, 'error');
+      addNotification(`Error selecting files: ${error.message}`, 'error', 4000, 'file-selection-error');
     } finally {
       setIsScanning(false);
     }
@@ -232,10 +364,8 @@ function DiscoverPhase() {
   const handleFolderSelection = async () => {
     try {
       setIsScanning(true);
-      addNotification('Opening folder picker...', 'info');
       const result = await window.electronAPI.files.selectDirectory();
       if (result?.success && result?.folder) {
-        addNotification(`Scanning folder: ${result.folder}`, 'info');
         const scanResult = await window.electronAPI.smartFolders.scanStructure(result.folder);
         if (scanResult && scanResult.files && scanResult.files.length > 0) {
           const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.zip', '.rar', '.7z', '.tar', '.gz'];
@@ -243,27 +373,77 @@ function DiscoverPhase() {
             const ext = file.name.includes('.') ? '.' + file.name.split('.').pop().toLowerCase() : '';
             return supportedExts.includes(ext);
           });
-          if (supportedFiles.length === 0) { addNotification('No supported files found in the selected folder', 'warning'); return; }
-          addNotification(`Found ${supportedFiles.length} supported files in folder`, 'success');
-          supportedFiles.forEach(file => updateFileState(file.path, 'pending'));
-          const fileObjects = await getBatchFileStats(supportedFiles.map(f => f.path));
+          
+          if (supportedFiles.length === 0) { 
+            addNotification('No supported files found in the selected folder', 'warning', 3000, 'folder-scan'); 
+            return; 
+          }
+          
+          // Get existing file paths to prevent duplicates
+          const existingPaths = new Set(selectedFiles.map(f => f.path));
+          
+          // Filter out files that are already selected
+          const newFiles = supportedFiles.filter(file => !existingPaths.has(file.path));
+          
+          if (newFiles.length === 0) {
+            addNotification('All files from this folder are already in the queue', 'info', 2000, 'duplicate-files');
+            return;
+          }
+          
+          if (newFiles.length < supportedFiles.length) {
+            const duplicateCount = supportedFiles.length - newFiles.length;
+            addNotification(`Skipped ${duplicateCount} duplicate files already in queue`, 'info', 2000, 'duplicate-files');
+          }
+          
+          // Update file states for new files only
+          newFiles.forEach(file => updateFileState(file.path, 'pending'));
+          
+          const fileObjects = await getBatchFileStats(newFiles.map(f => f.path));
           const enhancedFiles = fileObjects.map(file => ({ ...file, source: 'folder_scan' }));
-          setSelectedFiles(enhancedFiles); actions.setPhaseData('selectedFiles', enhancedFiles);
+          
+          // Merge with existing files, avoiding duplicates
+          const allFiles = [...selectedFiles, ...enhancedFiles];
+          const uniqueFiles = allFiles.filter((file, index, self) => 
+            index === self.findIndex(f => f.path === file.path)
+          );
+          
+          setSelectedFiles(uniqueFiles); 
+          actions.setPhaseData('selectedFiles', uniqueFiles);
+          
+          // Use batch notification for multiple files
+          if (enhancedFiles.length > 1) {
+            addNotification(`Added ${enhancedFiles.length} new files from folder for analysis`, 'success', 2500, 'files-added');
+          } else {
+            addNotification(`Added ${enhancedFiles.length} new file from folder for analysis`, 'success', 2500, 'files-added');
+          }
+          
           await analyzeFiles(enhancedFiles);
-        } else { addNotification('No files found in the selected folder', 'warning'); }
+        } else { 
+          addNotification('No files found in the selected folder', 'warning', 3000, 'folder-scan'); 
+        }
       } else if (result?.success === false && result?.folder === null) {
-        addNotification('Folder selection cancelled', 'info');
-      } else { addNotification('No folder selected', 'info'); }
+        addNotification('Folder selection cancelled', 'info', 2000, 'folder-selection');
+      } else { 
+        addNotification('No folder selected', 'info', 2000, 'folder-selection'); 
+      }
     } catch (error) {
-      addNotification(`Error selecting folder: ${error.message}`, 'error');
-    } finally { setIsScanning(false); }
+      addNotification(`Error selecting folder: ${error.message}`, 'error', 4000, 'folder-selection-error');
+    } finally { 
+      setIsScanning(false); 
+    }
   };
 
   const handleFileAction = async (action, filePath) => {
     try {
       switch (action) {
-        case 'open': await window.electronAPI.files.open(filePath); addNotification(`Opened: ${filePath.split(/[\\/]/).pop()}`, 'success'); break;
-        case 'reveal': await window.electronAPI.files.reveal(filePath); addNotification(`Revealed: ${filePath.split(/[\\/]/).pop()}`, 'success'); break;
+        case 'open': 
+          await window.electronAPI.files.open(filePath); 
+          addNotification(`Opened: ${filePath.split(/[\\/]/).pop()}`, 'success', 2000, 'file-actions'); 
+          break;
+        case 'reveal': 
+          await window.electronAPI.files.reveal(filePath); 
+          addNotification(`Revealed: ${filePath.split(/[\\/]/).pop()}`, 'success', 2000, 'file-actions'); 
+          break;
         case 'delete': {
           const fileName = filePath.split(/[\\/]/).pop();
           const confirmDelete = await showConfirm({ title: 'Delete File', message: 'This action cannot be undone. Are you sure you want to permanently delete this file?', confirmText: 'Delete', cancelText: 'Cancel', variant: 'danger', fileName });
@@ -273,105 +453,68 @@ function DiscoverPhase() {
               setAnalysisResults(prev => prev.filter(f => f.path !== filePath));
               setSelectedFiles(prev => prev.filter(f => f.path !== filePath));
               setFileStates(prev => { if (!prev) return prev; const next = { ...prev }; delete next[filePath]; return next; });
-              addNotification(`Deleted: ${fileName}`, 'success');
-            } else { addNotification(`Failed to delete: ${fileName}`, 'error'); }
+              addNotification(`Deleted: ${fileName}`, 'success', 3000, 'file-actions');
+            } else { 
+              addNotification(`Failed to delete: ${fileName}`, 'error', 4000, 'file-actions'); 
+            }
           }
           break;
         }
-        default: addNotification(`Unknown action: ${action}`, 'error');
+        default: addNotification(`Unknown action: ${action}`, 'error', 4000, 'file-actions');
       }
     } catch (error) {
-      addNotification(`Action failed: ${error.message}`, 'error');
+      addNotification(`Action failed: ${error.message}`, 'error', 4000, 'file-actions');
     }
   };
 
   const analyzeFiles = async (files) => {
     if (!files || files.length === 0) return;
-    setIsAnalyzing(true);
-    setAnalysisProgress({ current: 0, total: files.length });
-    setCurrentAnalysisFile('');
-    actions.setPhaseData('isAnalyzing', true);
-    actions.setPhaseData('analysisProgress', { current: 0, total: files.length });
-    actions.setPhaseData('currentAnalysisFile', '');
-    const results = [];
-    let maxConcurrent = 3;
-    try { const persistedSettings = await window.electronAPI.settings.get(); if (persistedSettings && typeof persistedSettings.maxConcurrentAnalysis !== 'undefined') { maxConcurrent = Number(persistedSettings.maxConcurrentAnalysis); } } catch {}
-    const concurrency = Math.max(1, Math.min(Number(maxConcurrent) || 3, 8));
-    try {
-      addNotification(`Starting AI analysis of ${files.length} files...`, 'info');
-      let index = 0;
-      const worker = async () => {
-        while (true) {
-          const i = index++;
-          if (i >= files.length) break;
-          const file = files[i];
-          const fileName = file.name || file.path.split(/[\\/]/).pop();
-          setCurrentAnalysisFile(fileName);
-          setAnalysisProgress({ current: i, total: files.length });
-          actions.setPhaseData('currentAnalysisFile', fileName);
-          actions.setPhaseData('analysisProgress', { current: i, total: files.length });
-          updateFileState(file.path, 'analyzing', { fileName });
-          await new Promise((resolve) => setTimeout(resolve, 0));
-          try {
-            const fileInfo = { ...file, size: file.size || 0, created: file.created, modified: file.modified };
-            const analysis = await Promise.race([
-              window.electronAPI.files.analyze(file.path),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), RENDERER_LIMITS.ANALYSIS_TIMEOUT_MS))
-            ]);
-            if (analysis && !analysis.error) {
-              const enhancedAnalysis = { ...analysis, suggestedName: generatePreviewName(analysis.suggestedName || fileName), namingConvention: { convention: namingConvention, dateFormat, caseConvention, separator } };
-              const result = { ...fileInfo, analysis: enhancedAnalysis, status: 'analyzed', analyzedAt: new Date().toISOString() };
-              results.push(result);
-              updateFileState(file.path, 'ready', { analysis: enhancedAnalysis, analyzedAt: new Date().toISOString() });
-            } else {
-              const result = { ...fileInfo, analysis: null, error: analysis?.error || 'Analysis failed', status: 'failed', analyzedAt: new Date().toISOString() };
-              results.push(result);
-              updateFileState(file.path, 'error', { error: analysis?.error || 'Analysis failed', analyzedAt: new Date().toISOString() });
-            }
-          } catch (error) {
-            const result = { ...file, analysis: null, error: error.message, status: 'failed', analyzedAt: new Date().toISOString() };
-            results.push(result);
-            updateFileState(file.path, 'error', { error: error.message, analyzedAt: new Date().toISOString() });
-          }
-          setAnalysisProgress((prev) => ({ current: Math.min(files.length, prev.current + 1), total: files.length }));
-          // Persist a rough progress signal to localStorage for resume UI
-          try {
-            const workflowState = { currentPhase: phaseData.currentPhase || PHASES.DISCOVER, phaseData: { ...phaseData, isAnalyzing: true, analysisProgress: { current: i + 1, total: files.length }, currentAnalysisFile: fileName }, timestamp: Date.now() };
-            localStorage.setItem('stratosort_workflow_state', JSON.stringify(workflowState));
-          } catch {}
-          actions.setPhaseData('analysisProgress', { current: Math.min(files.length, i + 1), total: files.length });
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-      };
-      const workers = Array.from({ length: concurrency }, () => worker());
-      await Promise.all(workers);
-       // Merge with any existing results (important for resume)
-       const resultsByPath = new Map((analysisResults || []).map(r => [r.path, r]));
-       results.forEach(r => resultsByPath.set(r.path, r));
-       const mergedResults = Array.from(resultsByPath.values());
-       setAnalysisResults(mergedResults);
-
-       // Merge file states (preserve previous states, update changed)
-       const mergedStates = { ...(fileStates || {}) };
-       results.forEach(result => {
-         if (result.analysis && !result.error) mergedStates[result.path] = { state: 'ready', timestamp: new Date().toISOString(), analysis: result.analysis, analyzedAt: result.analyzedAt };
-         else if (result.error) mergedStates[result.path] = { state: 'error', timestamp: new Date().toISOString(), error: result.error, analyzedAt: result.analyzedAt };
-       });
-       setFileStates(mergedStates);
-
-       actions.setPhaseData('analysisResults', mergedResults);
-       actions.setPhaseData('fileStates', mergedStates);
-       actions.setPhaseData('namingConvention', { convention: namingConvention, dateFormat, caseConvention, separator });
-      const successCount = results.filter(r => r.analysis).length;
-      const failureCount = results.length - successCount;
-       if (successCount > 0) {
-        addNotification(`🎉 Analysis complete! ${successCount} files ready for organization`, 'success');
-        setTimeout(() => { addNotification('📂 Proceeding to organize phase...', 'info'); actions.advancePhase(PHASES.ORGANIZE); }, 2000);
+    
+    console.log('[ANALYSIS] analyzeFiles called with:', {
+      filesCount: files.length,
+      isAnalyzing,
+      analysisProgress,
+      hasLastActivity: !!analysisProgress.lastActivity,
+      timeSinceActivity: analysisProgress.lastActivity ? Date.now() - analysisProgress.lastActivity : 'N/A',
+      lockStatus: analysisLockRef.current
+    });
+    
+    // Prevent multiple simultaneous analysis calls
+    if (analysisLockRef.current || globalAnalysisActive) {
+      console.log('[ANALYSIS] Analysis already in progress, skipping duplicate call', {
+        lockRef: analysisLockRef.current,
+        globalState: globalAnalysisActive
+      });
+      addNotification('Analysis already in progress', 'warning', 3000, 'analysis-status');
+      return;
+    }
+    
+    // Additional check: prevent analysis if UI shows it's already running
+    if (isAnalyzing) {
+      console.log('[ANALYSIS] UI shows analysis already in progress, skipping call');
+      addNotification('Analysis already in progress', 'warning', 3000, 'analysis-status');
+      return;
+    }
+    
+    // Set the lock immediately
+    analysisLockRef.current = true;
+    setGlobalAnalysisActive(true);
+    console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    
+    // Small delay to ensure lock is properly established
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Set a timeout to release the lock after 10 minutes (safety measure)
+    const lockTimeout = setTimeout(() => {
+      if (analysisLockRef.current) {
+        console.warn('[ANALYSIS] Analysis lock timeout reached, forcing release');
+        analysisLockRef.current = false;
       }
-      if (failureCount > 0) addNotification(`⚠️ ${failureCount} files failed analysis`, 'warning');
-    } catch (error) {
-      addNotification(`Analysis process failed: ${error.message}`, 'error');
-    } finally {
+    }, 10 * 60 * 1000); // 10 minutes
+    
+    // Force reset any existing analysis state to ensure clean start
+    if (isAnalyzing || analysisProgress.total > 0) {
+      console.log('[ANALYSIS] Force resetting existing analysis state for clean start');
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');
       setAnalysisProgress({ current: 0, total: 0 });
@@ -379,6 +522,321 @@ function DiscoverPhase() {
       actions.setPhaseData('currentAnalysisFile', '');
       actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
     }
+    
+    // Remove the old blocking logic since we now have the lock system
+    // The lock check at the beginning is sufficient
+    
+    setIsAnalyzing(true);
+    const initialProgress = { current: 0, total: files.length, lastActivity: Date.now() };
+    setAnalysisProgress(initialProgress);
+    setCurrentAnalysisFile('');
+    actions.setPhaseData('isAnalyzing', true);
+    actions.setPhaseData('analysisProgress', initialProgress);
+    actions.setPhaseData('currentAnalysisFile', '');
+    
+    console.log('[ANALYSIS] Started analysis with progress:', initialProgress);
+    
+    // Set up progress heartbeat to prevent stuck states
+    const heartbeatInterval = setInterval(() => {
+      if (isAnalyzing) {
+        const currentProgress = { 
+          current: analysisProgress.current, 
+          total: analysisProgress.total, 
+          lastActivity: Date.now() 
+        };
+        
+        // Validate progress before updating
+        if (validateProgressState(currentProgress)) {
+          setAnalysisProgress(currentProgress);
+          actions.setPhaseData('analysisProgress', currentProgress);
+        } else {
+          console.warn('[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis');
+          clearInterval(heartbeatInterval);
+          resetAnalysisState();
+        }
+      }
+    }, 30000); // Update every 30 seconds
+    
+    const results = [];
+    let maxConcurrent = 3;
+    try { 
+      const persistedSettings = await window.electronAPI.settings.get(); 
+      if (persistedSettings && typeof persistedSettings.maxConcurrentAnalysis !== 'undefined') { 
+        maxConcurrent = Number(persistedSettings.maxConcurrentAnalysis); 
+      } 
+    } catch {}
+    
+    const concurrency = Math.max(1, Math.min(Number(maxConcurrent) || 3, 8));
+    
+    try {
+      // Single notification for analysis start
+      addNotification(`Starting AI analysis of ${files.length} files...`, 'info', 3000, 'analysis-start');
+      
+      // Create a Set to track processed files and prevent duplicates
+      const processedFiles = new Set();
+      const fileQueue = [...files];
+      let completedCount = 0;
+      
+      // Create a single worker function that processes files sequentially
+      const processFile = async (file) => {
+        // Skip if already processed
+        if (processedFiles.has(file.path)) {
+          return;
+        }
+        
+        const fileName = file.name || file.path.split(/[\\/]/).pop();
+        
+        // Mark as processing
+        processedFiles.add(file.path);
+        updateFileState(file.path, 'analyzing', { fileName });
+        
+        try {
+          // Update progress atomically with proper lastActivity tracking
+          completedCount++;
+          const progress = { 
+            current: completedCount, 
+            total: files.length, 
+            lastActivity: Date.now() 
+          };
+          
+          // Validate progress before updating
+          if (validateProgressState(progress)) {
+            // Update all progress states atomically
+            setAnalysisProgress(progress);
+            setCurrentAnalysisFile(fileName);
+            actions.setPhaseData('analysisProgress', progress);
+            actions.setPhaseData('currentAnalysisFile', fileName);
+          } else {
+            console.warn('[ANALYSIS] Invalid progress state detected, skipping update');
+          }
+          
+          const fileInfo = { ...file, size: file.size || 0, created: file.created, modified: file.modified };
+          
+          const analysis = await Promise.race([
+            window.electronAPI.files.analyze(file.path),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timeout after 3 minutes')), RENDERER_LIMITS.ANALYSIS_TIMEOUT_MS))
+          ]);
+          
+          if (analysis && !analysis.error) {
+            const enhancedAnalysis = { 
+              ...analysis, 
+              suggestedName: generatePreviewName(analysis.suggestedName || fileName), 
+              namingConvention: { convention: namingConvention, dateFormat, caseConvention, separator } 
+            };
+            const result = { ...fileInfo, analysis: enhancedAnalysis, status: 'analyzed', analyzedAt: new Date().toISOString() };
+            results.push(result);
+            updateFileState(file.path, 'ready', { analysis: enhancedAnalysis, analyzedAt: new Date().toISOString() });
+          } else {
+            const result = { ...fileInfo, analysis: null, error: analysis?.error || 'Analysis failed', status: 'failed', analyzedAt: new Date().toISOString() };
+            results.push(result);
+            updateFileState(file.path, 'error', { error: analysis?.error || 'Analysis failed', analyzedAt: new Date().toISOString() });
+          }
+        } catch (error) {
+          const result = { ...file, analysis: null, error: error.message, status: 'failed', analyzedAt: new Date().toISOString() };
+          results.push(result);
+          updateFileState(file.path, 'error', { error: error.message, analyzedAt: new Date().toISOString() });
+        }
+        
+        // Persist progress to localStorage
+        try {
+          const workflowState = { 
+            currentPhase: phaseData.currentPhase || PHASES.DISCOVER, 
+            phaseData: { 
+              ...phaseData, 
+              isAnalyzing: true, 
+              analysisProgress: { current: completedCount, total: files.length }, 
+              currentAnalysisFile: fileName 
+            }, 
+            timestamp: Date.now() 
+          };
+          localStorage.setItem('stratosort_workflow_state', JSON.stringify(workflowState));
+        } catch {}
+      };
+      
+      // Process files with controlled concurrency
+      const processBatch = async (batch) => {
+        try {
+          const promises = batch.map(file => processFile(file));
+          await Promise.all(promises);
+          
+          // Update lastActivity after each batch to prevent stuck state
+          const currentProgress = { 
+            current: completedCount, 
+            total: files.length, 
+            lastActivity: Date.now() 
+          };
+          
+          // Validate progress before updating
+          if (validateProgressState(currentProgress)) {
+            setAnalysisProgress(currentProgress);
+            actions.setPhaseData('analysisProgress', currentProgress);
+          } else {
+            console.warn('[ANALYSIS] Invalid batch progress state detected, skipping update');
+          }
+        } catch (error) {
+          console.error('[ANALYSIS] Batch processing error:', error);
+          // Don't fail the entire analysis for batch errors
+        }
+      };
+      
+      // Process files in batches to control concurrency
+      for (let i = 0; i < fileQueue.length; i += concurrency) {
+        const batch = fileQueue.slice(i, i + concurrency);
+        await processBatch(batch);
+      }
+      
+      // Merge with any existing results (important for resume)
+      const resultsByPath = new Map((analysisResults || []).map(r => [r.path, r]));
+      results.forEach(r => resultsByPath.set(r.path, r));
+      const mergedResults = Array.from(resultsByPath.values());
+      setAnalysisResults(mergedResults);
+
+      // Merge file states (preserve previous states, update changed)
+      const mergedStates = { ...(fileStates || {}) };
+      results.forEach(result => {
+        if (result.analysis && !result.error) {
+          mergedStates[result.path] = { 
+            state: 'ready', 
+            timestamp: new Date().toISOString(), 
+            analysis: result.analysis, 
+            analyzedAt: result.analyzedAt 
+          };
+        } else if (result.error) {
+          mergedStates[result.path] = { 
+            state: 'error', 
+            timestamp: new Date().toISOString(), 
+            error: result.error, 
+            analyzedAt: new Date().toISOString() 
+          };
+        }
+      });
+      setFileStates(mergedStates);
+
+      actions.setPhaseData('analysisResults', mergedResults);
+      actions.setPhaseData('fileStates', mergedStates);
+      actions.setPhaseData('namingConvention', { convention: namingConvention, dateFormat, caseConvention, separator });
+      
+      const successCount = results.filter(r => r.analysis).length;
+      const failureCount = results.length - successCount;
+      
+      // Consolidated completion notification
+      if (successCount > 0 && failureCount === 0) {
+        addNotification(`🎉 Analysis complete! ${successCount} files ready for organization`, 'success', 4000, 'analysis-complete');
+        setTimeout(() => { 
+          addNotification('📂 Proceeding to organize phase...', 'info', 3000, 'phase-transition'); 
+          actions.advancePhase(PHASES.ORGANIZE); 
+        }, 2000);
+      } else if (successCount > 0 && failureCount > 0) {
+        addNotification(`Analysis complete: ${successCount} successful, ${failureCount} failed`, 'warning', 4000, 'analysis-complete');
+        setTimeout(() => { 
+          addNotification('📂 Proceeding to organize phase...', 'info', 3000, 'phase-transition'); 
+          actions.advancePhase(PHASES.ORGANIZE); 
+        }, 2000);
+      } else if (failureCount > 0) {
+        addNotification(`Analysis failed for all ${failureCount} files`, 'error', 5000, 'analysis-complete');
+      }
+      
+    } catch (error) {
+      addNotification(`Analysis process failed: ${error.message}`, 'error', 5000, 'analysis-error');
+    } finally {
+      // Always reset analysis state, regardless of success/failure
+      clearInterval(heartbeatInterval); // Clean up heartbeat
+      setIsAnalyzing(false);
+      setCurrentAnalysisFile('');
+      setAnalysisProgress({ current: 0, total: 0 });
+      actions.setPhaseData('isAnalyzing', false);
+      actions.setPhaseData('currentAnalysisFile', '');
+      actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+      
+      // Release the analysis lock
+      analysisLockRef.current = false;
+      setGlobalAnalysisActive(false);
+      clearTimeout(lockTimeout); // Clear the timeout
+      
+      // Clear any stuck localStorage state
+      try {
+        localStorage.removeItem('stratosort_workflow_state');
+      } catch {}
+    }
+  };
+
+  const resetAnalysisState = () => {
+    setIsAnalyzing(false);
+    setCurrentAnalysisFile('');
+    setAnalysisProgress({ current: 0, total: 0 });
+    actions.setPhaseData('isAnalyzing', false);
+    actions.setPhaseData('currentAnalysisFile', '');
+    actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+    
+    // Release the analysis lock
+    analysisLockRef.current = false;
+    setGlobalAnalysisActive(false);
+    
+    // Clear any stuck localStorage state
+    try {
+      localStorage.removeItem('stratosort_workflow_state');
+    } catch {}
+    
+    addNotification('Analysis state reset successfully', 'info', 2000, 'analysis-reset');
+  };
+
+  const forceReleaseAnalysisLock = () => {
+    console.log('[ANALYSIS] Manually releasing analysis lock');
+    analysisLockRef.current = false;
+    setGlobalAnalysisActive(false);
+    addNotification('Analysis lock manually released', 'info', 2000, 'analysis-reset');
+  };
+
+  const validateProgressState = (progress) => {
+    // Ensure progress state is valid
+    if (!progress || typeof progress !== 'object') return false;
+    if (typeof progress.current !== 'number' || typeof progress.total !== 'number') return false;
+    if (progress.current < 0 || progress.total < 0) return false;
+    if (progress.current > progress.total) return false;
+    if (!progress.lastActivity || typeof progress.lastActivity !== 'number') return false;
+    
+    // Check if progress is too old (more than 10 minutes)
+    const timeSinceActivity = Date.now() - progress.lastActivity;
+    if (timeSinceActivity > 10 * 60 * 1000) return false;
+    
+    return true;
+  };
+
+  const clearAnalysisQueue = () => {
+    setSelectedFiles([]);
+    setAnalysisResults([]);
+    setFileStates({});
+    setAnalysisProgress({ current: 0, total: 0 });
+    setCurrentAnalysisFile('');
+    actions.setPhaseData('selectedFiles', []);
+    actions.setPhaseData('analysisResults', []);
+    actions.setPhaseData('fileStates', {});
+    actions.setPhaseData('isAnalyzing', false);
+    actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+    actions.setPhaseData('currentAnalysisFile', '');
+    addNotification('Analysis queue cleared', 'info', 2000, 'queue-management');
+  };
+
+  const removeFileFromQueue = (filePath) => {
+    setSelectedFiles(prev => prev.filter(f => f.path !== filePath));
+    setAnalysisResults(prev => prev.filter(f => f.path !== filePath));
+    setFileStates(prev => {
+      const newStates = { ...prev };
+      delete newStates[filePath];
+      return newStates;
+    });
+    
+    // Update phase data
+    const newSelectedFiles = selectedFiles.filter(f => f.path !== filePath);
+    const newAnalysisResults = analysisResults.filter(f => f.path !== filePath);
+    const newFileStates = { ...fileStates };
+    delete newFileStates[filePath];
+    
+    actions.setPhaseData('selectedFiles', newSelectedFiles);
+    actions.setPhaseData('analysisResults', newAnalysisResults);
+    actions.setPhaseData('fileStates', newFileStates);
+    
+    addNotification('File removed from queue', 'info', 2000, 'queue-management');
   };
 
   return (
@@ -391,6 +849,8 @@ function DiscoverPhase() {
         <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['discover-naming','discover-selection','discover-dnd','discover-results']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true')); window.dispatchEvent(new Event('storage')); } catch {} }}>Expand all</button>
         <span className="text-system-gray-300">•</span>
         <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['discover-naming','discover-selection','discover-dnd','discover-results']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false')); window.dispatchEvent(new Event('storage')); } catch {} }}>Collapse all</button>
+        <span className="text-system-gray-300">•</span>
+        <button className="text-xs text-system-gray-600 hover:text-stratosort-blue underline" onClick={() => setShowAnalysisHistory(true)}>Open Analysis History</button>
       </div>
       <Collapsible title="Naming Settings" defaultOpen persistKey="discover-naming">
         <NamingSettings
@@ -407,6 +867,63 @@ function DiscoverPhase() {
 
       <Collapsible title="Select Files or Folder" defaultOpen persistKey="discover-selection">
         <SelectionControls onSelectFiles={handleFileSelection} onSelectFolder={handleFolderSelection} isScanning={isScanning} />
+        {selectedFiles.length > 0 && (
+          <div className="mt-4 flex items-center justify-between p-4 bg-system-gray-50 rounded-lg border border-system-gray-200">
+            <div className="text-sm text-system-gray-600">
+              <span className="font-medium">{selectedFiles.length}</span> file{selectedFiles.length !== 1 ? 's' : ''} in queue
+              {analysisResults.length > 0 && (
+                <span className="ml-2">
+                  • <span className="font-medium">{analysisResults.filter(r => r.analysis).length}</span> analyzed
+                  {analysisResults.filter(r => r.error).length > 0 && (
+                    <span className="ml-2 text-red-600">
+                      • <span className="font-medium">{analysisResults.filter(r => r.error).length}</span> failed
+                    </span>
+                  )}
+                </span>
+              )}
+              {analysisLockRef.current && (
+                <span className="ml-2 text-orange-600">
+                  • 🔒 Analysis locked
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={clearAnalysisQueue}
+                className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                title="Clear all files from the analysis queue"
+              >
+                Clear Queue
+              </button>
+              {isAnalyzing && (
+                <button
+                  onClick={() => {
+                    setIsAnalyzing(false);
+                    setCurrentAnalysisFile('');
+                    setAnalysisProgress({ current: 0, total: 0 });
+                    actions.setPhaseData('isAnalyzing', false);
+                    actions.setPhaseData('currentAnalysisFile', '');
+                    actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+                    addNotification('Analysis state reset', 'info', 2000, 'analysis-reset');
+                  }}
+                  className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
+                  title="Reset stuck analysis state"
+                >
+                  Reset Analysis
+                </button>
+              )}
+              {analysisLockRef.current && !isAnalyzing && (
+                <button
+                  onClick={forceReleaseAnalysisLock}
+                  className="px-3 py-2 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                  title="Release stuck analysis lock"
+                >
+                  Release Lock
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </Collapsible>
 
       <Collapsible title="Drag & Drop" defaultOpen persistKey="discover-dnd">
@@ -416,6 +933,26 @@ function DiscoverPhase() {
       {isAnalyzing && (
         <Collapsible title="Analysis Progress" defaultOpen persistKey="discover-progress">
           <AnalysisProgress progress={analysisProgress} currentFile={currentAnalysisFile} />
+          {/* Add reset button if analysis appears stuck */}
+          {analysisProgress.lastActivity && (Date.now() - analysisProgress.lastActivity) > 2 * 60 * 1000 && (
+            <div className="mt-fib-8 p-fib-8 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-fib-5">
+                  <span className="text-amber-600">⚠️</span>
+                  <span className="text-sm text-amber-800">
+                    Analysis appears to be stuck. Last activity: {new Date(analysisProgress.lastActivity).toLocaleTimeString()}
+                  </span>
+                </div>
+                <button
+                  onClick={resetAnalysisState}
+                  className="px-fib-8 py-fib-5 text-sm bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                  title="Reset stuck analysis state"
+                >
+                  Reset Analysis
+                </button>
+              </div>
+            </div>
+          )}
         </Collapsible>
       )}
 
@@ -425,6 +962,9 @@ function DiscoverPhase() {
         </Collapsible>
       )}
       <ConfirmDialog />
+      {showAnalysisHistory && (
+        <AnalysisHistoryModal onClose={() => setShowAnalysisHistory(false)} analysisStats={analysisStats} setAnalysisStats={setAnalysisStats} />
+      )}
     </div>
   );
 }

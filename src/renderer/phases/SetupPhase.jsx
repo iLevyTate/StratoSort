@@ -314,14 +314,14 @@ function SetupPhase() {
 
   return (
     <div className="w-full animate-slide-up">
-      <div className="mb-fib-21 text-center">
+      <div className="mb-21 text-center">
         <h2 className="heading-primary">
           ⚙️ Configure <span className="text-gradient inline-block">Smart Folders</span>
         </h2>
         <p className="text-lg text-system-gray-600 leading-relaxed">
           Set up smart folders where StratoSort will organize your files based on AI analysis.
         </p>
-        <div className="flex items-center justify-center gap-fib-8 mt-fib-8">
+        <div className="flex items-center justify-center gap-8 mt-8">
           <button
             className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
             onClick={() => {
@@ -361,12 +361,12 @@ function SetupPhase() {
         {isLoading ? (
           <SmartFolderSkeleton count={3} />
         ) : smartFolders.length === 0 ? (
-          <div className="text-center py-fib-21">
-            <div className="text-4xl mb-fib-8 opacity-50" role="img" aria-label="empty folder">📂</div>
+          <div className="text-center py-21">
+            <div className="text-4xl mb-8 opacity-50" role="img" aria-label="empty folder">📂</div>
             <p className="text-muted italic">No smart folders configured yet.</p>
           </div>
         ) : (
-          <div className="space-y-fib-8">
+          <div className="space-y-8">
             {smartFolders.map((folder, index) => (
               <SmartFolderItem
                 key={folder.id}
@@ -390,24 +390,24 @@ function SetupPhase() {
       </Collapsible>
 
       <Collapsible title="Add New Smart Folder" defaultOpen={false} persistKey="setup-add-folder">
-        <div className="space-y-fib-13">
+        <div className="space-y-13">
           <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Folder Name</label>
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">Folder Name</label>
             <Input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newFolderName.trim() && !isAddingFolder) { handleAddFolder(); } }} placeholder="e.g., Documents, Photos, Projects" className="w-full" aria-describedby="folder-name-help" />
-            <div id="folder-name-help" className="text-xs text-system-gray-500 mt-fib-3">Enter a descriptive name for your smart folder. Press Enter to add the folder.</div>
+            <div id="folder-name-help" className="text-xs text-system-gray-500 mt-3">Enter a descriptive name for your smart folder. Press Enter to add the folder.</div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Target Path (optional)</label>
-            <div className="flex gap-fib-8">
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">Target Path (optional)</label>
+            <div className="flex gap-8">
               <Input type="text" value={newFolderPath} onChange={(e) => setNewFolderPath(e.target.value)} placeholder="e.g., Documents/Work, Pictures/Family" className="flex-1" />
               <Button onClick={handleBrowseFolder} variant="secondary" title="Browse for folder">📁 Browse</Button>
             </div>
-            <p className="text-xs text-system-gray-500 mt-fib-3">Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}</p>
+            <p className="text-xs text-system-gray-500 mt-3">Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span></label>
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span></label>
             <Textarea value={newFolderDescription} onChange={(e) => setNewFolderDescription(e.target.value)} placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'" className="w-full" rows={3} aria-describedby="description-help" />
-            <div id="description-help" className="text-xs text-system-gray-500 mt-fib-3">💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.</div>
+            <div id="description-help" className="text-xs text-system-gray-500 mt-3">💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.</div>
           </div>
           <Button onClick={handleAddFolder} disabled={!newFolderName.trim() || isAddingFolder} variant="primary" aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}>
             {isAddingFolder ? (<><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>Adding...</>) : (<>➕ Add Smart Folder</>)}

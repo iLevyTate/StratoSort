@@ -13,9 +13,9 @@ function NamingSettings({
   setSeparator
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-fib-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
       <div>
-        <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">Convention</label>
+        <label className="block text-xs font-medium text-system-gray-700 mb-2">Convention</label>
         <Select value={namingConvention} onChange={(e) => setNamingConvention(e.target.value)}>
           <option value="subject-date">subject-date</option>
           <option value="date-subject">date-subject</option>
@@ -25,7 +25,7 @@ function NamingSettings({
         </Select>
       </div>
       <div>
-        <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">Date format</label>
+        <label className="block text-xs font-medium text-system-gray-700 mb-2">Date format</label>
         <Select value={dateFormat} onChange={(e) => setDateFormat(e.target.value)}>
           <option value="YYYY-MM-DD">YYYY-MM-DD</option>
           <option value="MM-DD-YYYY">MM-DD-YYYY</option>
@@ -34,7 +34,7 @@ function NamingSettings({
         </Select>
       </div>
       <div>
-        <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">Case</label>
+        <label className="block text-xs font-medium text-system-gray-700 mb-2">Case</label>
         <Select value={caseConvention} onChange={(e) => setCaseConvention(e.target.value)}>
           <option value="kebab-case">kebab-case</option>
           <option value="snake_case">snake_case</option>
@@ -45,7 +45,7 @@ function NamingSettings({
         </Select>
       </div>
       <div>
-        <label className="block text-xs font-medium text-system-gray-700 mb-fib-2">Separator</label>
+        <label className="block text-xs font-medium text-system-gray-700 mb-2">Separator</label>
         <Input value={separator} onChange={(e) => setSeparator(e.target.value)} placeholder="-" />
       </div>
     </div>

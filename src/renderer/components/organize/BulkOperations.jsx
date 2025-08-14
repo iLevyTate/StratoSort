@@ -15,19 +15,19 @@ function BulkOperations({
   smartFolders
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-fib-13">
+    <div className="flex items-center justify-between flex-wrap gap-8">
+      <div className="flex items-center gap-13">
         <input type="checkbox" checked={selectedCount === total && total > 0} onChange={onSelectAll} className="form-checkbox" />
         <span className="text-sm font-medium">{selectedCount > 0 ? `${selectedCount} selected` : 'Select all'}</span>
         {selectedCount > 0 && (
-          <div className="flex items-center gap-fib-8">
+          <div className="flex items-center gap-8">
             <Button onClick={onApproveSelected} variant="primary" className="text-sm">✓ Approve Selected</Button>
             <Button onClick={() => setBulkEditMode(!bulkEditMode)} variant="secondary" className="text-sm">✏️ Bulk Edit</Button>
           </div>
         )}
       </div>
       {bulkEditMode && (
-        <div className="flex items-center gap-fib-5">
+        <div className="flex items-center gap-5 flex-wrap">
           <Select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} className="text-sm">
             <option value="">Select category...</option>
             {smartFolders.map(folder => (<option key={folder.id} value={folder.name}>{folder.name}</option>))}

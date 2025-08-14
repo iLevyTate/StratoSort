@@ -569,6 +569,34 @@ export const createSettingsAction = (description, newSettings, oldSettings) => (
   metadata: { newSettings, oldSettings }
 });
 
+// Batch organize action that uses main process to perform and record undo/redo
+export const createOrganizeBatchAction = (description, operations, stateCallbacks = {}) => ({
+  type: ACTION_TYPES.BATCH_OPERATION,
+  description,
+  execute: async () => {
+    const result = await window.electronAPI.files.performOperation({ type: 'batch_organize', operations });
+    if (stateCallbacks.onExecute) {
+      try { stateCallbacks.onExecute(result); } catch {}
+    }
+    return result;
+  },
+  undo: async () => {
+    const result = await window.electronAPI.undoRedo.undo();
+    if (stateCallbacks.onUndo) {
+      try { stateCallbacks.onUndo(result); } catch {}
+    }
+    return result;
+  },
+  redo: async () => {
+    const result = await window.electronAPI.undoRedo.redo();
+    if (stateCallbacks.onRedo) {
+      try { stateCallbacks.onRedo(result); } catch {}
+    }
+    return result;
+  },
+  metadata: { operationCount: Array.isArray(operations) ? operations.length : 0 }
+});
+
 export const createBatchAction = (description, actions) => ({
   type: ACTION_TYPES.BATCH_OPERATION,
   description,
@@ -608,5 +636,6 @@ export default {
   ACTION_TYPES,
   createFileAction,
   createSettingsAction,
+  createOrganizeBatchAction,
   createBatchAction
 }; 

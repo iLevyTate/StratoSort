@@ -70,7 +70,6 @@ const IPC_CHANNELS = {
     ANALYZE_DOCUMENT: 'analyze-document',
     ANALYZE_IMAGE: 'analyze-image',
     EXTRACT_IMAGE_TEXT: 'extract-text-from-image'
-    
   },
   
   // Settings
@@ -104,8 +103,6 @@ const IPC_CHANNELS = {
     CLEAR: 'clear-analysis-history',
     EXPORT: 'export-analysis-history'
   },
-  
-
   
   // System Monitoring
   SYSTEM: {
@@ -213,7 +210,7 @@ const SUPPORTED_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx', '.pptx'
 
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
 
-// Audio temporarily disabled; keep list for potential future re-enable
+// Audio analysis disabled - removed for performance optimization
 const SUPPORTED_AUDIO_EXTENSIONS = [];
 
 const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv'];

@@ -15,6 +15,7 @@ let ollamaHost = 'http://127.0.0.1:11434';
 // Selected models persisted in userData config
 let selectedTextModel = null;
 let selectedVisionModel = null;
+let selectedEmbeddingModel = null;
 
 // Function to initialize or get the Ollama instance
 function getOllama() {
@@ -33,6 +34,10 @@ function getOllamaModel() {
 // Function to get the currently configured Ollama vision model
 function getOllamaVisionModel() {
   return selectedVisionModel;
+}
+
+function getOllamaEmbeddingModel() {
+  return selectedEmbeddingModel;
 }
 
 // Function to set/update the Ollama model
@@ -63,6 +68,20 @@ async function setOllamaVisionModel(modelName) {
     console.log(`[OLLAMA] Vision model set to: ${modelName} and saved.`);
   } catch (error) {
     console.error(`[OLLAMA] Error saving vision model selection:`, error);
+  }
+}
+
+async function setOllamaEmbeddingModel(modelName) {
+  selectedEmbeddingModel = modelName;
+  try {
+    const current = await loadOllamaConfig();
+    await saveOllamaConfig({
+      ...current,
+      selectedEmbeddingModel: modelName
+    });
+    console.log(`[OLLAMA] Embedding model set to: ${modelName} and saved.`);
+  } catch (error) {
+    console.error(`[OLLAMA] Error saving embedding model selection:`, error);
   }
 }
 
@@ -99,6 +118,10 @@ async function loadOllamaConfig() {
     if (config.selectedVisionModel) {
       selectedVisionModel = config.selectedVisionModel;
       console.log(`[OLLAMA] Loaded selected vision model: ${selectedVisionModel}`);
+    }
+    if (config.selectedEmbeddingModel) {
+      selectedEmbeddingModel = config.selectedEmbeddingModel;
+      console.log(`[OLLAMA] Loaded selected embedding model: ${selectedEmbeddingModel}`);
     }
     if (config.host) {
       ollamaHost = config.host;
@@ -163,8 +186,10 @@ module.exports = {
   getOllamaClient: getOllama,
   getOllamaModel,
   getOllamaVisionModel,
+  getOllamaEmbeddingModel,
   setOllamaModel,
   setOllamaVisionModel,
+  setOllamaEmbeddingModel,
   getOllamaHost,
   setOllamaHost,
   getOllamaConfigPath,

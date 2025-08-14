@@ -13,8 +13,11 @@ const {
   getOllama,
   getOllamaModel,
   getOllamaVisionModel,
+  getOllamaEmbeddingModel,
+  getOllamaHost,
   setOllamaModel,
   setOllamaVisionModel,
+  setOllamaEmbeddingModel,
   setOllamaHost,
   loadOllamaConfig,
 } = require('./ollamaUtils');
@@ -250,12 +253,15 @@ if (!gotTheLock) {
         getOllama,
         getOllamaModel,
         getOllamaVisionModel,
+        getOllamaEmbeddingModel,
+        getOllamaHost,
         buildOllamaOptions,
         scanDirectory,
         settingsService,
         setOllamaHost,
         setOllamaModel,
         setOllamaVisionModel,
+        setOllamaEmbeddingModel,
       });
 
       createWindow();
@@ -266,6 +272,7 @@ if (!gotTheLock) {
       const cfg = await loadOllamaConfig();
       if (cfg.selectedTextModel) await setOllamaModel(cfg.selectedTextModel);
       if (cfg.selectedVisionModel) await setOllamaVisionModel(cfg.selectedVisionModel);
+      if (cfg.selectedEmbeddingModel) await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
       logger.info('[STARTUP] Ollama configuration loaded');
       
     } catch (error) {

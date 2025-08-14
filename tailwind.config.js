@@ -6,6 +6,20 @@ module.exports = {
   ],
   theme: {
     extend: {
+      spacing: {
+        // Add exact pixel spacing tokens to avoid arbitrary values in @apply/classes
+        1: '1px',
+        2: '2px',
+        3: '3px',
+        5: '5px',
+        8: '8px',
+        13: '13px',
+        21: '21px',
+        34: '34px',
+        55: '55px',
+        89: '89px',
+        144: '144px'
+      },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
         mono: ['SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', 'Consolas', 'Courier New', 'monospace']
@@ -69,22 +83,6 @@ module.exports = {
           medium: '#CBD5E1',
           strong: '#94A3B8'
         }
-      },
-      spacing: {
-        // Golden ratio based spacing using Fibonacci sequence
-        'fib-1': '1px',
-        'fib-2': '2px',
-        'fib-3': '3px',
-        'fib-5': '5px',
-        'fib-8': '8px',
-        'fib-13': '13px',
-        'fib-21': '21px',
-        'fib-34': '34px',
-        'fib-55': '55px',
-        'fib-89': '89px',
-        'fib-144': '144px',
-        'fib-233': '233px',
-        'fib-377': '377px'
       },
       borderRadius: {
         'xs': '2px',

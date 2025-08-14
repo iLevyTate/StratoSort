@@ -1,4 +1,4 @@
-function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel }) {
+function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel, setOllamaEmbeddingModel }) {
   ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
     try {
       const loaded = await settingsService.load();
@@ -15,6 +15,7 @@ function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, s
       if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
       if (merged.textModel) await setOllamaModel(merged.textModel);
       if (merged.visionModel) await setOllamaVisionModel(merged.visionModel);
+      if (merged.embeddingModel && typeof setOllamaEmbeddingModel === 'function') await setOllamaEmbeddingModel(merged.embeddingModel);
       logger.info('[SETTINGS] Saved settings');
       return { success: true, settings: merged };
     } catch (error) {

@@ -5,6 +5,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { Collapsible, Button, Input, Select } from '../components/ui';
 import { StatusOverview, TargetFolderList, ReadyFileItem, BulkOperations, OrganizeProgress } from '../components/organize';
 import { UndoRedoToolbar, useUndoRedo } from '../components/UndoRedoSystem';
+import { createOrganizeBatchAction } from '../components/UndoRedoSystem';
 
 function OrganizePhase() {
   const { actions, phaseData } = usePhase();
@@ -131,35 +132,76 @@ function OrganizePhase() {
   const handleOrganizeFiles = async () => {
     try {
       setIsOrganizing(true);
-      const results = [];
       const filesToProcess = unprocessedFiles.filter(f => f.analysis);
+      if (filesToProcess.length === 0) return;
       setBatchProgress({ current: 0, total: filesToProcess.length, currentFile: '' });
-      for (let i = 0; i < filesToProcess.length; i++) {
-        const file = filesToProcess[i];
+
+      // Build operations for main process
+      const operations = filesToProcess.map((file, i) => {
         const edits = editingFiles[i] || {};
         const fileWithEdits = getFileWithEdits(file, i);
         const currentCategory = edits.category || fileWithEdits.analysis?.category;
         const smartFolder = findSmartFolderForCategory(currentCategory);
         const destinationDir = smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
         const newName = edits.suggestedName || fileWithEdits.analysis?.suggestedName || file.name;
-        setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: file.name });
-        // Simulate operation success; wire to electron API if desired
-        results.push({
-          originalPath: file.path,
-          path: `${destinationDir}/${newName}`,
-          originalName: file.name,
-          newName,
-          smartFolder: smartFolder?.name || currentCategory || 'Uncategorized',
-          organizedAt: new Date().toISOString()
-        });
-        // Brief yield to keep UI responsive
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise(r => setTimeout(r, 0));
-      }
-      setOrganizedFiles(prev => [...prev, ...results]);
-      markFilesAsProcessed(results.map(r => r.originalPath));
-      actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...results]);
-      addNotification(`Organized ${results.length} files`, 'success');
+        return { type: 'move', source: file.path, destination: `${destinationDir}/${newName}` };
+      });
+
+      const sourcePathsSet = new Set(operations.map(op => op.source));
+
+      const stateCallbacks = {
+        onExecute: (result) => {
+          try {
+            const resArray = Array.isArray(result?.results) ? result.results : [];
+            const uiResults = resArray.filter(r => r.success).map(r => {
+              const original = analysisResults.find(a => a.path === r.source) || {};
+              return {
+                originalPath: r.source,
+                path: r.destination,
+                originalName: original.name || (original.path ? original.path.split(/[\\/]/).pop() : ''),
+                newName: r.destination ? r.destination.split(/[\\/]/).pop() : '',
+                smartFolder: 'Organized',
+                organizedAt: new Date().toISOString()
+              };
+            });
+            if (uiResults.length > 0) {
+              setOrganizedFiles(prev => [...prev, ...uiResults]);
+              markFilesAsProcessed(uiResults.map(r => r.originalPath));
+              actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...uiResults]);
+              addNotification(`Organized ${uiResults.length} files`, 'success');
+            }
+          } catch {}
+        },
+        onUndo: () => {
+          try {
+            // Remove any organized entries that belong to this batch
+            setOrganizedFiles(prev => prev.filter(of => !sourcePathsSet.has(of.originalPath)));
+            unmarkFilesAsProcessed(Array.from(sourcePathsSet));
+            actions.setPhaseData('organizedFiles', (phaseData.organizedFiles || []).filter(of => !sourcePathsSet.has(of.originalPath)));
+            addNotification('Undo complete. Restored files to original locations.', 'info');
+          } catch {}
+        },
+        onRedo: () => {
+          try {
+            // Best-effort: re-add based on operations
+            const uiResults = operations.map(op => ({
+              originalPath: op.source,
+              path: op.destination,
+              originalName: op.source.split(/[\\/]/).pop(),
+              newName: op.destination.split(/[\\/]/).pop(),
+              smartFolder: 'Organized',
+              organizedAt: new Date().toISOString()
+            }));
+            setOrganizedFiles(prev => [...prev, ...uiResults]);
+            markFilesAsProcessed(uiResults.map(r => r.originalPath));
+            actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...uiResults]);
+            addNotification('Redo complete. Files re-organized.', 'info');
+          } catch {}
+        }
+      };
+
+      // Execute as a single undoable action
+      await executeAction(createOrganizeBatchAction(`Organize ${operations.length} files`, operations, stateCallbacks));
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');
     } finally {

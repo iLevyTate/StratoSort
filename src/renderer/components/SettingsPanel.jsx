@@ -20,6 +20,8 @@ function SettingsPanel() {
     defaultSmartFolderLocation: 'Documents'
   });
   const [ollamaModelLists, setOllamaModelLists] = useState({ text: [], vision: [], embedding: [], all: [] });
+  const [ollamaHealth, setOllamaHealth] = useState(null);
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [testResults, setTestResults] = useState({});
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,6 +60,7 @@ function SettingsPanel() {
 
   const loadOllamaModels = async () => {
     try {
+      setIsRefreshingModels(true);
       const response = await window.electronAPI.ollama.getModels();
       const categories = response?.categories || { text: [], vision: [], embedding: [] };
       setOllamaModelLists({
@@ -66,6 +69,7 @@ function SettingsPanel() {
         embedding: categories.embedding || [],
         all: response?.models || []
       });
+      if (response?.ollamaHealth) setOllamaHealth(response.ollamaHealth);
       if (response?.selected) {
         setSettings(prev => ({
           ...prev,
@@ -78,6 +82,8 @@ function SettingsPanel() {
     } catch (error) {
       console.error('Failed to load Ollama models:', error);
       setOllamaModelLists({ text: [], vision: [], embedding: [], all: [] });
+    } finally {
+      setIsRefreshingModels(false);
     }
   };
 
@@ -92,6 +98,21 @@ function SettingsPanel() {
       addNotification('Failed to save settings', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const testOllamaConnection = async () => {
+    try {
+      const res = await window.electronAPI.ollama.testConnection(settings.ollamaHost);
+      setOllamaHealth(res?.ollamaHealth || null);
+      if (res?.success) {
+        addNotification(`Ollama connected: ${res.modelCount} models found`, 'success');
+        await loadOllamaModels();
+      } else {
+        addNotification(`Ollama connection failed: ${res?.error || 'Unknown error'}`, 'error');
+      }
+    } catch (e) {
+      addNotification(`Ollama test failed: ${e.message}`, 'error');
     }
   };
 
@@ -165,9 +186,21 @@ function SettingsPanel() {
             <div className="space-y-fib-13">
               <div>
                 <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Ollama Host URL</label>
-                <Input type="text" value={settings.ollamaHost} onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))} placeholder="http://127.0.0.1:11434" />
+                <div className="flex gap-fib-8">
+                  <Input type="text" value={settings.ollamaHost} onChange={(e) => setSettings(prev => ({ ...prev, ollamaHost: e.target.value }))} placeholder="http://127.0.0.1:11434" className="flex-1" />
+                  <Button onClick={testOllamaConnection} variant="secondary" type="button" title="Test Ollama connection">🔗 Test</Button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-fib-13">
+              <div className="flex items-center gap-fib-8">
+                
+                <Button onClick={loadOllamaModels} variant="secondary" type="button" title="Refresh models" disabled={isRefreshingModels}>{isRefreshingModels ? 'Refreshing…' : '🔄 Refresh Models'}</Button>
+                {ollamaHealth && (
+                  <span className={`text-xs ${ollamaHealth.status === 'healthy' ? 'text-green-600' : 'text-red-600'}`}>
+                    {ollamaHealth.status === 'healthy' ? `Healthy (${ollamaHealth.modelCount || 0} models)` : `Unhealthy${ollamaHealth.error ? `: ${ollamaHealth.error}` : ''}`}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-fib-13">
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Text Model</label>
                   <Select value={settings.textModel} onChange={(e) => setSettings(prev => ({ ...prev, textModel: e.target.value }))}>
@@ -180,6 +213,14 @@ function SettingsPanel() {
                   <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Vision Model</label>
                   <Select value={settings.visionModel} onChange={(e) => setSettings(prev => ({ ...prev, visionModel: e.target.value }))}>
                     {(ollamaModelLists.vision.length ? ollamaModelLists.vision : ollamaModelLists.all).map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-fib-5">Embedding Model</label>
+                  <Select value={settings.embeddingModel} onChange={(e) => setSettings(prev => ({ ...prev, embeddingModel: e.target.value }))}>
+                    {(ollamaModelLists.embedding.length ? ollamaModelLists.embedding : ollamaModelLists.all).map(model => (
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </Select>

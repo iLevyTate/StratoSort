@@ -4,10 +4,10 @@ import { ToastContainer, useToast } from '../components/Toast';
 const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
-  const { toasts, addToast, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
+  const { toasts, addToast, removeToast, clearAllToasts, showSuccess, showError, showWarning, showInfo } = useToast();
 
-  const addNotification = useCallback((message, severity = 'info', duration = 3000) => {
-    return addToast(message, severity, duration);
+  const addNotification = useCallback((message, severity = 'info', duration = 3000, groupKey = null) => {
+    return addToast(message, severity, duration, groupKey);
   }, [addToast]);
 
   const removeNotification = useCallback((id) => {
@@ -39,13 +39,14 @@ export function NotificationProvider({ children }) {
       notifications: toasts, 
       addNotification, 
       removeNotification,
+      clearAllNotifications: clearAllToasts,
       showSuccess,
       showError, 
       showWarning,
       showInfo
     }}>
       {children}
-      <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
+      <ToastContainer toasts={toasts} onRemoveToast={removeToast} onClearAll={clearAllToasts} />
     </NotificationContext.Provider>
   );
 }

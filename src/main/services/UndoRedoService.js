@@ -169,6 +169,7 @@ class UndoRedoService {
         break;
         
       case 'BATCH_ORGANIZE':
+      case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
         // Reverse each file operation in the batch
         for (const operation of action.data.operations.reverse()) {
           await this.reverseFileOperation(operation);
@@ -207,6 +208,7 @@ class UndoRedoService {
         break;
         
       case 'BATCH_ORGANIZE':
+      case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
         // Re-execute each file operation in the batch
         for (const operation of action.data.operations) {
           await this.executeFileOperation(operation);

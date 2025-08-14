@@ -100,16 +100,56 @@ const Toast = ({
 };
 
 // Toast Container for managing multiple toasts
-export const ToastContainer = ({ toasts = [], onRemoveToast }) => {
+export const ToastContainer = ({ toasts = [], onRemoveToast, onClearAll }) => {
+  const [position, setPosition] = useState(() => {
+    try { return localStorage.getItem('toastPosition') || 'bottom-right'; } catch { return 'bottom-right'; }
+  });
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('toastCollapsed') === 'true'; } catch { return false; }
+  });
+
+  const containerStyle = () => {
+    const base = { position: 'fixed', zIndex: 1000 };
+    switch (position) {
+      case 'top-right': return { ...base, top: '21px', right: '21px' };
+      case 'top-left': return { ...base, top: '21px', left: '21px' };
+      case 'bottom-left': return { ...base, bottom: '21px', left: '21px' };
+      default: return { ...base, bottom: '21px', right: '21px' };
+    }
+  };
+
+  const updatePosition = (pos) => {
+    setPosition(pos);
+    try { localStorage.setItem('toastPosition', pos); } catch {}
+  };
+
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      try { localStorage.setItem('toastCollapsed', String(!prev)); } catch {}
+      return !prev;
+    });
+  };
+
   return (
-    <div 
-      className="fixed bottom-fib-21 right-fib-21 z-40 space-y-fib-5 pointer-events-none"
-      style={{ position: 'fixed', bottom: '21px', right: '21px', zIndex: 1000 }}
-      aria-live="polite"
-      aria-label="Notifications"
-    >
-      {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
+    <div aria-live="polite" aria-label="Notifications" className="z-40 pointer-events-none" style={containerStyle()}>
+      {/* Controls */}
+      <div className="pointer-events-auto mb-fib-5 flex items-center gap-fib-5 bg-white/80 backdrop-blur border border-system-gray-200 rounded px-fib-5 py-fib-3 shadow-sm">
+        <button onClick={toggleCollapsed} className="text-xs text-system-gray-700 hover:text-system-gray-900">{collapsed ? 'Expand' : 'Minimize'}</button>
+        <span className="text-system-gray-300">•</span>
+        <button onClick={() => onClearAll?.()} className="text-xs text-system-gray-700 hover:text-system-gray-900">Clear</button>
+        <span className="text-system-gray-300">•</span>
+        <label className="text-xs text-system-gray-700">Position</label>
+        <select value={position} onChange={(e) => updatePosition(e.target.value)} className="text-xs border border-system-gray-200 rounded px-fib-3 py-fib-1 bg-white">
+          <option value="top-right">Top Right</option>
+          <option value="top-left">Top Left</option>
+          <option value="bottom-right">Bottom Right</option>
+          <option value="bottom-left">Bottom Left</option>
+        </select>
+      </div>
+
+      {/* Toasts */}
+      {!collapsed && toasts.map((toast) => (
+        <div key={toast.id} className="pointer-events-auto mb-fib-5">
           <Toast
             message={toast.message}
             severity={toast.severity || toast.type}
@@ -123,15 +163,52 @@ export const ToastContainer = ({ toasts = [], onRemoveToast }) => {
   );
 };
 
-// Hook for using toasts
+// Hook for using toasts (with simple grouping and caps)
 export const useToast = () => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = (message, severity = 'info', duration = 3000) => {
+  const MAX_VISIBLE_TOASTS = 5;
+  const GROUP_WINDOW_MS = 2000; // merge toasts with same groupKey within 2s
+
+  const getHighestSeverity = (a, b) => {
+    const order = { error: 3, warning: 2, success: 1, info: 0 };
+    const aScore = order[a] ?? 0;
+    const bScore = order[b] ?? 0;
+    return aScore >= bScore ? a : b;
+  };
+
+  const addToast = (message, severity = 'info', duration = 3000, groupKey = null) => {
     const id = Date.now() + Math.random();
-    const toast = { id, message, severity, duration, show: true };
-    
-    setToasts(prev => [...prev, toast]);
+    const now = Date.now();
+
+    setToasts(prev => {
+      // If grouping, try to merge with an existing toast
+      if (groupKey) {
+        const idx = prev.findIndex(t => t.groupKey === groupKey && (now - (t.createdAt || now)) <= GROUP_WINDOW_MS);
+        if (idx !== -1) {
+          const existing = prev[idx];
+          const updated = {
+            ...existing,
+            id: existing.id, // keep id stable for animation
+            message,
+            severity: getHighestSeverity(existing.severity || 'info', severity || 'info'),
+            duration: duration ?? existing.duration,
+            createdAt: existing.createdAt || now
+          };
+          const copy = prev.slice();
+          copy[idx] = updated;
+          return copy;
+        }
+      }
+
+      const next = [...prev, { id, message, severity, duration, show: true, groupKey: groupKey || null, createdAt: now }];
+      // Cap visible toasts
+      if (next.length > MAX_VISIBLE_TOASTS) {
+        next.shift();
+      }
+      return next;
+    });
+
     return id;
   };
 

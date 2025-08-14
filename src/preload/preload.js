@@ -299,9 +299,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   analysis: {
     document: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
     image: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
-    // audio: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, filePath), // REMOVED - audio analysis disabled
     extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath),
-    // transcribe: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.TRANSCRIBE_AUDIO, filePath) // REMOVED - audio analysis disabled
   },
 
   // Analysis History

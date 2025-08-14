@@ -1,6 +1,6 @@
 const { Ollama } = require('ollama');
 
-function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel }) {
+function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel, getOllamaEmbeddingModel, getOllamaHost }) {
   ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, async () => {
     try {
       const ollama = getOllama();
@@ -14,8 +14,9 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
       return {
         models: models.map(m => m.name),
         categories,
-        selected: { textModel: getOllamaModel(), visionModel: getOllamaVisionModel() },
-        ollamaHealth: systemAnalytics.ollamaHealth
+        selected: { textModel: getOllamaModel(), visionModel: getOllamaVisionModel(), embeddingModel: typeof getOllamaEmbeddingModel === 'function' ? getOllamaEmbeddingModel() : null },
+        ollamaHealth: systemAnalytics.ollamaHealth,
+        host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined
       };
     } catch (error) {
       logger.error('[IPC] Error fetching Ollama models:', error);
@@ -25,8 +26,9 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
       return {
         models: [],
         categories: { text: [], vision: [], embedding: [] },
-        selected: { textModel: getOllamaModel(), visionModel: getOllamaVisionModel() },
+        selected: { textModel: getOllamaModel(), visionModel: getOllamaVisionModel(), embeddingModel: typeof getOllamaEmbeddingModel === 'function' ? getOllamaEmbeddingModel() : null },
         error: error.message,
+        host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined
       };
     }
   });

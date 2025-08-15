@@ -12,6 +12,8 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
         const name = m.name || '';
         if (/llava|vision|clip|sam/gi.test(name)) categories.vision.push(name); else if (/embed|embedding/gi.test(name)) categories.embedding.push(name); else categories.text.push(name);
       }
+      // Ensure we update health on every models fetch
+      systemAnalytics.ollamaHealth = { status: 'healthy', host: getOllamaHost ? getOllamaHost() : undefined, modelCount: models.length, lastCheck: Date.now() };
       return {
         models: models.map(m => m.name),
         categories,
@@ -29,7 +31,8 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
         categories: { text: [], vision: [], embedding: [] },
         selected: { textModel: getOllamaModel(), visionModel: getOllamaVisionModel(), embeddingModel: typeof getOllamaEmbeddingModel === 'function' ? getOllamaEmbeddingModel() : null },
         error: error.message,
-        host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined
+        host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined,
+        ollamaHealth: systemAnalytics.ollamaHealth
       };
     }
   }));

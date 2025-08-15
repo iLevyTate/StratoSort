@@ -846,7 +846,7 @@ function DiscoverPhase() {
     <div className="w-full">
       <div className="mb-21 text-center">
         <h2 className="heading-primary">🔍 Discover & Analyze</h2>
-        <p className="text-lg text-system-gray-600 leading-relaxed">Select files or scan a folder, then let StratoSort analyze and prepare them for organization.</p>
+        <p className="text-lg text-system-gray-600 leading-relaxed max-w-2xl mx-auto">Select files or scan a folder, then let StratoSort analyze and prepare them for organization.</p>
       </div>
       <div className="flex items-center justify-center gap-8 -mt-8 mb-13">
         <button className="text-xs text-system-gray-500 hover:text-system-gray-700 underline" onClick={() => { try { const keys = ['discover-naming','discover-selection','discover-dnd','discover-results']; keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true')); window.dispatchEvent(new Event('storage')); } catch {} }}>Expand all</button>
@@ -871,7 +871,7 @@ function DiscoverPhase() {
       <Collapsible title="Select Files or Folder" defaultOpen persistKey="discover-selection">
         <SelectionControls onSelectFiles={handleFileSelection} onSelectFolder={handleFolderSelection} isScanning={isScanning} />
         {selectedFiles.length > 0 && (
-          <div className="mt-4 flex items-center justify-between p-4 bg-system-gray-50 rounded-lg border border-system-gray-200">
+          <div className="mt-4 flex items-center justify-between p-8 bg-system-gray-50 rounded-lg border border-system-gray-200">
             <div className="text-sm text-system-gray-600">
               <span className="font-medium">{selectedFiles.length}</span> file{selectedFiles.length !== 1 ? 's' : ''} in queue
               {analysisResults.length > 0 && (
@@ -890,10 +890,10 @@ function DiscoverPhase() {
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-5">
               <button
                 onClick={clearAnalysisQueue}
-                className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                className="px-8 py-5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
                 title="Clear all files from the analysis queue"
               >
                 Clear Queue
@@ -909,7 +909,7 @@ function DiscoverPhase() {
                     actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
                     addNotification('Analysis state reset', 'info', 2000, 'analysis-reset');
                   }}
-                  className="px-3 py-2 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
+                  className="px-8 py-5 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
                   title="Reset stuck analysis state"
                 >
                   Reset Analysis
@@ -918,7 +918,7 @@ function DiscoverPhase() {
               {analysisLockRef.current && !isAnalyzing && (
                 <button
                   onClick={forceReleaseAnalysisLock}
-                  className="px-3 py-2 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                  className="px-8 py-5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
                   title="Release stuck analysis lock"
                 >
                   Release Lock
@@ -960,7 +960,7 @@ function DiscoverPhase() {
       )}
 
       {analysisResults.length > 0 && (
-        <Collapsible title="Analysis Results" defaultOpen persistKey="discover-results">
+        <Collapsible title="Analysis Results" defaultOpen persistKey="discover-results" contentClassName="max-h-[480px] overflow-y-auto pr-8">
           <AnalysisResultsList results={analysisResults} onFileAction={handleFileAction} getFileStateDisplay={getFileStateDisplay} />
         </Collapsible>
       )}

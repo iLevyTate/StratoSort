@@ -51,7 +51,7 @@ describe('StratoSort React App', () => {
         'utf8'
       );
       // These should appear in App.js wiring (providers now wrapped by AppProviders). SystemMonitoring removed per UX.
-      ['PhaseRenderer', 'TooltipManager'].forEach((c) => {
+      ['AppProviders','NavigationBar'].forEach((c) => {
         expect(appContent).toContain(c);
       });
       // Undo/Redo toolbar lives in its own file; ensure it exists there

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
 import { usePhase } from '../contexts/PhaseContext';
 import Button from './ui/Button';
@@ -27,6 +27,8 @@ function SettingsPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRebuildingFolders, setIsRebuildingFolders] = useState(false);
   const [isRebuildingFiles, setIsRebuildingFiles] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const didAutoHealthCheckRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -49,14 +51,36 @@ function SettingsPanel() {
     return () => { mounted = false; };
   }, []);
 
+  // After settings are loaded the first time, automatically check Ollama health
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    if (didAutoHealthCheckRef.current) return;
+    didAutoHealthCheckRef.current = true;
+    (async () => {
+      try {
+        const res = await window.electronAPI.ollama.testConnection(settings.ollamaHost);
+        setOllamaHealth(res?.ollamaHealth || null);
+        if (res?.success) {
+          // Refresh models to reflect current host/models
+          await loadOllamaModels();
+        }
+      } catch (e) {
+        // Silent fail; status text already reflects failure via GET_MODELS
+        console.error('Auto Ollama health check failed:', e);
+      }
+    })();
+  }, [settingsLoaded]);
+
   const loadSettings = async () => {
     try {
       const savedSettings = await window.electronAPI.settings.get();
       if (savedSettings) {
         setSettings(prev => ({ ...prev, ...savedSettings }));
       }
+      setSettingsLoaded(true);
     } catch (error) {
       console.error('Failed to load settings:', error);
+      setSettingsLoaded(true);
     }
   };
 

@@ -1,6 +1,7 @@
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 class SettingsService {
   constructor() {
@@ -37,7 +38,13 @@ class SettingsService {
   async save(settings) {
     const merged = { ...this.defaults, ...(settings || {}) };
     await fs.mkdir(path.dirname(this.settingsPath), { recursive: true });
-    await fs.writeFile(this.settingsPath, JSON.stringify(merged, null, 2));
+    const result = await backupAndReplace(
+      this.settingsPath,
+      JSON.stringify(merged, null, 2)
+    );
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to save settings');
+    }
     return merged;
   }
 }

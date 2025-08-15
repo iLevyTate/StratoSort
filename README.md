@@ -291,8 +291,9 @@ npm run lint               # Code linting
 - **Analysis modules**: document and image analysis happy-paths and edge cases (Ollama calls mocked in tests)
 - **File operations**: move/copy/delete, conflict handling, folder creation
 - **Integration scripts**: sample end-to-end flows for file movement and folder scaffolding
-- **Ollama IPC & model verification**: validates IPC handlers and ensures required models are present
-- **Smart folders LLM service**: tests folder enhancement and semantic similarity scoring logic
+- **Ollama IPC handlers**: validates model listing and connection tests via mocked `ipcMain` and Ollama client
+- **ModelVerifier service**: ensures essential model availability and command generation using mocked network calls
+- **SmartFoldersLLMService**: verifies folder enhancement and semantic similarity scoring with mocked fetch requests
 
 Run tests locally with `npm test`. Note: audio analysis tests exist for module-level behavior, but audio features are disabled in the current UI build.
 

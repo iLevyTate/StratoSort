@@ -781,10 +781,53 @@ select:focus {
   .glass-strong {
     @apply bg-white border-system-gray-900 backdrop-blur-none;
   }
-  
+
   .hc-card-border { @apply border-system-gray-900; }
-  
+
   .btn-primary {
     @apply bg-system-gray-900 text-white border-2 border-system-gray-900;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@layer components {
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .initial-loading {
+    @apply h-screen flex items-center justify-center font-sans;
+  }
+
+  .initial-section {
+    @apply text-center max-w-[400px];
+  }
+
+  .initial-icon {
+    @apply text-[48px] mb-4;
+  }
+
+  .initial-title {
+    @apply text-[#334155] m-0 text-2xl font-semibold;
+  }
+
+  .initial-subtitle {
+    @apply text-[#64748B] mt-2 text-sm;
+  }
+
+  .initial-spinner-wrapper {
+    @apply mt-6;
+  }
+
+  .loading-spinner {
+    @apply w-6 h-6 border-2 border-[#E2E8F0] border-t-[#2563EB] rounded-full mx-auto animate-spin;
   }
 }

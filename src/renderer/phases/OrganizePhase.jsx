@@ -14,6 +14,7 @@ function OrganizePhase() {
   const [organizedFiles, setOrganizedFiles] = useState([]);
   const [isOrganizing, setIsOrganizing] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentFile: '' });
+  const [organizePreview, setOrganizePreview] = useState([]);
   const [documentsPath, setDocumentsPath] = useState('');
   const [editingFiles, setEditingFiles] = useState({});
   const [selectedFiles, setSelectedFiles] = useState(new Set());
@@ -147,6 +148,20 @@ function OrganizePhase() {
         return { type: 'move', source: file.path, destination: `${destinationDir}/${newName}` };
       });
 
+      // Prepare a lightweight preview list for the progress UI
+      try {
+        const preview = filesToProcess.map((file, i) => {
+          const edits = editingFiles[i] || {};
+          const fileWithEdits = getFileWithEdits(file, i);
+          const currentCategory = edits.category || fileWithEdits.analysis?.category;
+          const smartFolder = findSmartFolderForCategory(currentCategory);
+          const destinationDir = smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
+          const newName = edits.suggestedName || fileWithEdits.analysis?.suggestedName || file.name;
+          return { fileName: newName, destination: `${destinationDir}/${newName}` };
+        });
+        setOrganizePreview(preview);
+      } catch {}
+
       const sourcePathsSet = new Set(operations.map(op => op.source));
 
       const stateCallbacks = {
@@ -169,6 +184,8 @@ function OrganizePhase() {
               markFilesAsProcessed(uiResults.map(r => r.originalPath));
               actions.setPhaseData('organizedFiles', [...(phaseData.organizedFiles || []), ...uiResults]);
               addNotification(`Organized ${uiResults.length} files`, 'success');
+              // Mark visual progress complete
+              setBatchProgress({ current: filesToProcess.length, total: filesToProcess.length, currentFile: '' });
             }
           } catch {}
         },
@@ -217,7 +234,7 @@ function OrganizePhase() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="heading-primary mb-8">📂 Review & Organize</h2>
-            <p className="text-lg text-system-gray-600 leading-relaxed">Review AI suggestions and organize your files into smart folders.</p>
+            <p className="text-lg text-system-gray-600 leading-relaxed max-w-2xl">Review AI suggestions and organize your files into smart folders.</p>
               {isAnalysisRunning && (
                 <div className="mt-13 p-13 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center gap-8">
@@ -231,7 +248,7 @@ function OrganizePhase() {
         </div>
       </div>
       {smartFolders.length > 0 && (
-        <Collapsible title="📁 Target Smart Folders" defaultOpen={false} persistKey="organize-target-folders">
+        <Collapsible title="📁 Target Smart Folders" defaultOpen={false} persistKey="organize-target-folders" contentClassName="max-h-[360px] overflow-y-auto pr-8">
           <TargetFolderList folders={smartFolders} defaultLocation={defaultLocation} />
         </Collapsible>
       )}
@@ -256,7 +273,7 @@ function OrganizePhase() {
           />
         </Collapsible>
       )}
-      <Collapsible title="Files Ready for Organization" defaultOpen persistKey="organize-ready-list">
+      <Collapsible title="Files Ready for Organization" defaultOpen persistKey="organize-ready-list" contentClassName="max-h-[540px] overflow-y-auto pr-8">
         {unprocessedFiles.length === 0 ? (
           <div className="text-center py-21">
             <div className="text-4xl mb-13">{processedFiles.length > 0 ? '✅' : '📭'}</div>
@@ -292,8 +309,8 @@ function OrganizePhase() {
         )}
       </Collapsible>
       {processedFiles.length > 0 && (
-        <Collapsible title="✅ Previously Organized Files" defaultOpen={false} persistKey="organize-history">
-          <div className="space-y-5 max-h-64 overflow-y-auto">
+        <Collapsible title="✅ Previously Organized Files" defaultOpen={false} persistKey="organize-history" contentClassName="max-h-[320px] overflow-y-auto pr-8">
+          <div className="space-y-5">
             {processedFiles.map((file, index) => (
               <div key={index} className="flex items-center justify-between p-8 bg-green-50 rounded-lg border border-green-200">
                 <div className="flex items-center gap-8">
@@ -314,15 +331,15 @@ function OrganizePhase() {
           <p className="text-system-gray-600 mb-13">StratoSort will move and rename <strong>{unprocessedFiles.filter(f => f.analysis).length} files</strong> according to AI suggestions.</p>
           <p className="text-xs text-system-gray-500 mb-13">💡 Don't worry - you can undo this operation if needed</p>
           {isOrganizing ? (
-            <OrganizeProgress isOrganizing={isOrganizing} batchProgress={batchProgress} />
+            <OrganizeProgress isOrganizing={isOrganizing} batchProgress={batchProgress} preview={organizePreview} />
           ) : (
             <Button onClick={handleOrganizeFiles} variant="success" className="text-lg px-21 py-13" disabled={unprocessedFiles.filter(f => f.analysis).length === 0}>✨ Organize Files Now</Button>
           )}
         </Collapsible>
       )}
-      <div className="flex justify-between">
-        <Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="secondary" disabled={isOrganizing}>← Back to Discovery</Button>
-        <Button onClick={() => actions.advancePhase(PHASES.COMPLETE)} disabled={processedFiles.length === 0 || isOrganizing} className={`${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}>View Results →</Button>
+      <div className="flex flex-col sm:flex-row justify-between gap-8">
+        <Button onClick={() => actions.advancePhase(PHASES.DISCOVER)} variant="secondary" disabled={isOrganizing} className="w-full sm:w-auto">← Back to Discovery</Button>
+        <Button onClick={() => actions.advancePhase(PHASES.COMPLETE)} disabled={processedFiles.length === 0 || isOrganizing} className={`w-full sm:w-auto ${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}>View Results →</Button>
       </div>
     </div>
   );

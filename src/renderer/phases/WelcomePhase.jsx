@@ -20,7 +20,7 @@ function WelcomePhase() {
         </p>
       </div>
 
-      <div className="space-y-13" role="navigation" aria-label="Main actions">
+      <div className="space-y-8 md:space-y-13 max-w-md mx-auto" role="navigation" aria-label="Main actions">
         <Button 
           onClick={() => actions.advancePhase(PHASES.DISCOVER)}
           variant="primary"
@@ -44,7 +44,7 @@ function WelcomePhase() {
 
       <div className="mt-21 bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 hover:shadow-md hover:border-border-medium transition-all duration-200 backdrop-blur-sm">
         <h3 className="heading-tertiary text-center">How StratoSort Works:</h3>
-        <div className="grid md:grid-cols-3 gap-13 text-sm text-system-gray-600">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 md:gap-13 text-sm text-system-gray-600">
           <div className="text-center p-13 rounded-lg hover:bg-surface-secondary transition-colors duration-200">
             <div className="text-3xl mb-5 animate-bounce-subtle">🔍</div>
             <strong className="text-system-gray-700">Discover</strong><br/>

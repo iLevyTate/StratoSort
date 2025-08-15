@@ -6,6 +6,7 @@ export default function Collapsible({
   actions = null,
   defaultOpen = true,
   className = '',
+  contentClassName = '',
   persistKey
 }) {
   const contentId = useId();
@@ -88,7 +89,7 @@ export default function Collapsible({
 
       <div
         id={contentId}
-        className={`transition-all duration-200 ${isOpen ? 'mt-13' : 'h-0 overflow-hidden'}`}
+        className={`transition-all duration-200 ${isOpen ? 'mt-13' : 'h-0 overflow-hidden'} ${isOpen ? contentClassName : ''}`.trim()}
       >
         {isOpen ? children : null}
       </div>

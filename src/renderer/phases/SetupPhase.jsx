@@ -285,7 +285,7 @@ function SetupPhase() {
         <h2 className="heading-primary">
           ⚙️ Configure <span className="text-gradient inline-block">Smart Folders</span>
         </h2>
-        <p className="text-lg text-system-gray-600 leading-relaxed">
+        <p className="text-lg text-system-gray-600 leading-relaxed max-w-2xl mx-auto">
           Set up smart folders where StratoSort will organize your files based on AI analysis.
         </p>
         <div className="flex items-center justify-center gap-8 mt-8">
@@ -324,6 +324,7 @@ function SetupPhase() {
         ) : null}
         defaultOpen
         persistKey="setup-current-folders"
+        contentClassName="max-h-[420px] overflow-y-auto pr-8"
       >
         {isLoading ? (
           <SmartFolderSkeleton count={3} />
@@ -365,26 +366,26 @@ function SetupPhase() {
           </div>
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-5">Target Path (optional)</label>
-            <div className="flex gap-8">
+            <div className="flex gap-8 flex-col sm:flex-row">
               <Input type="text" value={newFolderPath} onChange={(e) => setNewFolderPath(e.target.value)} placeholder="e.g., Documents/Work, Pictures/Family" className="flex-1" />
-              <Button onClick={handleBrowseFolder} variant="secondary" title="Browse for folder">📁 Browse</Button>
+              <Button onClick={handleBrowseFolder} variant="secondary" title="Browse for folder" className="w-full sm:w-auto">📁 Browse</Button>
             </div>
             <p className="text-xs text-system-gray-500 mt-3">Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-system-gray-700 mb-5">Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span></label>
-            <Textarea value={newFolderDescription} onChange={(e) => setNewFolderDescription(e.target.value)} placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'" className="w-full" rows={3} aria-describedby="description-help" />
+            <Textarea value={newFolderDescription} onChange={(e) => setNewFolderDescription(e.target.value)} placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'" className="w-full" rows={4} aria-describedby="description-help" />
             <div id="description-help" className="text-xs text-system-gray-500 mt-3">💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.</div>
           </div>
-          <Button onClick={handleAddFolder} disabled={!newFolderName.trim() || isAddingFolder} variant="primary" aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}>
+          <Button onClick={handleAddFolder} disabled={!newFolderName.trim() || isAddingFolder} variant="primary" className="w-full sm:w-auto" aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}>
             {isAddingFolder ? (<><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>Adding...</>) : (<>➕ Add Smart Folder</>)}
           </Button>
         </div>
       </Collapsible>
 
-      <div className="flex justify-between">
-        <Button onClick={() => actions.advancePhase(PHASES.WELCOME)} variant="secondary">← Back to Welcome</Button>
-        <Button onClick={() => { if (smartFolders.length === 0) { showWarning('Please add at least one smart folder before continuing'); } else { actions.advancePhase(PHASES.DISCOVER); } }} variant="primary">Continue to File Discovery →</Button>
+      <div className="flex flex-col sm:flex-row justify-between gap-8">
+        <Button onClick={() => actions.advancePhase(PHASES.WELCOME)} variant="secondary" className="w-full sm:w-auto">← Back to Welcome</Button>
+        <Button onClick={() => { if (smartFolders.length === 0) { showWarning('Please add at least one smart folder before continuing'); } else { actions.advancePhase(PHASES.DISCOVER); } }} variant="primary" className="w-full sm:w-auto">Continue to File Discovery →</Button>
       </div>
 
       <ConfirmDialog />

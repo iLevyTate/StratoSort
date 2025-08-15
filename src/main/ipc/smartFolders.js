@@ -2,9 +2,10 @@ const path = require('path');
 const fs = require('fs').promises;
 const { getOllama: getOllamaClient } = require('../ollamaUtils');
 const { enhanceSmartFolderWithLLM } = require('../services/SmartFoldersLLMService');
+const { withErrorLogging } = require('./withErrorLogging');
 
 function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders, buildOllamaOptions, getOllamaModel, scanDirectory }) {
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, async () => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET, withErrorLogging(logger, async () => {
     const customFolders = getCustomFolders();
     logger.info('[SMART-FOLDERS] Getting Smart Folders for UI:', customFolders.length);
     const foldersWithStatus = await Promise.all(
@@ -14,16 +15,16 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       })
     );
     return foldersWithStatus;
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, async () => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM, withErrorLogging(logger, async () => {
     const customFolders = getCustomFolders();
     logger.info('[SMART-FOLDERS] Getting Custom Folders for UI:', customFolders.length);
     return customFolders;
-  });
+  }));
 
   // Smart folder matching using embeddings/LLM with fallbacks
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, async (event, payload) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.MATCH, withErrorLogging(logger, async (event, payload) => {
     try {
       const { text, smartFolders = [] } = payload || {};
       if (!text || !Array.isArray(smartFolders) || smartFolders.length === 0) {
@@ -67,9 +68,9 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[SMART_FOLDERS.MATCH] Failed:', error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, async (event, folders) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SAVE, withErrorLogging(logger, async (event, folders) => {
     try {
       if (!Array.isArray(folders)) return { success: false, error: 'Folders must be an array', errorCode: 'INVALID_INPUT' };
       const originalFolders = [...getCustomFolders()];
@@ -86,9 +87,9 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[ERROR] Failed to save smart folders:', error);
       return { success: false, error: error.message, errorCode: 'SAVE_FAILED' };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, async (event, folders) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, withErrorLogging(logger, async (event, folders) => {
     try {
       if (!Array.isArray(folders)) return { success: false, error: 'Folders must be an array', errorCode: 'INVALID_INPUT' };
       const originalFolders = [...getCustomFolders()];
@@ -105,9 +106,9 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[ERROR] Failed to update custom folders:', error);
       return { success: false, error: error.message, errorCode: 'UPDATE_FAILED' };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, async (event, folderId, updatedFolder) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.EDIT, withErrorLogging(logger, async (event, folderId, updatedFolder) => {
     try {
       if (!folderId || typeof folderId !== 'string') return { success: false, error: 'Valid folder ID is required', errorCode: 'INVALID_FOLDER_ID' };
       if (!updatedFolder || typeof updatedFolder !== 'object') return { success: false, error: 'Valid folder data is required', errorCode: 'INVALID_FOLDER_DATA' };
@@ -162,9 +163,9 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[ERROR] Failed to edit smart folder:', error);
       return { success: false, error: error.message, errorCode: 'EDIT_FAILED' };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, async (event, folderId) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.DELETE, withErrorLogging(logger, async (event, folderId) => {
     try {
       if (!folderId || typeof folderId !== 'string') return { success: false, error: 'Valid folder ID is required', errorCode: 'INVALID_FOLDER_ID' };
       const customFolders = getCustomFolders();
@@ -197,10 +198,10 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[ERROR] Failed to delete smart folder:', error);
       return { success: false, error: error.message, errorCode: 'DELETE_FAILED' };
     }
-  });
+  }));
 
   // Create/add new smart folder with LLM enhancement
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, async (event, folder) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.ADD, withErrorLogging(logger, async (event, folder) => {
     try {
       if (!folder || typeof folder !== 'object') return { success: false, error: 'Invalid folder data provided', errorCode: 'INVALID_FOLDER_DATA' };
       if (!folder.name || typeof folder.name !== 'string' || !folder.name.trim()) return { success: false, error: 'Folder name is required and must be a non-empty string', errorCode: 'INVALID_FOLDER_NAME' };
@@ -274,10 +275,10 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[ERROR] Failed to add smart folder:', error);
       return { success: false, error: 'Failed to add smart folder', errorCode: 'ADD_FOLDER_FAILED', details: error.message };
     }
-  });
+  }));
 
   // Scan folder structure
-  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, async (event, rootPath) => {
+  ipcMain.handle(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, withErrorLogging(logger, async (event, rootPath) => {
     try {
       logger.info('[FOLDER-SCAN] Scanning folder structure:', rootPath);
       // Reuse existing scanner (shallow aggregation is done in renderer today)
@@ -298,7 +299,7 @@ function registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolde
       logger.error('[FOLDER-SCAN] Error scanning folder structure:', error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 }
 
 module.exports = registerSmartFoldersIpc;

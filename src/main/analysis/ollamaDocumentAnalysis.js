@@ -85,9 +85,24 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
     if (fileExtension === '.pdf') {
       try {
         extractedText = await extractTextFromPdf(filePath, fileName);
+        if (!extractedText || extractedText.trim().length === 0) {
+          // Try OCR fallback for image-only PDFs
+          const ocrText = await ocrPdfIfNeeded(filePath);
+          extractedText = ocrText || '';
+        }
       } catch (pdfError) {
         logger.error(`Error parsing PDF`, { fileName, error: pdfError.message });
-        throw new FileProcessingError('PDF_PROCESSING_FAILURE', fileName, { originalError: pdfError.message, suggestion: 'PDF may be corrupted, password-protected, or image-based' });
+        // Attempt OCR fallback before giving up
+        try {
+          const ocrText = await ocrPdfIfNeeded(filePath);
+          if (ocrText && ocrText.trim().length > 0) {
+            extractedText = ocrText;
+          } else {
+            throw new FileProcessingError('PDF_PROCESSING_FAILURE', fileName, { originalError: pdfError.message, suggestion: 'PDF may be corrupted, password-protected, or image-based' });
+          }
+        } catch (ocrErr) {
+          throw new FileProcessingError('PDF_PROCESSING_FAILURE', fileName, { originalError: pdfError.message, suggestion: 'PDF may be corrupted, password-protected, or image-based' });
+        }
       }
     } else if ([...SUPPORTED_TEXT_EXTENSIONS, '.doc'].includes(fileExtension)) {
       // Read text files directly

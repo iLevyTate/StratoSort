@@ -132,6 +132,14 @@ Analyze this image:`;
         confidence: 0
       };
     }
+    // Guidance for vision model input failures
+    if (error.message.includes('unable to make llava embedding')) {
+      return {
+        error: 'Unsupported image format or dimensions for vision model. Convert to PNG/JPG and keep under ~2048px on the longest side.',
+        keywords: [],
+        confidence: 0
+      };
+    }
     
     return { 
       error: `Ollama API error for image: ${error.message}`, 
@@ -177,22 +185,36 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     // Read and encode image as base64
     let imageBuffer = await fs.readFile(filePath);
     
-    // Rasterize SVG to PNG for analysis
-    if (fileExtension === '.svg') {
+    // Preprocess image for vision model compatibility
+    // - Convert unsupported formats (svg, tiff, bmp, gif, webp) to PNG
+    // - Downscale very large images to avoid model failures
+    try {
+      const needsFormatConversion = ['.svg', '.tiff', '.tif', '.bmp', '.gif', '.webp'].includes(fileExtension);
+      let transformer = null;
+
+      let meta = null;
       try {
-        imageBuffer = await sharp(imageBuffer)
-          .png()
-          .resize({ width: 1280, withoutEnlargement: true })
-          .toBuffer();
-      } catch (svgErr) {
-        logger.error(`Failed to rasterize SVG`, { path: filePath, error: svgErr.message });
-        return {
-          error: 'Failed to process SVG image',
-          category: 'error',
-          keywords: [],
-          confidence: 0
-        };
+        meta = await sharp(imageBuffer).metadata();
+      } catch {}
+
+      const maxDimension = 2048;
+      const shouldResize = meta && (Number(meta.width) > maxDimension || Number(meta.height) > maxDimension);
+
+      if (needsFormatConversion || shouldResize) {
+        transformer = sharp(imageBuffer);
+        if (shouldResize) {
+          const resizeOptions = { fit: 'inside', withoutEnlargement: true };
+          if (meta && meta.width && meta.height) {
+            if (meta.width >= meta.height) resizeOptions.width = maxDimension; else resizeOptions.height = maxDimension;
+          } else {
+            resizeOptions.width = maxDimension;
+          }
+          transformer = transformer.resize(resizeOptions);
+        }
+        imageBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
       }
+    } catch (preErr) {
+      logger.error(`Failed to pre-process image for analysis`, { path: filePath, error: preErr.message });
     }
     
     // Validate buffer is not empty

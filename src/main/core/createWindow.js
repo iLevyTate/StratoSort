@@ -53,16 +53,25 @@ function createMainWindow() {
     });
   }
 
-  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
-        ]
+    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+      let wsHost = '';
+      try {
+        const url = new URL(ollamaHost);
+        wsHost = url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+      } catch {
+        wsHost = '';
       }
+
+      const csp = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
+
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp]
+        }
+      });
     });
-  });
 
   win.once('ready-to-show', () => {
     win.show();

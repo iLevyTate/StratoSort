@@ -2,11 +2,12 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.js';
 import './tailwind.css';
+import { logger } from '../shared/logger';
 
 // Wait for DOM to be ready before initializing React
 function initializeApp() {
   try {
-    console.log('[RENDERER] Initializing React application...');
+    logger.info('[RENDERER] Initializing React application...');
     
     // Find the root container
     const container = document.getElementById('root');
@@ -14,7 +15,7 @@ function initializeApp() {
       throw new Error('Root container not found! Make sure there is a div with id="root" in the HTML.');
     }
     
-    console.log('[RENDERER] Root container found, creating React root...');
+    logger.info('[RENDERER] Root container found, creating React root...');
     
     // Create React root
     const root = createRoot(container);
@@ -32,10 +33,10 @@ function initializeApp() {
       </React.StrictMode>
     );
     
-    console.log('[RENDERER] React application initialized successfully');
+    logger.info('[RENDERER] React application initialized successfully');
     
   } catch (error) {
-    console.error('[RENDERER] Failed to initialize React application:', error);
+    logger.error('[RENDERER] Failed to initialize React application:', error);
     
     // Show error message in the initial loading screen
     const initialLoading = document.getElementById('initial-loading');

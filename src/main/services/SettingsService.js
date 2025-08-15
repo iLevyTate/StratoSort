@@ -1,6 +1,7 @@
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('../../shared/logger');
 
 class SettingsService {
   constructor() {
@@ -28,7 +29,7 @@ class SettingsService {
       return { ...this.defaults, ...parsed };
     } catch (err) {
       if (err && err.code !== 'ENOENT') {
-        console.warn('[SETTINGS] Failed to read settings, using defaults:', err.message);
+        logger.warn('[SETTINGS] Failed to read settings, using defaults:', err.message);
       }
       return { ...this.defaults };
     }

@@ -7,6 +7,7 @@ const { Ollama } = require('ollama');
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('../../shared/logger');
 
 class ModelManager {
   constructor(host = 'http://127.0.0.1:11434') {
@@ -39,7 +40,7 @@ class ModelManager {
    */
   async initialize() {
     try {
-      console.log('[MODEL-MANAGER] Initializing...');
+      logger.info('[MODEL-MANAGER] Initializing...');
       
       // Load saved configuration
       await this.loadConfig();
@@ -50,10 +51,10 @@ class ModelManager {
       // Ensure we have a working model
       await this.ensureWorkingModel();
       
-      console.log(`[MODEL-MANAGER] Initialized with model: ${this.selectedModel}`);
+      logger.info(`[MODEL-MANAGER] Initialized with model: ${this.selectedModel}`);
       return true;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Initialization failed:', error);
+      logger.error('[MODEL-MANAGER] Initialization failed:', error);
       return false;
     }
   }
@@ -71,10 +72,10 @@ class ModelManager {
         this.analyzeModelCapabilities(model);
       }
       
-      console.log(`[MODEL-MANAGER] Discovered ${this.availableModels.length} models`);
+      logger.info(`[MODEL-MANAGER] Discovered ${this.availableModels.length} models`);
       return this.availableModels;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Failed to discover models:', error);
+      logger.error('[MODEL-MANAGER] Failed to discover models:', error);
       this.availableModels = [];
       return [];
     }
@@ -128,7 +129,7 @@ class ModelManager {
     if (this.selectedModel) {
       const modelExists = this.availableModels.some(m => m.name === this.selectedModel);
       if (modelExists && await this.testModel(this.selectedModel)) {
-        console.log(`[MODEL-MANAGER] Using existing model: ${this.selectedModel}`);
+        logger.info(`[MODEL-MANAGER] Using existing model: ${this.selectedModel}`);
         return this.selectedModel;
       }
     }
@@ -158,7 +159,7 @@ class ModelManager {
       );
       
       if (model && await this.testModel(model.name)) {
-        console.log(`[MODEL-MANAGER] Selected preferred model: ${model.name}`);
+        logger.info(`[MODEL-MANAGER] Selected preferred model: ${model.name}`);
         return model.name;
       }
     }
@@ -168,7 +169,7 @@ class ModelManager {
       const capabilities = this.modelCapabilities.get(model.name);
       if (capabilities && (capabilities.text || capabilities.chat)) {
         if (await this.testModel(model.name)) {
-          console.log(`[MODEL-MANAGER] Selected fallback model: ${model.name}`);
+          logger.info(`[MODEL-MANAGER] Selected fallback model: ${model.name}`);
           return model.name;
         }
       }
@@ -177,7 +178,7 @@ class ModelManager {
     // Last resort: try the first available model
     const firstModel = this.availableModels[0];
     if (await this.testModel(firstModel.name)) {
-      console.log(`[MODEL-MANAGER] Selected first available model: ${firstModel.name}`);
+      logger.info(`[MODEL-MANAGER] Selected first available model: ${firstModel.name}`);
       return firstModel.name;
     }
 
@@ -189,7 +190,7 @@ class ModelManager {
    */
   async testModel(modelName, timeout = 10000) {
     try {
-      console.log(`[MODEL-MANAGER] Testing model: ${modelName}`);
+      logger.info(`[MODEL-MANAGER] Testing model: ${modelName}`);
       
       const { buildOllamaOptions } = require('./PerformanceService');
       const perfOptions = await buildOllamaOptions('text');
@@ -208,10 +209,10 @@ class ModelManager {
       );
 
       await Promise.race([testPromise, timeoutPromise]);
-      console.log(`[MODEL-MANAGER] Model ${modelName} is working`);
+      logger.info(`[MODEL-MANAGER] Model ${modelName} is working`);
       return true;
     } catch (error) {
-      console.log(`[MODEL-MANAGER] Model ${modelName} failed test: ${error.message}`);
+      logger.info(`[MODEL-MANAGER] Model ${modelName} failed test: ${error.message}`);
       return false;
     }
   }
@@ -267,7 +268,7 @@ class ModelManager {
 
     this.selectedModel = modelName;
     await this.saveConfig();
-    console.log(`[MODEL-MANAGER] Selected model set to: ${modelName}`);
+    logger.info(`[MODEL-MANAGER] Selected model set to: ${modelName}`);
   }
 
   /**
@@ -302,7 +303,7 @@ class ModelManager {
 
     for (const modelName of modelsToTry) {
       try {
-        console.log(`[MODEL-MANAGER] Attempting generation with: ${modelName}`);
+        logger.info(`[MODEL-MANAGER] Attempting generation with: ${modelName}`);
         
         const { buildOllamaOptions } = require('./PerformanceService');
         const perfOptions = await buildOllamaOptions('text');
@@ -325,7 +326,7 @@ class ModelManager {
           };
         }
       } catch (error) {
-        console.log(`[MODEL-MANAGER] Model ${modelName} failed: ${error.message}`);
+        logger.info(`[MODEL-MANAGER] Model ${modelName} failed: ${error.message}`);
         continue;
       }
     }
@@ -341,10 +342,10 @@ class ModelManager {
       const data = await fs.readFile(this.configPath, 'utf-8');
       const config = JSON.parse(data);
       this.selectedModel = config.selectedModel || null;
-      console.log(`[MODEL-MANAGER] Loaded config: ${this.selectedModel}`);
+      logger.info(`[MODEL-MANAGER] Loaded config: ${this.selectedModel}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('[MODEL-MANAGER] Error loading config:', error);
+        logger.error('[MODEL-MANAGER] Error loading config:', error);
       }
     }
   }
@@ -360,7 +361,7 @@ class ModelManager {
       };
       await fs.writeFile(this.configPath, JSON.stringify(config, null, 2));
     } catch (error) {
-      console.error('[MODEL-MANAGER] Error saving config:', error);
+      logger.error('[MODEL-MANAGER] Error saving config:', error);
     }
   }
 

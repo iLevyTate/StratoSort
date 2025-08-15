@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect } from 'react';
 import { ToastContainer, useToast } from '../components/Toast';
+import { logger } from '../../shared/logger';
 
 const NotificationContext = createContext(null);
 
@@ -27,7 +28,7 @@ export function NotificationProvider({ children }) {
         else if (type === 'warning') showWarning(message, 4000);
         else showInfo(message, 3000);
       } catch (e) {
-        console.error('[Renderer] Failed to display app:error', e);
+        logger.error('[Renderer] Failed to display app:error', e);
       }
     });
 

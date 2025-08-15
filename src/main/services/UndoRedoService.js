@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
+const { logger } = require('../../shared/logger');
 
 class UndoRedoService {
   constructor() {
@@ -19,9 +20,9 @@ class UndoRedoService {
     try {
       await this.loadActions();
       this.initialized = true;
-      console.log('UndoRedoService initialized successfully');
+      logger.info('UndoRedoService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize UndoRedoService:', error);
+      logger.error('Failed to initialize UndoRedoService:', error);
       this.actions = [];
       this.currentIndex = -1;
       this.initialized = true;
@@ -100,7 +101,7 @@ class UndoRedoService {
         message: `Undid: ${action.description}`
       };
     } catch (error) {
-      console.error('Failed to undo action:', error);
+      logger.error('Failed to undo action:', error);
       throw new Error(`Failed to undo action: ${error.message}`);
     }
   }
@@ -124,7 +125,7 @@ class UndoRedoService {
         message: `Redid: ${action.description}`
       };
     } catch (error) {
-      console.error('Failed to redo action:', error);
+      logger.error('Failed to redo action:', error);
       throw new Error(`Failed to redo action: ${error.message}`);
     }
   }
@@ -164,7 +165,7 @@ class UndoRedoService {
           await fs.rmdir(action.data.folderPath);
         } catch (error) {
           // Folder might not be empty, try to restore to original state
-          console.warn('Could not remove folder, might contain files:', error.message);
+          logger.warn('Could not remove folder, might contain files:', error.message);
         }
         break;
         

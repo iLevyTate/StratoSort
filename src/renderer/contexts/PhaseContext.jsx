@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useReducer } from 'react';
 import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA, UI_WORKFLOW } from '../../shared/constants';
+import { logger } from '../../shared/logger';
 
 function phaseReducer(state, action) {
   switch (action.type) {
@@ -7,7 +8,7 @@ function phaseReducer(state, action) {
       const { targetPhase, data = {} } = action.payload;
       const allowedTransitions = PHASE_TRANSITIONS[state.currentPhase] || [];
       if (targetPhase !== state.currentPhase && !allowedTransitions.includes(targetPhase)) {
-        console.warn(`Invalid transition from ${state.currentPhase} to ${targetPhase}`);
+        logger.warn(`Invalid transition from ${state.currentPhase} to ${targetPhase}`);
         return state;
       }
       return { ...state, currentPhase: targetPhase, phaseData: { ...state.phaseData, ...data } };
@@ -48,7 +49,7 @@ export function PhaseProvider({ children }) {
         }
       }
     } catch (error) {
-      console.error('Failed to load workflow state:', error);
+      logger.error('Failed to load workflow state:', error);
     }
   }, []);
 
@@ -60,7 +61,7 @@ export function PhaseProvider({ children }) {
           localStorage.setItem('stratosort_workflow_state', JSON.stringify(workflowState));
         }
       } catch (error) {
-        console.error('Failed to save workflow state:', error);
+        logger.error('Failed to save workflow state:', error);
       }
     };
     const timeoutId = setTimeout(save, UI_WORKFLOW.SAVE_DEBOUNCE_MS);

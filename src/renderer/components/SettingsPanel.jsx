@@ -6,6 +6,7 @@ import Input from './ui/Input';
 import Textarea from './ui/Textarea';
 import Select from './ui/Select';
 import Collapsible from './ui/Collapsible';
+import { logger } from '../../shared/logger';
 
 function SettingsPanel() {
   const { actions } = usePhase();
@@ -56,7 +57,7 @@ function SettingsPanel() {
         setSettings(prev => ({ ...prev, ...savedSettings }));
       }
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      logger.error('Failed to load settings:', error);
     }
   };
 
@@ -82,7 +83,7 @@ function SettingsPanel() {
         }));
       }
     } catch (error) {
-      console.error('Failed to load Ollama models:', error);
+      logger.error('Failed to load Ollama models:', error);
       setOllamaModelLists({ text: [], vision: [], embedding: [], all: [] });
     } finally {
       setIsRefreshingModels(false);
@@ -96,7 +97,7 @@ function SettingsPanel() {
       addNotification('Settings saved successfully!', 'success');
       actions.toggleSettings();
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      logger.error('Failed to save settings:', error);
       addNotification('Failed to save settings', 'error');
     } finally {
       setIsSaving(false);

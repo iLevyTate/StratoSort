@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { logger } from '../../shared/logger';
 
 function SystemMonitoring() {
   const [systemMetrics, setSystemMetrics] = useState({
@@ -21,11 +22,11 @@ function SystemMonitoring() {
             const updatedMetrics = await window.electronAPI.system.getMetrics();
             setSystemMetrics(updatedMetrics);
           } catch (error) {
-            console.warn('Failed to update system metrics:', error);
+            logger.warn('Failed to update system metrics:', error);
           }
         }, 5000);
       } catch (error) {
-        console.error('Failed to start system monitoring:', error);
+        logger.error('Failed to start system monitoring:', error);
         setIsMonitoring(false);
       }
     };

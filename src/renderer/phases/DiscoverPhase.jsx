@@ -7,6 +7,7 @@ import { Collapsible, Button, Input, Select } from '../components/ui';
 import AnalysisDetails from '../components/AnalysisDetails';
 import AnalysisHistoryModal from '../components/AnalysisHistoryModal';
 import { NamingSettings, SelectionControls, DragAndDropZone, AnalysisResultsList, AnalysisProgress } from '../components/discover';
+import { logger } from '../../shared/logger';
 
 function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
@@ -55,7 +56,7 @@ function DiscoverPhase() {
       const isStuck = timeSinceActivity > 2 * 60 * 1000; // 2 minutes
       
       if (isStuck) {
-        console.log('[ANALYSIS] Detected stuck analysis state on mount, resetting...');
+        logger.info('[ANALYSIS] Detected stuck analysis state on mount, resetting...');
         // Don't restore stuck analysis state
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
@@ -101,7 +102,7 @@ function DiscoverPhase() {
       const fiveMinutes = 5 * 60 * 1000;
       
       if (timeSinceActivity > fiveMinutes) {
-        console.log('[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity');
+        logger.info('[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity');
         addNotification('Detected stuck analysis state - auto-resetting', 'warning', 5000, 'analysis-auto-reset');
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
@@ -124,7 +125,7 @@ function DiscoverPhase() {
       const twoMinutes = 2 * 60 * 1000;
       
       if (timeSinceActivity > twoMinutes) {
-        console.log('[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes');
+        logger.info('[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes');
         addNotification('Analysis stalled with no progress - auto-resetting', 'warning', 5000, 'analysis-stalled');
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
@@ -475,7 +476,7 @@ function DiscoverPhase() {
   const analyzeFiles = async (files) => {
     if (!files || files.length === 0) return;
     
-    console.log('[ANALYSIS] analyzeFiles called with:', {
+    logger.info('[ANALYSIS] analyzeFiles called with:', {
       filesCount: files.length,
       isAnalyzing,
       analysisProgress,
@@ -486,7 +487,7 @@ function DiscoverPhase() {
     
     // Prevent multiple simultaneous analysis calls (silent)
     if (analysisLockRef.current || globalAnalysisActive) {
-      console.log('[ANALYSIS] Analysis already in progress, skipping duplicate call', {
+      logger.info('[ANALYSIS] Analysis already in progress, skipping duplicate call', {
         lockRef: analysisLockRef.current,
         globalState: globalAnalysisActive
       });
@@ -495,14 +496,14 @@ function DiscoverPhase() {
     
     // Additional check: prevent analysis if UI shows it's already running (silent)
     if (isAnalyzing) {
-      console.log('[ANALYSIS] UI shows analysis already in progress, skipping call');
+      logger.info('[ANALYSIS] UI shows analysis already in progress, skipping call');
       return;
     }
     
     // Set the lock immediately
     analysisLockRef.current = true;
     setGlobalAnalysisActive(true);
-    console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    logger.info('[ANALYSIS] Analysis lock acquired and global state set');
     
     // Small delay to ensure lock is properly established
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -510,14 +511,14 @@ function DiscoverPhase() {
     // Set a timeout to release the lock after 5 minutes (safety measure)
     const lockTimeout = setTimeout(() => {
       if (analysisLockRef.current) {
-        console.warn('[ANALYSIS] Analysis lock timeout reached, forcing release');
+        logger.warn('[ANALYSIS] Analysis lock timeout reached, forcing release');
         analysisLockRef.current = false;
       }
     }, 5 * 60 * 1000); // 5 minutes
     
     // Force reset any existing analysis state to ensure clean start
     if (isAnalyzing || analysisProgress.total > 0) {
-      console.log('[ANALYSIS] Force resetting existing analysis state for clean start');
+      logger.info('[ANALYSIS] Force resetting existing analysis state for clean start');
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');
       setAnalysisProgress({ current: 0, total: 0 });
@@ -537,7 +538,7 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', initialProgress);
     actions.setPhaseData('currentAnalysisFile', '');
     
-    console.log('[ANALYSIS] Started analysis with progress:', initialProgress);
+    logger.info('[ANALYSIS] Started analysis with progress:', initialProgress);
     
     // Set up progress heartbeat to prevent stuck states
     const heartbeatInterval = setInterval(() => {
@@ -553,7 +554,7 @@ function DiscoverPhase() {
           setAnalysisProgress(currentProgress);
           actions.setPhaseData('analysisProgress', currentProgress);
         } else {
-          console.warn('[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis');
+          logger.warn('[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis');
           clearInterval(heartbeatInterval);
           resetAnalysisState();
         }
@@ -610,7 +611,7 @@ function DiscoverPhase() {
             actions.setPhaseData('analysisProgress', progress);
             actions.setPhaseData('currentAnalysisFile', fileName);
           } else {
-            console.warn('[ANALYSIS] Invalid progress state detected, skipping update');
+            logger.warn('[ANALYSIS] Invalid progress state detected, skipping update');
           }
           
           const fileInfo = { ...file, size: file.size || 0, created: file.created, modified: file.modified };
@@ -674,10 +675,10 @@ function DiscoverPhase() {
             setAnalysisProgress(currentProgress);
             actions.setPhaseData('analysisProgress', currentProgress);
           } else {
-            console.warn('[ANALYSIS] Invalid batch progress state detected, skipping update');
+            logger.warn('[ANALYSIS] Invalid batch progress state detected, skipping update');
           }
         } catch (error) {
-          console.error('[ANALYSIS] Batch processing error:', error);
+          logger.error('[ANALYSIS] Batch processing error:', error);
           // Don't fail the entire analysis for batch errors
         }
       };
@@ -784,7 +785,7 @@ function DiscoverPhase() {
   };
 
   const forceReleaseAnalysisLock = () => {
-    console.log('[ANALYSIS] Manually releasing analysis lock');
+    logger.info('[ANALYSIS] Manually releasing analysis lock');
     analysisLockRef.current = false;
     setGlobalAnalysisActive(false);
     addNotification('Analysis lock manually released', 'info', 2000, 'analysis-reset');

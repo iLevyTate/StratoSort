@@ -6,6 +6,7 @@ import { useConfirmDialog } from '../hooks';
 import { Collapsible, Button, Input, Textarea } from '../components/ui';
 import { SmartFolderSkeleton } from '../components/LoadingSkeleton';
 import { SmartFolderItem } from '../components/setup';
+import { logger } from '../../shared/logger';
 
 function SetupPhase() {
   const { actions, phaseData } = usePhase();
@@ -31,7 +32,7 @@ function SetupPhase() {
       try {
         await Promise.all([loadSmartFolders(), loadDefaultLocation()]);
       } catch (error) {
-        console.error('Failed to initialize setup:', error);
+        logger.error('Failed to initialize setup:', error);
         showError('Failed to load setup data');
       } finally {
         setIsLoading(false);
@@ -63,7 +64,7 @@ function SetupPhase() {
         }
       }
     } catch (error) {
-      console.error('Failed to load default location:', error);
+      logger.error('Failed to load default location:', error);
     }
   };
 
@@ -76,7 +77,7 @@ function SetupPhase() {
         showInfo('Smart folders updated. Files may need re-analysis to match new folder structure.', 7000);
       }
     } catch (error) {
-      console.error('Failed to load smart folders:', error);
+      logger.error('Failed to load smart folders:', error);
       showError('Failed to load smart folders');
     }
   };
@@ -167,7 +168,7 @@ function SetupPhase() {
         showError(`❌ Failed to add folder: ${result.error}`);
       }
     } catch (error) {
-      console.error('Failed to add smart folder:', error);
+      logger.error('Failed to add smart folder:', error);
       showError('Failed to add smart folder');
     } finally {
       setIsAddingFolder(false);
@@ -196,7 +197,7 @@ function SetupPhase() {
         showError(`❌ Failed to update folder: ${result.error}`);
       }
     } catch (error) {
-      console.error('Failed to update folder:', error);
+      logger.error('Failed to update folder:', error);
       showError('Failed to update folder');
     } finally {
       setIsSavingEdit(false);
@@ -234,7 +235,7 @@ function SetupPhase() {
         showError(`❌ Failed to delete folder: ${result.error}`);
       }
     } catch (error) {
-      console.error('Failed to delete folder:', error);
+      logger.error('Failed to delete folder:', error);
       showError('❌ Failed to delete folder');
     } finally {
       setIsDeletingFolder(null);
@@ -250,7 +251,7 @@ function SetupPhase() {
         setNewFolderPath(res.folder);
       }
     } catch (error) {
-      console.error('Failed to browse folder:', error);
+      logger.error('Failed to browse folder:', error);
       showError('Failed to browse folder');
     }
   };
@@ -264,7 +265,7 @@ function SetupPhase() {
         showError(`Failed to open folder: ${result?.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Failed to open folder:', error);
+      logger.error('Failed to open folder:', error);
       showError('Failed to open folder');
     }
   };
@@ -274,7 +275,7 @@ function SetupPhase() {
       await window.electronAPI.files.createFolder(folderPath);
       return { success: true };
     } catch (error) {
-      console.error('Failed to create folder:', error);
+      logger.error('Failed to create folder:', error);
       return { success: false, error: error.message };
     }
   };

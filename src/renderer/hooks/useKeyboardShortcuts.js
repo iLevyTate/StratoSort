@@ -3,6 +3,7 @@ import { usePhase } from '../contexts/PhaseContext';
 import { useUndoRedo } from '../components/UndoRedoSystem';
 import { useNotification } from '../contexts/NotificationContext';
 import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
+import { logger } from '../../shared/logger';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
@@ -18,7 +19,7 @@ export function useKeyboardShortcuts() {
           try {
             addNotification('Use Ctrl+Z in organize phase for undo', 'info', 2000);
           } catch (error) {
-            console.error('Undo shortcut failed:', error);
+            logger.error('Undo shortcut failed:', error);
           }
         }
       }
@@ -30,7 +31,7 @@ export function useKeyboardShortcuts() {
           try {
             addNotification('Use Ctrl+Shift+Z in organize phase for redo', 'info', 2000);
           } catch (error) {
-            console.error('Redo shortcut failed:', error);
+            logger.error('Redo shortcut failed:', error);
           }
         }
       }

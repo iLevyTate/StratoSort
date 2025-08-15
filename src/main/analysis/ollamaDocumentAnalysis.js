@@ -49,7 +49,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
   try {
     const connectionCheck = await modelVerifier.checkOllamaConnection();
     if (!connectionCheck.connected) {
-      console.warn(`[ANALYSIS-FALLBACK] Ollama unavailable (${connectionCheck.error}). Using filename-based analysis for ${fileName}.`);
+      logger.warn(`[ANALYSIS-FALLBACK] Ollama unavailable (${connectionCheck.error}). Using filename-based analysis for ${fileName}.`);
       const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
       const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
       return {
@@ -64,7 +64,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       };
     }
   } catch (error) {
-    console.error('Pre-flight verification failed:', error.message);
+    logger.error('Pre-flight verification failed:', error.message);
     const intelligentCategory = getIntelligentCategory(fileName, fileExtension, smartFolders);
     const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
     return {

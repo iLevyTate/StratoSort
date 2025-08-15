@@ -6,6 +6,7 @@
 const { Ollama } = require('ollama');
 const { ModelMissingError, OllamaConnectionError } = require('../errors/AnalysisError');
 const { DEFAULT_AI_MODELS } = require('../../shared/constants');
+const { logger } = require('../../shared/logger');
 
 class ModelVerifier {
   constructor() {
@@ -58,7 +59,7 @@ class ModelVerifier {
   }
 
   async verifyEssentialModels() {
-    console.log('[ModelVerifier] Checking essential models...');
+    logger.info('[ModelVerifier] Checking essential models...');
     
     const connectionCheck = await this.checkOllamaConnection();
     if (!connectionCheck.connected) {
@@ -103,8 +104,8 @@ class ModelVerifier {
     const whisperVariants = ['whisper', 'whisper:base', 'whisper:small', 'whisper:medium', 'whisper:large'];
     const hasWhisper = installedModelNames.some(installed => installed.startsWith('whisper'));
 
-    console.log(`[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`);
-    console.log(`[ModelVerifier] Whisper available: ${hasWhisper}`);
+    logger.info(`[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`);
+    logger.info(`[ModelVerifier] Whisper available: ${hasWhisper}`);
 
     return {
       success: missingModels.length === 0,
@@ -179,7 +180,7 @@ class ModelVerifier {
   }
 
   async testModelFunctionality() {
-    console.log('[ModelVerifier] Testing model functionality...');
+    logger.info('[ModelVerifier] Testing model functionality...');
     
     const tests = [];
 
@@ -253,7 +254,7 @@ class ModelVerifier {
     }
 
     const successfulTests = tests.filter(t => t.success).length;
-    console.log(`[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`);
+    logger.info(`[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`);
 
     return {
       success: successfulTests >= Math.ceil(tests.length * 0.5), // At least half should work

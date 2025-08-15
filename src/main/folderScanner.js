@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('../shared/logger');
 
 const DEFAULT_IGNORE_PATTERNS = [
   '.DS_Store',
@@ -45,7 +46,7 @@ async function scanDirectory(dirPath, ignorePatterns = DEFAULT_IGNORE_PATTERNS) 
       items.push(itemInfo);
     }
   } catch (error) {
-    console.error(`Error scanning directory ${dirPath}:`, error);
+    logger.error(`Error scanning directory ${dirPath}:`, error);
     // Optionally, rethrow or return a specific error structure
     if (error.code === 'EACCES' || error.code === 'EPERM') {
       // Handle permission errors gracefully, e.g., by skipping the directory

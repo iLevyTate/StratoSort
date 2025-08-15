@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
 const crypto = require('crypto');
+const { logger } = require('../../shared/logger');
 
 class AnalysisHistoryService {
   constructor() {
@@ -28,9 +29,9 @@ class AnalysisHistoryService {
       await this.loadHistory();
       await this.loadIndex();
       this.initialized = true;
-      console.log('AnalysisHistoryService initialized successfully');
+      logger.info('AnalysisHistoryService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize AnalysisHistoryService:', error);
+      logger.error('Failed to initialize AnalysisHistoryService:', error);
       await this.createDefaultStructures();
     }
   }
@@ -392,7 +393,7 @@ class AnalysisHistoryService {
     }
     
     if (removedCount > 0) {
-      console.log(`Removed ${removedCount} expired analysis entries`);
+      logger.info(`Removed ${removedCount} expired analysis entries`);
       await this.saveHistory();
       await this.saveIndex();
     }
@@ -426,7 +427,7 @@ class AnalysisHistoryService {
 
   async migrateHistory() {
     // Future migration logic for schema changes
-    console.log('Schema migration not yet implemented');
+    logger.info('Schema migration not yet implemented');
   }
 
   async createDefaultStructures() {

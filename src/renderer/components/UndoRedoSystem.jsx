@@ -1,6 +1,7 @@
 // Undo/Redo System - Implementing Shneiderman's Golden Rule #6: Action Reversal Infrastructure
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ConfirmModal } from './Modal';
+import { logger } from '../../shared/logger';
 
 // Undo/Redo Context
 const UndoRedoContext = createContext();
@@ -9,15 +10,15 @@ const UndoRedoContext = createContext();
 function useSimpleNotifications() {
   return {
     showSuccess: (title, description) => {
-      console.log(`✅ ${title}: ${description}`);
+      logger.info(`✅ ${title}: ${description}`);
       // Could integrate with window.electronAPI for toast notifications if available
     },
     showError: (title, description) => {
-      console.error(`❌ ${title}: ${description}`);
+      logger.error(`❌ ${title}: ${description}`);
       // Could integrate with window.electronAPI for toast notifications if available  
     },
     showInfo: (title, description) => {
-      console.log(`ℹ️ ${title}: ${description}`);
+      logger.info(`ℹ️ ${title}: ${description}`);
       // Could integrate with window.electronAPI for toast notifications if available
     }
   };

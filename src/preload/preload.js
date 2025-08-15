@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
+const { logger } = require('../shared/logger');
 
-console.log('[PRELOAD] Secure preload script loaded');
+logger.info('[PRELOAD] Secure preload script loaded');
 
 // Import centralized IPC channel map using an absolute path to avoid resolution issues when the preload is bundled or moved
 const constantsPath = path.resolve(__dirname, '..', 'shared', 'constants.js');
@@ -71,7 +72,7 @@ class SecureIPCManager {
     try {
       // Channel validation
       if (!ALL_SEND_CHANNELS.includes(channel)) {
-        console.warn(`[PRELOAD] Blocked invoke to unauthorized channel: ${channel}`);
+        logger.warn(`[PRELOAD] Blocked invoke to unauthorized channel: ${channel}`);
         throw new Error(`Unauthorized IPC channel: ${channel}`);
       }
 
@@ -81,7 +82,7 @@ class SecureIPCManager {
       // Argument sanitization
       const sanitizedArgs = this.sanitizeArguments(args);
 
-      console.log(`[PRELOAD] Secure invoke: ${channel}`, sanitizedArgs.length > 0 ? '[with args]' : '');
+      logger.info(`[PRELOAD] Secure invoke: ${channel}`, sanitizedArgs.length > 0 ? '[with args]' : '');
       
       const result = await ipcRenderer.invoke(channel, ...sanitizedArgs);
       
@@ -89,7 +90,7 @@ class SecureIPCManager {
       return this.validateResult(result, channel);
       
     } catch (error) {
-      console.error(`[PRELOAD] IPC invoke error for ${channel}:`, error.message);
+      logger.error(`[PRELOAD] IPC invoke error for ${channel}:`, error.message);
       throw new Error(`IPC Error: ${error.message}`);
     }
   }
@@ -99,7 +100,7 @@ class SecureIPCManager {
    */
   safeOn(channel, callback) {
     if (!ALLOWED_RECEIVE_CHANNELS.includes(channel)) {
-      console.warn(`[PRELOAD] Blocked listener on unauthorized channel: ${channel}`);
+      logger.warn(`[PRELOAD] Blocked listener on unauthorized channel: ${channel}`);
       return () => {};
     }
 
@@ -107,7 +108,7 @@ class SecureIPCManager {
       try {
         // Validate event source
         if (!this.validateEventSource(event)) {
-          console.warn(`[PRELOAD] Rejected event from invalid source on channel: ${channel}`);
+          logger.warn(`[PRELOAD] Rejected event from invalid source on channel: ${channel}`);
           return;
         }
 
@@ -120,13 +121,13 @@ class SecureIPCManager {
           if (this.isValidSystemMetrics(data)) {
             callback(data);
           } else {
-            console.warn('[PRELOAD] Invalid system-metrics data rejected');
+            logger.warn('[PRELOAD] Invalid system-metrics data rejected');
           }
         } else {
           callback(...sanitizedArgs);
         }
       } catch (error) {
-        console.error(`[PRELOAD] Error in ${channel} event handler:`, error);
+        logger.error(`[PRELOAD] Error in ${channel} event handler:`, error);
       }
     };
 
@@ -229,7 +230,7 @@ class SecureIPCManager {
       ipcRenderer.removeListener(channel, callback);
     }
     this.activeListeners.clear();
-    console.log('[PRELOAD] All IPC listeners cleaned up');
+    logger.info('[PRELOAD] All IPC listeners cleaned up');
   }
 }
 
@@ -361,14 +362,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
     invoke: (channel, ...args) => {
-      console.warn('[PRELOAD] Using deprecated electron.ipcRenderer.invoke - migrate to window.electronAPI');
+      logger.warn('[PRELOAD] Using deprecated electron.ipcRenderer.invoke - migrate to window.electronAPI');
       return secureIPC.safeInvoke(channel, ...args);
     },
     on: (channel, callback) => {
-      console.warn('[PRELOAD] Using deprecated electron.ipcRenderer.on - migrate to window.electronAPI.events');
+      logger.warn('[PRELOAD] Using deprecated electron.ipcRenderer.on - migrate to window.electronAPI.events');
       return secureIPC.safeOn(channel, callback);
     }
   }
 });
 
-console.log('[PRELOAD] Secure context bridge exposed with structured API'); 
+logger.info('[PRELOAD] Secure context bridge exposed with structured API');

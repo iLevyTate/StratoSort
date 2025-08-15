@@ -6,6 +6,7 @@ import { Collapsible, Button, Input, Select } from '../components/ui';
 import { StatusOverview, TargetFolderList, ReadyFileItem, BulkOperations, OrganizeProgress } from '../components/organize';
 import { UndoRedoToolbar, useUndoRedo } from '../components/UndoRedoSystem';
 import { createOrganizeBatchAction } from '../components/UndoRedoSystem';
+import { logger } from '../../shared/logger';
 
 function OrganizePhase() {
   const { actions, phaseData } = usePhase();
@@ -41,7 +42,7 @@ function OrganizePhase() {
           }
         }
       } catch (error) {
-        console.error('Failed to load smart folders in Organize phase:', error);
+        logger.error('Failed to load smart folders in Organize phase:', error);
       }
     };
     loadSmartFoldersIfMissing();

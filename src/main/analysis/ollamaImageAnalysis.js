@@ -271,7 +271,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     };
 
   } catch (error) {
-    console.error(`Error processing image ${filePath}:`, error.message);
+    logger.error(`Error processing image ${filePath}:`, error.message);
     return {
       error: `Failed to process image: ${error.message}`,
       category: 'error',
@@ -309,7 +309,7 @@ async function extractTextFromImage(filePath) {
     
     return null;
   } catch (error) {
-    console.error('Error extracting text from image:', error.message);
+    logger.error('Error extracting text from image:', error.message);
     return null;
   }
 }

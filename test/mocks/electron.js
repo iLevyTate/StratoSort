@@ -1,8 +1,12 @@
 module.exports = {
+  contextBridge: {
+    exposeInMainWorld: jest.fn()
+  },
   ipcRenderer: {
     invoke: jest.fn(),
     on: jest.fn(),
-    send: jest.fn()
+    send: jest.fn(),
+    removeListener: jest.fn()
   },
   ipcMain: {
     _handlers: new Map(),

@@ -2,12 +2,13 @@ const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 const path = require('path');
 const { SUPPORTED_IMAGE_EXTENSIONS } = require('../../shared/constants');
+const { withErrorLogging } = require('./withErrorLogging');
 
 function registerEmbeddingsIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, getServiceIntegration }) {
   const embeddingIndex = new EmbeddingIndexService();
   const folderMatcher = new FolderMatchingService(embeddingIndex);
 
-  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS, async () => {
+  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS, withErrorLogging(logger, async () => {
     try {
       const smartFolders = getCustomFolders().filter(f => f && f.name);
       await embeddingIndex.resetFolders();
@@ -17,9 +18,9 @@ function registerEmbeddingsIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders
       logger.error('[EMBEDDINGS] Rebuild folders failed:', e);
       return { success: false, error: e.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES, async () => {
+  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES, withErrorLogging(logger, async () => {
     try {
       const serviceIntegration = getServiceIntegration && getServiceIntegration();
       const historyService = serviceIntegration?.analysisHistory;
@@ -63,16 +64,16 @@ function registerEmbeddingsIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders
       logger.error('[EMBEDDINGS] Rebuild files failed:', e);
       return { success: false, error: e.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE, async () => {
+  ipcMain.handle(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE, withErrorLogging(logger, async () => {
     try {
       await embeddingIndex.resetAll();
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
     }
-  });
+  }));
 }
 
 module.exports = registerEmbeddingsIpc;

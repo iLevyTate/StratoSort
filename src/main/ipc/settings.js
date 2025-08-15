@@ -1,5 +1,7 @@
+const { withErrorLogging } = require('./withErrorLogging');
+
 function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel, setOllamaEmbeddingModel }) {
-  ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async () => {
+  ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, withErrorLogging(logger, async () => {
     try {
       const loaded = await settingsService.load();
       return loaded;
@@ -7,9 +9,9 @@ function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, s
       logger.error('Failed to get settings:', error);
       return {};
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, async (event, settings) => {
+  ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, withErrorLogging(logger, async (event, settings) => {
     try {
       const merged = await settingsService.save(settings);
       if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
@@ -22,7 +24,7 @@ function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, s
       logger.error('Failed to save settings:', error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 }
 
 module.exports = registerSettingsIpc;

@@ -7,15 +7,19 @@ import NavigationBar from './components/NavigationBar';
 import PhaseRenderer from './components/PhaseRenderer';
 
 import AppProviders from './components/AppProviders';
+import ErrorBoundary from './components/ErrorBoundary';
+// ProgressIndicator folded into NavigationBar
 
 function App() {
   return (
-    <AppProviders>
-      <AppShell header={<NavigationBar />}> 
-        <PhaseRenderer />
-        <TooltipManager />
-      </AppShell>
-    </AppProviders>
+    <ErrorBoundary>
+      <AppProviders>
+        <AppShell header={<NavigationBar />}>
+          <PhaseRenderer />
+          <TooltipManager />
+        </AppShell>
+      </AppProviders>
+    </ErrorBoundary>
   );
 }
 

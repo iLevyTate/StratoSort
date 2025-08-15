@@ -25,6 +25,8 @@ function SettingsPanel() {
   const [testResults, setTestResults] = useState({});
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRebuildingFolders, setIsRebuildingFolders] = useState(false);
+  const [isRebuildingFiles, setIsRebuildingFiles] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -224,6 +226,28 @@ function SettingsPanel() {
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-13">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-system-gray-700 mb-5">Smart Folder Embeddings</label>
+                  <p className="text-xs text-system-gray-500 mb-8">Rebuild embeddings for all smart folders to improve semantic matching after you edit folder names or descriptions.</p>
+                  <div className="flex gap-8">
+                    <Button
+                      onClick={async () => { try { setIsRebuildingFolders(true); const res = await window.electronAPI.embeddings.rebuildFolders(); addNotification(res?.success ? `Rebuilt ${res.folders || 0} folder embeddings` : `Failed: ${res?.error || 'Unknown error'}`, res?.success ? 'success' : 'error'); } catch (e) { addNotification(`Failed: ${e.message}`, 'error'); } finally { setIsRebuildingFolders(false); } }}
+                      variant="secondary"
+                      disabled={isRebuildingFolders}
+                      type="button"
+                      title="Rebuild folder embeddings"
+                    >{isRebuildingFolders ? 'Rebuilding…' : 'Rebuild Folder Embeddings'}</Button>
+                    <Button
+                      onClick={async () => { try { setIsRebuildingFiles(true); const res = await window.electronAPI.embeddings.rebuildFiles(); addNotification(res?.success ? `Rebuilt ${res.files || 0} file embeddings` : `Failed: ${res?.error || 'Unknown error'}`, res?.success ? 'success' : 'error'); } catch (e) { addNotification(`Failed: ${e.message}`, 'error'); } finally { setIsRebuildingFiles(false); } }}
+                      variant="secondary"
+                      disabled={isRebuildingFiles}
+                      type="button"
+                      title="Rebuild file embeddings from analysis history"
+                    >{isRebuildingFiles ? 'Rebuilding…' : 'Rebuild File Embeddings'}</Button>
+                  </div>
                 </div>
               </div>
             </div>

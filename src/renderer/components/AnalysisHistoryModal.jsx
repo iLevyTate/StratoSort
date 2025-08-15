@@ -49,6 +49,25 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
     }
   };
 
+  const getDestinationLabel = (entry) => {
+    try {
+      const actual = entry?.organization?.actual;
+      if (actual && typeof actual === 'string') {
+        const normalized = actual.replace(/\\+/g, '/');
+        const segments = normalized.split('/').filter(Boolean);
+        if (segments.length > 1) {
+          const last = segments[segments.length - 1];
+          const isFile = /\.[A-Za-z0-9]+$/.test(last);
+          const folder = isFile ? segments[segments.length - 2] : last;
+          if (folder) return folder;
+        }
+      }
+      if (entry?.organization?.smartFolder) return entry.organization.smartFolder;
+      if (entry?.analysis?.category) return entry.analysis.category;
+    } catch {}
+    return 'Uncategorized';
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-21 max-h-[90vh] overflow-hidden">
@@ -117,13 +136,22 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                           <div className="flex-1">
                             <div className="font-medium text-system-gray-900">{entry.fileName || 'Unknown File'}</div>
                             <div className="text-sm text-system-gray-600 mt-3">
-                              <span className="text-stratosort-blue">{entry.category || 'Uncategorized'}</span>
-                              {entry.confidence && <span className="ml-8">Confidence: {entry.confidence}%</span>}
+                              <span className="text-stratosort-blue">{getDestinationLabel(entry)}</span>
+                              {(entry?.analysis?.confidence || entry?.confidence) && (
+                                <span className="ml-8">Confidence: {(entry?.analysis?.confidence ?? entry?.confidence)}%</span>
+                              )}
                             </div>
                             {entry.keywords && entry.keywords.length > 0 && (
                               <div className="flex flex-wrap gap-3 mt-5">
                                 {entry.keywords.slice(0, 5).map((keyword, i) => (
                                   <span key={i} className="text-xs bg-stratosort-blue/10 text-stratosort-blue px-3 py-1 rounded-full">{keyword}</span>
+                                ))}
+                              </div>
+                            )}
+                            {!entry.keywords && entry?.analysis?.tags && entry.analysis.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-3 mt-5">
+                                {entry.analysis.tags.slice(0, 5).map((tag, i) => (
+                                  <span key={i} className="text-xs bg-stratosort-blue/10 text-stratosort-blue px-3 py-1 rounded-full">{tag}</span>
                                 ))}
                               </div>
                             )}

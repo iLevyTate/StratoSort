@@ -10,12 +10,22 @@ const {
   extractTextFromDocx,
   extractTextFromXlsx,
   extractTextFromPptx,
+  extractTextFromXls,
+  extractTextFromPpt,
+  extractTextFromOdfZip,
+  extractTextFromEpub,
+  extractTextFromEml,
+  extractTextFromMsg,
+  extractTextFromKml,
+  extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
 } = require('./documentExtractors');
 const { analyzeTextWithOllama } = require('./documentLlm');
 const { normalizeAnalysisResult } = require('./utils');
 const { getIntelligentCategory, getIntelligentKeywords, safeSuggestedName } = require('./fallbackUtils');
+const EmbeddingIndexService = require('../services/EmbeddingIndexService');
+const FolderMatchingService = require('../services/FolderMatchingService');
 
 // Import error handling system
 const { FileProcessingError } = require('../errors/AnalysisError');
@@ -24,6 +34,8 @@ const ModelVerifier = require('../services/ModelVerifier');
 // AppConfig now provided by documentLlm.js
 
 const modelVerifier = new ModelVerifier();
+const embeddingIndex = new EmbeddingIndexService();
+const folderMatcher = new FolderMatchingService(embeddingIndex);
 
 // LLM moved to documentLlm.js
 
@@ -110,16 +122,32 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         });
       }
     } else if (SUPPORTED_DOCUMENT_EXTENSIONS.includes(fileExtension)) {
-      // Extract content from Office documents
+      // Extract content from extended document set
       try {
-        logger.info(`Extracting content from Office document`, { fileName });
-        
+        logger.info(`Extracting content from document`, { fileName, fileExtension });
+
         if (fileExtension === '.docx') {
           extractedText = await extractTextFromDocx(filePath);
         } else if (fileExtension === '.xlsx') {
           extractedText = await extractTextFromXlsx(filePath);
         } else if (fileExtension === '.pptx') {
           extractedText = await extractTextFromPptx(filePath);
+        } else if (fileExtension === '.xls') {
+          extractedText = await extractTextFromXls(filePath);
+        } else if (fileExtension === '.ppt') {
+          extractedText = await extractTextFromPpt(filePath);
+        } else if (fileExtension === '.odt' || fileExtension === '.ods' || fileExtension === '.odp') {
+          extractedText = await extractTextFromOdfZip(filePath);
+        } else if (fileExtension === '.epub') {
+          extractedText = await extractTextFromEpub(filePath);
+        } else if (fileExtension === '.eml') {
+          extractedText = await extractTextFromEml(filePath);
+        } else if (fileExtension === '.msg') {
+          extractedText = await extractTextFromMsg(filePath);
+        } else if (fileExtension === '.kml') {
+          extractedText = await extractTextFromKml(filePath);
+        } else if (fileExtension === '.kmz') {
+          extractedText = await extractTextFromKmz(filePath);
         }
         
         logger.debug(`Extracted characters from office document`, { fileName, length: extractedText.length });
@@ -199,6 +227,28 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       logger.debug(`[CONTENT-PREVIEW]`, { preview: extractedText.substring(0, 200) });
       
       const analysis = await analyzeTextWithOllama(extractedText, fileName, smartFolders);
+
+      // Attempt semantic folder refinement
+      try {
+        // Ensure folder embeddings exist
+        if (smartFolders && smartFolders.length > 0) {
+          await Promise.all(smartFolders.map(f => folderMatcher.upsertFolderEmbedding(f)));
+        }
+        // Create a file id for embedding lookup using path hash-like identifier
+        const fileId = `file:${filePath}`;
+        const summaryForEmbedding = [analysis.project, analysis.purpose, (analysis.keywords || []).join(' '), extractedText.slice(0, 2000)].filter(Boolean).join('\n');
+        await folderMatcher.upsertFileEmbedding(fileId, summaryForEmbedding, { path: filePath });
+        const candidates = await folderMatcher.matchFileToFolders(fileId, 5);
+        if (Array.isArray(candidates) && candidates.length > 0) {
+          const top = candidates[0];
+          if (top.score >= 0.55) {
+            analysis.category = top.name; // refine to closest folder name
+          }
+          analysis.folderMatchCandidates = candidates;
+        }
+      } catch (e) {
+        // Non-fatal; continue without refinement
+      }
       
       if (analysis && !analysis.error) {
         logger.info(`[AI-ANALYSIS-SUCCESS]`, { fileName, category: analysis.category, keywords: analysis.keywords });

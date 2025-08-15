@@ -1,7 +1,6 @@
 import React from 'react';
 import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
-import { UndoRedoToolbar } from './UndoRedoSystem';
 
 function NavigationBar() {
   const { currentPhase, actions } = usePhase();
@@ -13,50 +12,80 @@ function NavigationBar() {
     }
   };
 
+  // Preserve explicit order for progress-style chips
+  const phaseOrder = [
+    PHASES.WELCOME,
+    PHASES.SETUP,
+    PHASES.DISCOVER,
+    PHASES.ORGANIZE,
+    PHASES.COMPLETE
+  ];
+  const currentIndex = phaseOrder.indexOf(currentPhase);
+
+  // Restrict chip labels to at most two words; prefer provided navLabel if any
+  const getTwoWordLabel = (title, navLabel) => {
+    if (navLabel && typeof navLabel === 'string') return navLabel;
+    if (!title) return '';
+    const filtered = title
+      .replace(/&/g, ' ') // treat ampersand as a separator
+      .split(/\s+/)
+      .filter(Boolean)
+      // drop common connectors to keep meaning within two words
+      .filter((w) => !/^to|and|of|the|for|a|an$/i.test(w));
+    return filtered.slice(0, 2).join(' ');
+  };
+
   return (
-    <nav className="glass-card border-b border-border-light px-21 py-13 sticky top-0 z-40">
+    <nav className="glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40">
       <div className="container-enhanced">
-        <div className="flex items-center justify-between min-h-[56px]">
-          <div className="flex items-center space-x-21">
-            <div className="flex items-center space-x-8">
+        <div className="flex items-center justify-between min-h-[56px] gap-8">
+          <div className="flex flex-1 items-center gap-13 min-w-0">
+            <div className="flex items-center gap-5 shrink-0">
               <div className="text-21 animate-float">🚀</div>
               <h1 className="text-xl font-bold">
                 <span className="text-gradient">StratoSort</span>
               </h1>
             </div>
-            <div className="flex-1 flex items-center space-x-5 overflow-x-auto whitespace-nowrap no-scrollbar">
-              {Object.entries(PHASES).map(([key, phase]) => {
+            <div className="flex-1 grid grid-cols-5 gap-8 items-stretch">
+              {phaseOrder.map((phase) => {
                 const isActive = currentPhase === phase;
                 const metadata = PHASE_METADATA[phase];
                 const allowedTransitions = PHASE_TRANSITIONS[currentPhase] || [];
                 const canNavigate = allowedTransitions.includes(phase) || isActive;
+                const phaseIndex = phaseOrder.indexOf(phase);
+                const isCompleted = phaseIndex < currentIndex;
+                const label = getTwoWordLabel(metadata.title, metadata.navLabel);
                 return (
                   <button
                     key={phase}
                     onClick={() => handlePhaseChange(phase)}
                     disabled={!canNavigate}
                     className={`
-                      shrink-0 flex items-center space-x-5 px-13 py-8 rounded-lg text-sm font-medium transition-all
-                      ${isActive 
-                        ? 'bg-stratosort-blue text-white shadow-sm' 
+                      w-full h-full flex items-center justify-center gap-5 px-12 py-8 rounded-2xl text-sm font-medium transition-all min-h-[72px]
+                      ${isActive
+                        ? 'bg-stratosort-blue text-white shadow-sm'
                         : canNavigate
-                          ? 'text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-50'
-                          : 'text-system-gray-400 cursor-not-allowed'
-                      }
+                          ? 'text-system-gray-700 hover:text-stratosort-blue hover:bg-system-gray-50'
+                          : 'text-system-gray-400 cursor-not-allowed'}
                     `}
+                    title={metadata.title}
                   >
                     <span className="text-lg" aria-hidden>{metadata.icon}</span>
-                    <span className="hidden md:inline">{metadata.title}</span>
+                    <span
+                      className="hidden sm:inline-block whitespace-normal break-normal leading-normal text-center max-w-full"
+                      style={{ hyphens: 'none', WebkitHyphens: 'none', msHyphens: 'none', wordBreak: 'normal', overflowWrap: 'normal' }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
-          <div className="flex items-center space-x-13 flex-shrink-0">
-            <UndoRedoToolbar />
+          <div className="flex items-center gap-10 flex-shrink-0">
             <button
               onClick={actions.toggleSettings}
-              className="p-8 text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-100 rounded-lg transition-colors"
+              className="p-6 text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-100 rounded-lg transition-colors"
               title="Settings"
               aria-label="Open settings"
             >
@@ -67,8 +96,6 @@ function NavigationBar() {
             </button>
           </div>
         </div>
-
-        {/* Progress/phase subheader removed per request */}
       </div>
     </nav>
   );

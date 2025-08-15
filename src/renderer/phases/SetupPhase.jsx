@@ -4,7 +4,7 @@ import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useConfirmDialog } from '../hooks';
 import { Collapsible, Button, Input, Textarea } from '../components/ui';
-import LoadingSkeleton, { SmartFolderSkeleton } from '../components/LoadingSkeleton';
+import { SmartFolderSkeleton } from '../components/LoadingSkeleton';
 import { SmartFolderItem } from '../components/setup';
 
 function SetupPhase() {
@@ -23,7 +23,7 @@ function SetupPhase() {
   const [isEditingFolder, setIsEditingFolder] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(null);
-  const [isCreatingAllFolders, setIsCreatingAllFolders] = useState(false);
+  
 
   useEffect(() => {
     const initializeSetup = async () => {
@@ -241,40 +241,7 @@ function SetupPhase() {
     }
   };
 
-  const handleCreateAllFolders = async () => {
-    if (smartFolders.length === 0) {
-      showWarning('No smart folders to create');
-      return;
-    }
-    setIsCreatingAllFolders(true);
-    try {
-      let createdCount = 0;
-      let existedCount = 0;
-      let errorCount = 0;
-      for (const folder of smartFolders) {
-        try {
-          const stats = await window.electronAPI.files.getStats(folder.path);
-          if (stats && stats.isDirectory) {
-            existedCount++;
-          } else {
-            await window.electronAPI.files.createFolder(folder.path);
-            createdCount++;
-          }
-        } catch {
-          errorCount++;
-        }
-      }
-      if (createdCount > 0) showSuccess(`✅ Created ${createdCount} smart folder directories`);
-      if (existedCount > 0) showInfo(`📁 ${existedCount} directories already existed`);
-      if (errorCount > 0) showWarning(`⚠️ Failed to create ${errorCount} directories`);
-      if (createdCount === 0 && errorCount === 0) showInfo('📁 All smart folder directories already exist');
-    } catch (error) {
-      console.error('Failed to create folders:', error);
-      showError('Failed to create folder directories');
-    } finally {
-      setIsCreatingAllFolders(false);
-    }
-  };
+  
 
   const handleBrowseFolder = async () => {
     try {
@@ -353,7 +320,7 @@ function SetupPhase() {
       <Collapsible
         title={<span>📁 Current Smart Folders</span>}
         actions={smartFolders.length > 0 ? (
-          <Button onClick={handleCreateAllFolders} variant="primary" className="text-sm" title="Create all smart folder directories">📁 Create All Folders</Button>
+          <Button onClick={async () => { try { const res = await window.electronAPI.embeddings.rebuildFolders(); if (res?.success) { showSuccess(`🧠 Rebuilt ${res.folders || 0} folder embeddings`); } else { showError(`Failed to rebuild embeddings: ${res?.error || 'Unknown error'}`); } } catch (e) { showError(`Failed: ${e.message}`); } }} variant="primary" className="text-sm" title="Rebuild all smart folder embeddings">🧠 Rebuild Embeddings</Button>
         ) : null}
         defaultOpen
         persistKey="setup-current-folders"
@@ -421,7 +388,7 @@ function SetupPhase() {
       </div>
 
       <ConfirmDialog />
-      {isCreatingAllFolders && <LoadingSkeleton message="Creating folders..." />}
+      
     </div>
   );
 }

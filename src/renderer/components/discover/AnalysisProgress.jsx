@@ -7,7 +7,7 @@ function AnalysisProgress({ progress = { current: 0, total: 0 }, currentFile = '
       <div className="flex items-center gap-8 mb-8">
         <div className="animate-spin w-13 h-13 border-2 border-blue-500 border-t-transparent rounded-full"></div>
         <div className="text-sm font-medium text-blue-700">
-          Analyzing files: {progress.current} / {progress.total}
+          Analyzing {progress.current} of {progress.total}
         </div>
       </div>
       {progress.total > 0 && (
@@ -16,7 +16,7 @@ function AnalysisProgress({ progress = { current: 0, total: 0 }, currentFile = '
             <div className="bg-stratosort-blue h-5 rounded-full transition-all duration-300" style={{ width: `${percent}%` }}></div>
           </div>
           {currentFile && (
-            <div className="text-xs text-system-gray-500 mt-3 truncate">Currently analyzing: {currentFile}</div>
+            <div className="text-xs text-system-gray-500 mt-3 truncate">{currentFile}</div>
           )}
         </div>
       )}

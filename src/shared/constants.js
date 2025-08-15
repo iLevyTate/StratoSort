@@ -25,11 +25,11 @@ const PHASE_TRANSITIONS = {
 
 // Phase metadata for UI display
 const PHASE_METADATA = {
-  [PHASES.WELCOME]: { title: 'Welcome to StratoSort', icon: '🚀', progress: 0 },
-  [PHASES.SETUP]: { title: 'Configure Smart Folders', icon: '⚙️', progress: 20 },
-  [PHASES.DISCOVER]: { title: 'Discover & Analyze Files', icon: '🔍', progress: 50 },
-  [PHASES.ORGANIZE]: { title: 'Review & Organize', icon: '📂', progress: 80 },
-  [PHASES.COMPLETE]: { title: 'Organization Complete', icon: '✅', progress: 100 }
+  [PHASES.WELCOME]: { title: 'Welcome to StratoSort', navLabel: 'Welcome', icon: '🚀', progress: 0 },
+  [PHASES.SETUP]: { title: 'Configure Smart Folders', navLabel: 'Smart Folders', icon: '⚙️', progress: 20 },
+  [PHASES.DISCOVER]: { title: 'Discover & Analyze Files', navLabel: 'Discover Files', icon: '🔎', progress: 50 },
+  [PHASES.ORGANIZE]: { title: 'Review & Organize', navLabel: 'Review Organize', icon: '📂', progress: 80 },
+  [PHASES.COMPLETE]: { title: 'Organization Complete', navLabel: 'Complete', icon: '✅', progress: 100 }
 };
 
 // IPC Channel constants - centralized to avoid magic strings
@@ -76,6 +76,13 @@ const IPC_CHANNELS = {
   SETTINGS: {
     GET: 'get-settings',
     SAVE: 'save-settings'
+  },
+
+  // Embeddings / Semantic Matching
+  EMBEDDINGS: {
+    REBUILD_FOLDERS: 'embeddings-rebuild-folders',
+    REBUILD_FILES: 'embeddings-rebuild-files',
+    CLEAR_STORE: 'embeddings-clear-store'
   },
   
   // Ollama
@@ -206,7 +213,17 @@ const TIMEOUTS = {
 // File type mappings
 const SUPPORTED_TEXT_EXTENSIONS = ['.txt', '.md', '.rtf', '.json', '.csv', '.xml', '.html', '.htm', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bat', '.ps1', '.yaml', '.yml', '.ini', '.conf', '.log'];
 
-const SUPPORTED_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xlsx', '.pptx'];
+const SUPPORTED_DOCUMENT_EXTENSIONS = [
+  '.pdf', '.doc', '.docx', '.xlsx', '.pptx',
+  // Legacy Office
+  '.xls', '.ppt',
+  // OpenDocument formats
+  '.odt', '.ods', '.odp',
+  // E-books and email
+  '.epub', '.eml', '.msg',
+  // Geospatial packages (treat as documents for analysis)
+  '.kml', '.kmz'
+];
 
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
 

@@ -368,7 +368,12 @@ function DiscoverPhase() {
       if (result?.success && result?.folder) {
         const scanResult = await window.electronAPI.smartFolders.scanStructure(result.folder);
         if (scanResult && scanResult.files && scanResult.files.length > 0) {
-          const supportedExts = ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.zip', '.rar', '.7z', '.tar', '.gz'];
+          const supportedExts = [
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.txt', '.md', '.rtf', '.odt', '.ods', '.odp', '.epub', '.eml', '.msg',
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg',
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.kml', '.kmz'
+          ];
           const supportedFiles = scanResult.files.filter(file => {
             const ext = file.name.includes('.') ? '.' + file.name.split('.').pop().toLowerCase() : '';
             return supportedExts.includes(ext);

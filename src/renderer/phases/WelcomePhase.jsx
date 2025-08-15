@@ -27,11 +27,9 @@ function WelcomePhase() {
           className="text-lg px-21 py-13"
           aria-describedby="organize-help"
         >
-          <span role="img" aria-label="folder">🗂️</span> Organize My Files Now
+          <span role="img" aria-label="folder">🗂️</span> Organize files (fast start)
         </Button>
-        <div id="organize-help" className="text-xs text-system-gray-500 mt-3">
-          Start organizing files immediately with AI-powered analysis.
-        </div>
+        <div id="organize-help" className="text-xs text-system-gray-500 mt-3">Start now with AI analysis.</div>
         
         <Button 
           onClick={() => actions.advancePhase(PHASES.SETUP)}
@@ -39,11 +37,9 @@ function WelcomePhase() {
           className="text-lg px-21 py-13"
           aria-describedby="setup-help"
         >
-          <span role="img" aria-label="settings">⚙️</span> Setup Configuration First
+          <span role="img" aria-label="settings">⚙️</span> Configure smart folders (recommended)
         </Button>
-        <div id="setup-help" className="text-xs text-system-gray-500 mt-3">
-          Configure smart folders and AI settings before organizing files.
-        </div>
+        <div id="setup-help" className="text-xs text-system-gray-500 mt-3">Set up folders and AI settings first.</div>
       </div>
 
       <div className="mt-21 bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 hover:shadow-md hover:border-border-medium transition-all duration-200 backdrop-blur-sm">

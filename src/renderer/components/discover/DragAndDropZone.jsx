@@ -7,7 +7,7 @@ function DragAndDropZone({ isDragging, dragProps }) {
       {...dragProps}
     >
       <div className="text-2xl mb-5">📥</div>
-      <div className="text-sm text-system-gray-600">Drag and drop files here to analyze</div>
+      <div className="text-sm text-system-gray-600">Drop files or folders here, or click to select</div>
     </div>
   );
 }

@@ -5,6 +5,8 @@ const { getOllamaVisionModel, loadOllamaConfig, getOllamaClient } = require('../
 const { AI_DEFAULTS, SUPPORTED_IMAGE_EXTENSIONS } = require('../../shared/constants');
 const { normalizeAnalysisResult } = require('./utils');
 const { getIntelligentCategory: getIntelligentImageCategory, getIntelligentKeywords: getIntelligentImageKeywords, safeSuggestedName } = require('./fallbackUtils');
+const EmbeddingIndexService = require('../services/EmbeddingIndexService');
+const FolderMatchingService = require('../services/FolderMatchingService');
 
 // App configuration for image analysis - Optimized for speed
 const AppConfig = { ai: { imageAnalysis: {
@@ -222,6 +224,26 @@ async function analyzeImageFile(filePath, smartFolders = []) {
 
     // Analyze with Ollama
     const analysis = await analyzeImageWithOllama(imageBase64, fileName, smartFolders);
+
+    // Semantic folder refinement using embeddings based on image JSON fields
+    try {
+      const embeddingIndex = new EmbeddingIndexService();
+      const folderMatcher = new FolderMatchingService(embeddingIndex);
+      if (smartFolders && smartFolders.length > 0) {
+        await Promise.all(smartFolders.map(f => folderMatcher.upsertFolderEmbedding(f)));
+      }
+      const fileId = `image:${filePath}`;
+      const summary = [analysis.project, analysis.purpose, (analysis.keywords || []).join(' '), analysis.content_type || ''].filter(Boolean).join('\n');
+      await folderMatcher.upsertFileEmbedding(fileId, summary, { path: filePath });
+      const candidates = await folderMatcher.matchFileToFolders(fileId, 5);
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        const top = candidates[0];
+        if (top.score >= 0.55) {
+          analysis.category = top.name;
+        }
+        analysis.folderMatchCandidates = candidates;
+      }
+    } catch {}
     
     if (analysis && !analysis.error) {
       return normalizeAnalysisResult(

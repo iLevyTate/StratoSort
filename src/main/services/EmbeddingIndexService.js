@@ -70,6 +70,32 @@ class EmbeddingIndexService {
     }
     return scores.sort((a, b) => b.score - a.score).slice(0, topK);
   }
+
+  async resetFiles() {
+    await this.initialize();
+    this.fileVectors.clear();
+    try {
+      await fs.writeFile(this.filesPath, '');
+    } catch (e) {
+      // If persisting fails, mark disabled but still function in-memory
+      this.persistDisabled = true;
+    }
+  }
+
+  async resetFolders() {
+    await this.initialize();
+    this.folderVectors.clear();
+    try {
+      await fs.writeFile(this.foldersPath, '');
+    } catch (e) {
+      this.persistDisabled = true;
+    }
+  }
+
+  async resetAll() {
+    await this.resetFiles();
+    await this.resetFolders();
+  }
 }
 
 module.exports = EmbeddingIndexService;

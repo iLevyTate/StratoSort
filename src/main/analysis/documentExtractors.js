@@ -1,10 +1,12 @@
 const fs = require('fs').promises;
+const path = require('path');
 const pdf = require('pdf-parse');
 const sharp = require('sharp');
 const tesseract = require('node-tesseract-ocr');
 const mammoth = require('mammoth');
 const officeParser = require('officeparser');
 const XLSX = require('xlsx-populate');
+const AdmZip = require('adm-zip');
 
 const { FileProcessingError } = require('../errors/AnalysisError');
 
@@ -66,7 +68,8 @@ async function extractTextFromXlsx(filePath) {
 }
 
 async function extractTextFromPptx(filePath) {
-  const text = await officeParser.parseOfficeAsync(filePath);
+  const result = await officeParser.parseOfficeAsync(filePath);
+  const text = typeof result === 'string' ? result : (result && result.text) || '';
   if (!text || text.trim().length === 0) throw new Error('No text content in PPTX');
   return text;
 }
@@ -102,6 +105,85 @@ function extractPlainTextFromHtml(html) {
   }
 }
 
+// Generic ODF extractor: reads content.xml from ZIP and strips tags
+async function extractTextFromOdfZip(filePath) {
+  const zip = new AdmZip(filePath);
+  const entry = zip.getEntry('content.xml');
+  if (!entry) return '';
+  const xml = entry.getData().toString('utf8');
+  return extractPlainTextFromHtml(xml);
+}
+
+async function extractTextFromEpub(filePath) {
+  const zip = new AdmZip(filePath);
+  const entries = zip.getEntries();
+  let text = '';
+  for (const e of entries) {
+    const name = e.entryName.toLowerCase();
+    if (name.endsWith('.xhtml') || name.endsWith('.html') || name.endsWith('.htm')) {
+      try {
+        const html = e.getData().toString('utf8');
+        text += extractPlainTextFromHtml(html) + '\n';
+      } catch {}
+    }
+  }
+  return text.trim();
+}
+
+async function extractTextFromEml(filePath) {
+  const raw = await fs.readFile(filePath, 'utf8');
+  const parts = raw.split(/\r?\n\r?\n/);
+  const headers = parts[0] || '';
+  const body = parts.slice(1).join('\n\n');
+  const subject = (headers.match(/^Subject:\s*(.*)$/mi) || [])[1] || '';
+  const from = (headers.match(/^From:\s*(.*)$/mi) || [])[1] || '';
+  const to = (headers.match(/^To:\s*(.*)$/mi) || [])[1] || '';
+  return [subject, from, to, body].filter(Boolean).join('\n');
+}
+
+async function extractTextFromMsg(filePath) {
+  // Best-effort using officeparser; if unavailable, return empty string
+  try {
+    const result = await officeParser.parseOfficeAsync(filePath);
+    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    return text || '';
+  } catch {
+    return '';
+  }
+}
+
+async function extractTextFromKml(filePath) {
+  const xml = await fs.readFile(filePath, 'utf8');
+  return extractPlainTextFromHtml(xml);
+}
+
+async function extractTextFromKmz(filePath) {
+  const zip = new AdmZip(filePath);
+  let kmlEntry = zip.getEntry('doc.kml') || zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.kml'));
+  if (!kmlEntry) return '';
+  const xml = kmlEntry.getData().toString('utf8');
+  return extractPlainTextFromHtml(xml);
+}
+
+async function extractTextFromXls(filePath) {
+  try {
+    const result = await officeParser.parseOfficeAsync(filePath);
+    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    if (text && text.trim()) return text;
+  } catch {}
+  return '';
+}
+
+async function extractTextFromPpt(filePath) {
+  try {
+    const result = await officeParser.parseOfficeAsync(filePath);
+    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    return text || '';
+  } catch {
+    return '';
+  }
+}
+
 module.exports = {
   extractTextFromPdf,
   ocrPdfIfNeeded,
@@ -109,6 +191,14 @@ module.exports = {
   extractTextFromDocx,
   extractTextFromXlsx,
   extractTextFromPptx,
+  extractTextFromXls,
+  extractTextFromPpt,
+  extractTextFromOdfZip,
+  extractTextFromEpub,
+  extractTextFromEml,
+  extractTextFromMsg,
+  extractTextFromKml,
+  extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
 };

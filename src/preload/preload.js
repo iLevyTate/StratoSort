@@ -16,6 +16,7 @@ const ALLOWED_CHANNELS = {
   OLLAMA: Object.values(IPC_CHANNELS.OLLAMA),
   UNDO_REDO: Object.values(IPC_CHANNELS.UNDO_REDO),
   ANALYSIS_HISTORY: Object.values(IPC_CHANNELS.ANALYSIS_HISTORY),
+  EMBEDDINGS: Object.values(IPC_CHANNELS.EMBEDDINGS),
 
   SYSTEM: Object.values(IPC_CHANNELS.SYSTEM)
 };
@@ -270,7 +271,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     analyze: (filePath) => {
       // Determine file type and route to appropriate analyzer
       const ext = filePath.split('.').pop()?.toLowerCase();
-      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff'];
       // const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a']; // REMOVED - audio analysis disabled
       
       if (imageExts.includes(ext)) {
@@ -310,6 +311,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFileHistory: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, filePath),
     clear: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR),
     export: (format) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, format)
+  },
+
+  // Embeddings / Semantic
+  embeddings: {
+    rebuildFolders: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS),
+    rebuildFiles: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES),
+    clearStore: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE)
   },
 
   // Undo/Redo System

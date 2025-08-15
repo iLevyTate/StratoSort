@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Textarea from '../ui/Textarea';
@@ -19,6 +19,7 @@ function SmartFolderItem({
   addNotification
 }) {
   const isEditing = editingFolder?.id === folder.id;
+  const [isRebuilding, setIsRebuilding] = useState(false);
 
   return (
     <div className="p-13 bg-surface-secondary rounded-lg hover:bg-surface-tertiary transition-colors duration-200 animate-slide-in-right" style={{ animationDelay: `${index * 0.1}s` }}>
@@ -62,6 +63,9 @@ function SmartFolderItem({
               </Button>
               <Button onClick={() => onEditStart(folder)} className="p-5 text-stratosort-blue hover:bg-stratosort-blue/10 rounded transition-colors" title="Edit folder" aria-label={`Edit folder ${folder.name}`}>
                 <span role="img" aria-label="edit">✏️</span>
+              </Button>
+              <Button onClick={async () => { try { setIsRebuilding(true); const res = await window.electronAPI.embeddings.rebuildFolders(); addNotification && addNotification(res?.success ? `Rebuilt folder embeddings` : `Failed: ${res?.error || 'Unknown error'}`, res?.success ? 'success' : 'error'); } catch (e) { addNotification && addNotification(`Failed: ${e.message}`, 'error'); } finally { setIsRebuilding(false); } }} className={`p-5 rounded transition-colors ${isRebuilding ? 'opacity-70' : 'text-purple-600 hover:bg-purple-100'}`} title="Rebuild embeddings" aria-label={`Rebuild embeddings for smart folders`} disabled={isRebuilding}>
+                {isRebuilding ? <div className="animate-spin w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full"></div> : <span role="img" aria-label="rebuild">🧠</span>}
               </Button>
               <Button onClick={() => onDeleteFolder(folder.id)} disabled={isDeleting} className="p-5 text-system-red-600 hover:bg-system-red-100 rounded transition-colors disabled:opacity-50" title="Remove from config" aria-label={`Delete folder ${folder.name}`}>
                 {isDeleting ? (

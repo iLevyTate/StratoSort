@@ -50,8 +50,8 @@ describe('StratoSort React App', () => {
         path.join(__dirname, '../src/renderer/App.js'), 
         'utf8'
       );
-      // These should appear in App.js wiring (providers now wrapped by AppProviders). SystemMonitoring removed per UX.
-      ['AppProviders','NavigationBar','ProgressIndicator'].forEach((c) => {
+      // These should appear in App.js wiring (providers now wrapped by AppProviders). SystemMonitoring and legacy progress indicators removed per UX.
+      ['AppProviders', 'NavigationBar', 'PhaseRenderer'].forEach((c) => {
         expect(appContent).toContain(c);
       });
       // Undo/Redo toolbar lives in its own file; ensure it exists there

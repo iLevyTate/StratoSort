@@ -2,10 +2,11 @@ const path = require('path');
 const fs = require('fs').promises;
 const { app } = require('electron');
 const { SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_ARCHIVE_EXTENSIONS, ACTION_TYPES } = require('../../shared/constants');
+const { withErrorLogging } = require('./withErrorLogging');
 
 function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration }) {
   // Select files (and folders scanned shallowly)
-  ipcMain.handle(IPC_CHANNELS.FILES.SELECT, async () => {
+  ipcMain.handle(IPC_CHANNELS.FILES.SELECT, withErrorLogging(logger, async () => {
     logger.info('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
     const mainWindow = getMainWindow();
     logger.info('[MAIN-FILE-SELECT] mainWindow exists?', !!mainWindow);
@@ -98,9 +99,9 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[MAIN-FILE-SELECT] Failed to select files:', error);
       return { success: false, error: error.message, files: [] };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, async () => {
+  ipcMain.handle(IPC_CHANNELS.FILES.SELECT_DIRECTORY, withErrorLogging(logger, async () => {
     try {
       const result = await dialog.showOpenDialog(getMainWindow() || null, {
         properties: ['openDirectory', 'dontAddToRecent'],
@@ -113,17 +114,17 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[IPC] Directory selection failed:', error);
       return { success: false, folder: null, error: error.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, async () => {
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH, withErrorLogging(logger, async () => {
     try { return app.getPath('documents'); } catch (error) { logger.error('Failed to get documents path:', error); return null; }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, withErrorLogging(logger, async (event, filePath) => {
     try { const stats = await fs.stat(filePath); return { size: stats.size, isDirectory: stats.isDirectory(), isFile: stats.isFile(), modified: stats.mtime, created: stats.birthtime }; }
     catch (error) { logger.error('Failed to get file stats:', error); return null; }
-  });
-  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, async (event, basePath, folderName) => {
+  }));
+  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, withErrorLogging(logger, async (event, basePath, folderName) => {
     try {
       const folderPath = path.join(basePath, folderName);
       await fs.mkdir(folderPath, { recursive: true });
@@ -133,9 +134,9 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[FILE-OPS] Error creating folder:', error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, async (event, fullPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, withErrorLogging(logger, async (event, fullPath) => {
     try {
       const normalizedPath = path.resolve(fullPath);
       try {
@@ -156,9 +157,9 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EEXIST') userMessage = 'Folder already exists';
       return { success: false, error: userMessage, details: error.message, code: error.code };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, async (event, dirPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, withErrorLogging(logger, async (event, dirPath) => {
     try {
       const items = await fs.readdir(dirPath, { withFileTypes: true });
       const result = items.map(item => ({
@@ -173,9 +174,9 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[FILE-OPS] Error reading directory:', error);
       return { error: error.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, async (event, operation) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, withErrorLogging(logger, async (event, operation) => {
     try {
       logger.info('[FILE-OPS] Performing operation:', operation.type);
       logger.info('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
@@ -246,9 +247,9 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[FILE-OPS] Error performing operation:', error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, withErrorLogging(logger, async (event, filePath) => {
     try {
       if (!filePath || typeof filePath !== 'string') {
         return { success: false, error: 'Invalid file path provided', errorCode: 'INVALID_PATH' };
@@ -268,19 +269,19 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EBUSY') { errorCode = 'FILE_IN_USE'; userMessage = 'File is currently in use'; }
       return { success: false, error: userMessage, errorCode, details: error.message, systemError: error.code };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FILE, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FILE, withErrorLogging(logger, async (event, filePath) => {
     try { await shell.openPath(filePath); logger.info('[FILE-OPS] Opened file:', filePath); return { success: true }; }
     catch (error) { logger.error('[FILE-OPS] Error opening file:', error); return { success: false, error: error.message }; }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_FILE, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.REVEAL_FILE, withErrorLogging(logger, async (event, filePath) => {
     try { await shell.showItemInFolder(filePath); logger.info('[FILE-OPS] Revealed file in folder:', filePath); return { success: true }; }
     catch (error) { logger.error('[FILE-OPS] Error revealing file:', error); return { success: false, error: error.message }; }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, async (event, sourcePath, destinationPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.COPY_FILE, withErrorLogging(logger, async (event, sourcePath, destinationPath) => {
     try {
       if (!sourcePath || !destinationPath) { return { success: false, error: 'Source and destination paths are required', errorCode: 'INVALID_PATHS' }; }
       const normalizedSource = path.resolve(sourcePath);
@@ -300,10 +301,10 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EEXIST') { errorCode = 'FILE_EXISTS'; userMessage = 'Destination file already exists'; }
       return { success: false, error: userMessage, errorCode, details: error.message };
     }
-  });
+  }));
 
   // Open folder
-  ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, async (event, folderPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.OPEN_FOLDER, withErrorLogging(logger, async (event, folderPath) => {
     try {
       if (!folderPath || typeof folderPath !== 'string') {
         return { success: false, error: 'Invalid folder path provided', errorCode: 'INVALID_PATH' };
@@ -324,10 +325,10 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       logger.error('[FILE-OPS] Error opening folder:', error);
       return { success: false, error: 'Failed to open folder', errorCode: 'OPEN_FAILED', details: error.message };
     }
-  });
+  }));
 
   // Delete empty folder
-  ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, async (event, fullPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FOLDER, withErrorLogging(logger, async (event, fullPath) => {
     try {
       const normalizedPath = path.resolve(fullPath);
       try {
@@ -356,7 +357,7 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EBUSY') userMessage = 'Directory is in use by another process';
       return { success: false, error: userMessage, details: error.message, code: error.code };
     }
-  });
+  }));
 }
 
 module.exports = registerFilesIpc;

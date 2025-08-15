@@ -1,8 +1,9 @@
 const path = require('path');
 const { performance } = require('perf_hooks');
+const { withErrorLogging } = require('./withErrorLogging');
 
 function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, getServiceIntegration, getCustomFolders }) {
-  ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, withErrorLogging(logger, async (event, filePath) => {
     try {
       const startTime = performance.now();
       logger.info(`[IPC-ANALYSIS] Starting document analysis for: ${filePath}`);
@@ -28,9 +29,9 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
       try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
       return { error: error.message, suggestedName: path.basename(filePath, path.extname(filePath)), category: 'documents', keywords: [], confidence: 0 };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, withErrorLogging(logger, async (event, filePath) => {
     try {
       logger.info(`[IPC] Starting image analysis for: ${filePath}`);
       const serviceIntegration = getServiceIntegration && getServiceIntegration();
@@ -53,9 +54,9 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
       try { await serviceIntegration?.processingState?.markAnalysisError(filePath, error.message); } catch {}
       return { error: error.message, suggestedName: path.basename(filePath, path.extname(filePath)), category: 'images', keywords: [], confidence: 0 };
     }
-  });
+  }));
 
-  ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, withErrorLogging(logger, async (event, filePath) => {
     try {
       const start = performance.now();
       const text = await tesseract.recognize(filePath, { lang: 'eng', oem: 1, psm: 3 });
@@ -66,7 +67,7 @@ function registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemA
       systemAnalytics.recordFailure(error);
       return { success: false, error: error.message };
     }
-  });
+  }));
 }
 
 module.exports = registerAnalysisIpc;

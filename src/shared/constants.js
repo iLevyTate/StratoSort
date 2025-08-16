@@ -117,6 +117,16 @@ const IPC_CHANNELS = {
     GET_METRICS: 'get-system-metrics'
   },
   
+  // Window Controls
+  WINDOW: {
+    MINIMIZE: 'window-minimize',
+    MAXIMIZE: 'window-maximize',
+    UNMAXIMIZE: 'window-unmaximize',
+    TOGGLE_MAXIMIZE: 'window-toggle-maximize',
+    IS_MAXIMIZED: 'window-is-maximized',
+    CLOSE: 'window-close'
+  },
+  
   // Menu Actions
   MENU: {
     NEW_ANALYSIS: 'menu-new-analysis',

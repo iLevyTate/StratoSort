@@ -1,15 +1,27 @@
-const { BrowserWindow, shell } = require('electron');
+const { BrowserWindow, shell, app } = require('electron');
 const path = require('path');
 const { logger } = require('../../shared/logger');
+const windowStateKeeper = require('electron-window-state');
 
 const isDev = process.env.NODE_ENV === 'development';
 
 function createMainWindow() {
   logger.debug('[DEBUG] Creating new window...');
 
+  // Ensure AppUserModelID for Windows integration (notifications, jump list)
+  try { app.setAppUserModelId('com.stratosort.app'); } catch {}
+
+  // Restore previous window position/size
+  const mainWindowState = windowStateKeeper({ defaultWidth: 1200, defaultHeight: 800 });
+
+  const isWindows = process.platform === 'win32';
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    x: mainWindowState.x,
+    y: mainWindowState.y,
+    width: mainWindowState.width,
+    height: mainWindowState.height,
+    // Use native title bar/caption buttons on all platforms for now
+    frame: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -26,13 +38,18 @@ function createMainWindow() {
     },
     icon: path.join(__dirname, '../../../assets/stratosort-logo.png'),
     show: false,
+    // For custom controls on Windows, use frameless window and do NOT enable titleBarOverlay
     titleBarStyle: 'default',
     autoHideMenuBar: !isDev
   });
 
   logger.debug('[DEBUG] BrowserWindow created');
 
-  if (isDev) {
+  // Manage window state
+  mainWindowState.manage(win);
+
+  const useDevServer = isDev && process.env.USE_DEV_SERVER === 'true';
+  if (useDevServer) {
     win.loadURL('http://localhost:3000').catch((error) => {
       logger.info('Development server not available:', error.message);
       logger.info('Loading from built files instead...');
@@ -58,7 +75,9 @@ function createMainWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+          process.env.NODE_ENV === 'production'
+            ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434; object-src 'none'; base-uri 'self'; form-action 'self';"
+            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
         ]
       }
     });

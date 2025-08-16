@@ -12,11 +12,15 @@ describe('OrganizeResumeService.resumeIncompleteBatches', () => {
   });
 
   afterEach(async () => {
-    try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('resumes and completes pending operations', async () => {
-    const { resumeIncompleteBatches } = require('../src/main/services/OrganizeResumeService');
+    const {
+      resumeIncompleteBatches,
+    } = require('../src/main/services/OrganizeResumeService');
 
     // Create two files to move
     const srcA = path.join(tmpDir, 'a.txt');
@@ -29,29 +33,34 @@ describe('OrganizeResumeService.resumeIncompleteBatches', () => {
 
     const serviceIntegration = {
       processingState: {
-        getIncompleteOrganizeBatches: () => ([{
-          id: 'batch1',
-          operations: [
-            { source: srcA, destination: destA, status: 'pending' },
-            { source: srcB, destination: destB, status: 'pending' }
-          ]
-        }]),
+        getIncompleteOrganizeBatches: () => [
+          {
+            id: 'batch1',
+            operations: [
+              { source: srcA, destination: destA, status: 'pending' },
+              { source: srcB, destination: destB, status: 'pending' },
+            ],
+          },
+        ],
         markOrganizeOpStarted: jest.fn(async () => {}),
         markOrganizeOpDone: jest.fn(async () => {}),
         markOrganizeOpError: jest.fn(async () => {}),
-        completeOrganizeBatch: jest.fn(async () => {})
-      }
+        completeOrganizeBatch: jest.fn(async () => {}),
+      },
     };
 
     const logger = { info: jest.fn(), warn: jest.fn() };
-    const getMainWindow = () => ({ isDestroyed: () => false, webContents: { send: jest.fn() } });
+    const getMainWindow = () => ({
+      isDestroyed: () => false,
+      webContents: { send: jest.fn() },
+    });
 
     await resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
 
     expect(fssync.existsSync(destA)).toBe(true);
     expect(fssync.existsSync(destB)).toBe(true);
-    expect(serviceIntegration.processingState.completeOrganizeBatch).toHaveBeenCalled();
+    expect(
+      serviceIntegration.processingState.completeOrganizeBatch,
+    ).toHaveBeenCalled();
   });
 });
-
-

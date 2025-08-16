@@ -1,7 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/" # Location of package.json, adjust if needed
+  - package-ecosystem: 'npm'
+    directory: '/' # Location of package.json, adjust if needed
     schedule:
-      interval: "daily"
-
+      interval: 'daily'

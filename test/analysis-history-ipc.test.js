@@ -17,7 +17,7 @@ describe('AnalysisHistory IPC', () => {
       getFileHistory: jest.fn(async () => []),
       clear: jest.fn(async () => ({})),
       export: jest.fn(async () => ({ success: true, path: 'out.json' })),
-      getRecentAnalysis: jest.fn(async () => [])
+      getRecentAnalysis: jest.fn(async () => []),
     };
 
     registerAllIpc({
@@ -25,18 +25,18 @@ describe('AnalysisHistory IPC', () => {
       IPC_CHANNELS,
       logger,
       systemAnalytics: { collectMetrics: jest.fn(async () => ({})) },
-      getServiceIntegration: () => ({ analysisHistory: service })
+      getServiceIntegration: () => ({ analysisHistory: service }),
     });
 
     const hGet = ipcMain._handlers.get(IPC_CHANNELS.ANALYSIS_HISTORY.GET);
     expect(Array.isArray(await hGet())).toBe(true);
     const hSearch = ipcMain._handlers.get(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH);
     expect(Array.isArray(await hSearch('term', {}))).toBe(true);
-    const hStats = ipcMain._handlers.get(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS);
+    const hStats = ipcMain._handlers.get(
+      IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS,
+    );
     expect((await hStats()).total).toBe(0);
     const hExport = ipcMain._handlers.get(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT);
     expect((await hExport('json')).success).toBe(true);
   });
 });
-
-

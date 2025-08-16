@@ -15,4 +15,3 @@ function withErrorLogging(logger, fn) {
 }
 
 module.exports = { withErrorLogging };
-

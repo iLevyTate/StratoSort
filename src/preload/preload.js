@@ -19,13 +19,13 @@ const ALLOWED_CHANNELS = {
   ANALYSIS_HISTORY: Object.values(IPC_CHANNELS.ANALYSIS_HISTORY),
   EMBEDDINGS: Object.values(IPC_CHANNELS.EMBEDDINGS),
 
-  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM)
+  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM),
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
   'operation-progress',
-  'app:error'
+  'app:error',
 ];
 
 // Flatten allowed send channels for validation
@@ -46,22 +46,27 @@ class SecureIPCManager {
    */
   checkRateLimit(channel) {
     const now = Date.now();
-    const channelData = this.rateLimiter.get(channel) || { count: 0, resetTime: now + 1000 };
-    
+    const channelData = this.rateLimiter.get(channel) || {
+      count: 0,
+      resetTime: now + 1000,
+    };
+
     if (now > channelData.resetTime) {
       channelData.count = 1;
       channelData.resetTime = now + 1000;
     } else {
       channelData.count++;
     }
-    
+
     this.rateLimiter.set(channel, channelData);
-    
+
     if (channelData.count > this.maxRequestsPerSecond) {
       const resetIn = Math.ceil((channelData.resetTime - now) / 1000);
-      throw new Error(`Rate limit exceeded for channel: ${channel}. Please wait ${resetIn}s before retrying. Consider reducing concurrent requests.`);
+      throw new Error(
+        `Rate limit exceeded for channel: ${channel}. Please wait ${resetIn}s before retrying. Consider reducing concurrent requests.`,
+      );
     }
-    
+
     return true;
   }
 
@@ -72,7 +77,9 @@ class SecureIPCManager {
     try {
       // Channel validation
       if (!ALL_SEND_CHANNELS.includes(channel)) {
-        console.warn(`[PRELOAD] Blocked invoke to unauthorized channel: ${channel}`);
+        console.warn(
+          `[PRELOAD] Blocked invoke to unauthorized channel: ${channel}`,
+        );
         throw new Error(`Unauthorized IPC channel: ${channel}`);
       }
 
@@ -82,15 +89,20 @@ class SecureIPCManager {
       // Argument sanitization
       const sanitizedArgs = this.sanitizeArguments(args);
 
-      console.log(`[PRELOAD] Secure invoke: ${channel}`, sanitizedArgs.length > 0 ? '[with args]' : '');
-      
+      console.log(
+        `[PRELOAD] Secure invoke: ${channel}`,
+        sanitizedArgs.length > 0 ? '[with args]' : '',
+      );
+
       const result = await ipcRenderer.invoke(channel, ...sanitizedArgs);
-      
+
       // Result validation
       return this.validateResult(result, channel);
-      
     } catch (error) {
-      console.error(`[PRELOAD] IPC invoke error for ${channel}:`, error.message);
+      console.error(
+        `[PRELOAD] IPC invoke error for ${channel}:`,
+        error.message,
+      );
       throw new Error(`IPC Error: ${error.message}`);
     }
   }
@@ -100,7 +112,9 @@ class SecureIPCManager {
    */
   safeOn(channel, callback) {
     if (!ALLOWED_RECEIVE_CHANNELS.includes(channel)) {
-      console.warn(`[PRELOAD] Blocked listener on unauthorized channel: ${channel}`);
+      console.warn(
+        `[PRELOAD] Blocked listener on unauthorized channel: ${channel}`,
+      );
       return () => {};
     }
 
@@ -108,13 +122,15 @@ class SecureIPCManager {
       try {
         // Validate event source
         if (!this.validateEventSource(event)) {
-          console.warn(`[PRELOAD] Rejected event from invalid source on channel: ${channel}`);
+          console.warn(
+            `[PRELOAD] Rejected event from invalid source on channel: ${channel}`,
+          );
           return;
         }
 
         // Sanitize incoming data
         const sanitizedArgs = this.sanitizeArguments(args);
-        
+
         // Special handling for different event types
         if (channel === 'system-metrics' && sanitizedArgs.length === 1) {
           const data = sanitizedArgs[0];
@@ -132,10 +148,13 @@ class SecureIPCManager {
     };
 
     ipcRenderer.on(channel, wrappedCallback);
-    
+
     // Track listener for cleanup
     const listenerKey = `${channel}_${Date.now()}`;
-    this.activeListeners.set(listenerKey, { channel, callback: wrappedCallback });
+    this.activeListeners.set(listenerKey, {
+      channel,
+      callback: wrappedCallback,
+    });
 
     // Return cleanup function
     return () => {
@@ -156,7 +175,7 @@ class SecureIPCManager {
    * Sanitize arguments to prevent injection attacks
    */
   sanitizeArguments(args) {
-    return args.map(arg => this.sanitizeObject(arg));
+    return args.map((arg) => this.sanitizeObject(arg));
   }
 
   /**
@@ -168,13 +187,16 @@ class SecureIPCManager {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => this.sanitizeObject(item));
+      return obj.map((item) => this.sanitizeObject(item));
     }
 
     if (obj && typeof obj === 'object') {
       const sanitized = {};
       for (const [key, value] of Object.entries(obj)) {
-        const cleanKey = sanitizeHtml(key, { allowedTags: [], allowedAttributes: {} });
+        const cleanKey = sanitizeHtml(key, {
+          allowedTags: [],
+          allowedAttributes: {},
+        });
         sanitized[cleanKey] = this.sanitizeObject(value);
       }
       return sanitized;
@@ -189,8 +211,10 @@ class SecureIPCManager {
   isValidSystemMetrics(data) {
     // Accept flexible shapes produced by main: ensure object with some expected keys
     if (!data || typeof data !== 'object') return false;
-    const hasUptime = typeof data.uptime === 'number' || typeof data.uptime === 'string';
-    const hasMemory = typeof data.memory === 'object' || typeof data.memory?.used === 'number';
+    const hasUptime =
+      typeof data.uptime === 'number' || typeof data.uptime === 'string';
+    const hasMemory =
+      typeof data.memory === 'object' || typeof data.memory?.used === 'number';
     return hasUptime || hasMemory;
   }
 
@@ -204,7 +228,9 @@ class SecureIPCManager {
         return this.isValidSystemMetrics(result) ? result : null;
       case 'select-directory':
         // Main returns { success, folder } now
-        return result && typeof result === 'object' ? result : { success: false, folder: null };
+        return result && typeof result === 'object'
+          ? result
+          : { success: false, folder: null };
       case 'get-custom-folders':
         return Array.isArray(result) ? result : [];
       default:
@@ -237,9 +263,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File Operations
   files: {
     select: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT),
-    selectDirectory: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT_DIRECTORY),
-    getDocumentsPath: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH),
-    createFolder: (fullPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, fullPath),
+    selectDirectory: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT_DIRECTORY),
+    getDocumentsPath: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_DOCUMENTS_PATH),
+    createFolder: (fullPath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, fullPath),
     normalizePath: (p) => {
       try {
         if (typeof p !== 'string') return p;
@@ -248,118 +277,188 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return p;
       }
     },
-    getStats: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILE_STATS, filePath),
-    getDirectoryContents: (dirPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
-    organize: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, { type: 'batch_organize', operations }),
-    performOperation: (operations) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, operations),
-    delete: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FILE, filePath),
+    getStats: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILE_STATS, filePath),
+    getDirectoryContents: (dirPath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, dirPath),
+    organize: (operations) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, {
+        type: 'batch_organize',
+        operations,
+      }),
+    performOperation: (operations) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.PERFORM_OPERATION, operations),
+    delete: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.DELETE_FILE, filePath),
     // Add missing file operations that the UI is calling
-    open: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FILE, filePath),
-    reveal: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.REVEAL_FILE, filePath),
-    copy: (sourcePath, destinationPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.COPY_FILE, sourcePath, destinationPath),
-    openFolder: (folderPath) => secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FOLDER, folderPath),
+    open: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FILE, filePath),
+    reveal: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.REVEAL_FILE, filePath),
+    copy: (sourcePath, destinationPath) =>
+      secureIPC.safeInvoke(
+        IPC_CHANNELS.FILES.COPY_FILE,
+        sourcePath,
+        destinationPath,
+      ),
+    openFolder: (folderPath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.FILES.OPEN_FOLDER, folderPath),
     // Add file analysis method that routes to appropriate analyzer
     analyze: (filePath) => {
       // Determine file type and route to appropriate analyzer
       const ext = filePath.split('.').pop()?.toLowerCase();
-      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff'];
+      const imageExts = [
+        'jpg',
+        'jpeg',
+        'png',
+        'gif',
+        'bmp',
+        'webp',
+        'svg',
+        'tiff',
+      ];
       // const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a']; // REMOVED - audio analysis disabled
-      
+
       if (imageExts.includes(ext)) {
-        return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath);
+        return secureIPC.safeInvoke(
+          IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE,
+          filePath,
+        );
       } else {
         // Audio analysis removed - all non-image files go to document analysis
-        return secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath);
+        return secureIPC.safeInvoke(
+          IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT,
+          filePath,
+        );
       }
-    }
+    },
   },
 
   // Smart Folders
   smartFolders: {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET),
-    save: (folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SAVE, folders),
-    updateCustom: (folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, folders),
-    getCustom: () => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM),
-    scanStructure: (rootPath) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, rootPath),
-    add: (folder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.ADD, folder),
-    edit: (folderId, updatedFolder) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.EDIT, folderId, updatedFolder),
-    delete: (folderId) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.DELETE, folderId),
-    match: (text, folders) => secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.MATCH, { text, smartFolders: folders })
+    save: (folders) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SAVE, folders),
+    updateCustom: (folders) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.UPDATE_CUSTOM, folders),
+    getCustom: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.GET_CUSTOM),
+    scanStructure: (rootPath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.SCAN_STRUCTURE, rootPath),
+    add: (folder) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.ADD, folder),
+    edit: (folderId, updatedFolder) =>
+      secureIPC.safeInvoke(
+        IPC_CHANNELS.SMART_FOLDERS.EDIT,
+        folderId,
+        updatedFolder,
+      ),
+    delete: (folderId) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.DELETE, folderId),
+    match: (text, folders) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SMART_FOLDERS.MATCH, {
+        text,
+        smartFolders: folders,
+      }),
   },
 
   // Analysis
   analysis: {
-    document: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
-    image: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
-    extractText: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath),
+    document: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_DOCUMENT, filePath),
+    image: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.ANALYZE_IMAGE, filePath),
+    extractText: (filePath) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS.EXTRACT_IMAGE_TEXT, filePath),
   },
 
   // Analysis History
   analysisHistory: {
-    get: (options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET, options),
-    search: (query, options) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH, query, options),
-    getStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS),
-    getFileHistory: (filePath) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY, filePath),
+    get: (options) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET, options),
+    search: (query, options) =>
+      secureIPC.safeInvoke(
+        IPC_CHANNELS.ANALYSIS_HISTORY.SEARCH,
+        query,
+        options,
+      ),
+    getStatistics: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.GET_STATISTICS),
+    getFileHistory: (filePath) =>
+      secureIPC.safeInvoke(
+        IPC_CHANNELS.ANALYSIS_HISTORY.GET_FILE_HISTORY,
+        filePath,
+      ),
     clear: () => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.CLEAR),
-    export: (format) => secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, format)
+    export: (format) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, format),
   },
 
   // Embeddings / Semantic
   embeddings: {
-    rebuildFolders: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS),
-    rebuildFiles: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES),
-    clearStore: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE)
+    rebuildFolders: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS),
+    rebuildFiles: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES),
+    clearStore: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE),
   },
 
   // Undo/Redo System
   undoRedo: {
     undo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.UNDO),
     redo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.REDO),
-    getHistory: (limit) => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, limit),
+    getHistory: (limit) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.GET_HISTORY, limit),
     clear: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CLEAR_HISTORY),
     canUndo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CAN_UNDO),
-    canRedo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CAN_REDO)
+    canRedo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CAN_REDO),
   },
-
-
 
   // System Monitoring (only metrics and app statistics currently implemented)
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
-    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS)
+    getApplicationStatistics: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS),
   },
 
   // Ollama (only implemented endpoints)
   ollama: {
     getModels: () => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.GET_MODELS),
-    testConnection: (hostUrl) => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl)
+    testConnection: (hostUrl) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl),
   },
 
   // Event Listeners (with automatic cleanup)
   events: {
-    onOperationProgress: (callback) => secureIPC.safeOn('operation-progress', callback),
-    onAppError: (callback) => secureIPC.safeOn('app:error', callback)
+    onOperationProgress: (callback) =>
+      secureIPC.safeOn('operation-progress', callback),
+    onAppError: (callback) => secureIPC.safeOn('app:error', callback),
   },
 
   // Settings
   settings: {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.GET),
-    save: (settings) => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.SAVE, settings)
-  }
+    save: (settings) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.SAVE, settings),
+  },
 });
 
 // Legacy compatibility layer (deprecated but maintained for migration)
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
     invoke: (channel, ...args) => {
-      console.warn('[PRELOAD] Using deprecated electron.ipcRenderer.invoke - migrate to window.electronAPI');
+      console.warn(
+        '[PRELOAD] Using deprecated electron.ipcRenderer.invoke - migrate to window.electronAPI',
+      );
       return secureIPC.safeInvoke(channel, ...args);
     },
     on: (channel, callback) => {
-      console.warn('[PRELOAD] Using deprecated electron.ipcRenderer.on - migrate to window.electronAPI.events');
+      console.warn(
+        '[PRELOAD] Using deprecated electron.ipcRenderer.on - migrate to window.electronAPI.events',
+      );
       return secureIPC.safeOn(channel, callback);
-    }
-  }
+    },
+  },
 });
 
 console.log('[PRELOAD] Secure context bridge exposed with structured API');

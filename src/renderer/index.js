@@ -7,36 +7,37 @@ import './tailwind.css';
 function initializeApp() {
   try {
     console.log('[RENDERER] Initializing React application...');
-    
+
     // Find the root container
     const container = document.getElementById('root');
     if (!container) {
-      throw new Error('Root container not found! Make sure there is a div with id="root" in the HTML.');
+      throw new Error(
+        'Root container not found! Make sure there is a div with id="root" in the HTML.',
+      );
     }
-    
+
     console.log('[RENDERER] Root container found, creating React root...');
-    
+
     // Create React root
     const root = createRoot(container);
-    
+
     // Hide initial loading screen once React is ready
     const initialLoading = document.getElementById('initial-loading');
     if (initialLoading) {
       initialLoading.style.display = 'none';
     }
-    
+
     // Render the React app
     root.render(
       <React.StrictMode>
         <App />
-      </React.StrictMode>
+      </React.StrictMode>,
     );
-    
+
     console.log('[RENDERER] React application initialized successfully');
-    
   } catch (error) {
     console.error('[RENDERER] Failed to initialize React application:', error);
-    
+
     // Show error message in the initial loading screen
     const initialLoading = document.getElementById('initial-loading');
     if (initialLoading) {
@@ -61,4 +62,4 @@ if (document.readyState === 'loading') {
 } else {
   // DOM is already ready
   initializeApp();
-} 
+}

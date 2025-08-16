@@ -36,17 +36,79 @@ function registerAllIpc({
   setOllamaVisionModel,
   setOllamaEmbeddingModel,
 }) {
-  registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration });
-  registerSmartFoldersIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, setCustomFolders, saveCustomFolders, buildOllamaOptions, getOllamaModel, scanDirectory });
+  registerFilesIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    dialog,
+    shell,
+    getMainWindow,
+    getServiceIntegration,
+  });
+  registerSmartFoldersIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    getCustomFolders,
+    setCustomFolders,
+    saveCustomFolders,
+    buildOllamaOptions,
+    getOllamaModel,
+    scanDirectory,
+  });
   registerUndoRedoIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
-  registerAnalysisHistoryIpc({ ipcMain, IPC_CHANNELS, logger, getServiceIntegration });
-  registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration });
-  registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel, getOllamaEmbeddingModel, getOllamaHost });
-  registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, getServiceIntegration, getCustomFolders });
-  registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel, setOllamaEmbeddingModel });
-  registerEmbeddingsIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, getServiceIntegration });
+  registerAnalysisHistoryIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    getServiceIntegration,
+  });
+  registerSystemIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    systemAnalytics,
+    getServiceIntegration,
+  });
+  registerOllamaIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    systemAnalytics,
+    getOllama,
+    getOllamaModel,
+    getOllamaVisionModel,
+    getOllamaEmbeddingModel,
+    getOllamaHost,
+  });
+  registerAnalysisIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    tesseract,
+    systemAnalytics,
+    analyzeDocumentFile,
+    analyzeImageFile,
+    getServiceIntegration,
+    getCustomFolders,
+  });
+  registerSettingsIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    settingsService,
+    setOllamaHost,
+    setOllamaModel,
+    setOllamaVisionModel,
+    setOllamaEmbeddingModel,
+  });
+  registerEmbeddingsIpc({
+    ipcMain,
+    IPC_CHANNELS,
+    logger,
+    getCustomFolders,
+    getServiceIntegration,
+  });
 }
 
 module.exports = { registerAllIpc };
-
-

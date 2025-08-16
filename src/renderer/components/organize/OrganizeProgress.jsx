@@ -1,9 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0, currentFile: '' }, preview = [] }) {
+function OrganizeProgress({
+  isOrganizing,
+  batchProgress = { current: 0, total: 0, currentFile: '' },
+  preview = [],
+}) {
   const [startedAt, setStartedAt] = useState(null);
   const hasTotals = Number(batchProgress.total) > 0;
-  const actualPercent = hasTotals ? Math.round((Number(batchProgress.current) / Number(batchProgress.total)) * 100) : 0;
+  const actualPercent = hasTotals
+    ? Math.round(
+        (Number(batchProgress.current) / Number(batchProgress.total)) * 100,
+      )
+    : 0;
   const [visualPercent, setVisualPercent] = useState(0);
 
   useEffect(() => {
@@ -34,7 +42,10 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => { isMounted = false; cancelAnimationFrame(rafId); };
+    return () => {
+      isMounted = false;
+      cancelAnimationFrame(rafId);
+    };
   }, [isOrganizing, hasTotals, actualPercent]);
 
   // Compute ETA only when totals are known and progress is non-zero
@@ -48,11 +59,19 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
     const m = Math.floor(remainingSec / 60);
     const s = remainingSec % 60;
     return `${m}m ${s}s remaining`;
-  }, [startedAt, hasTotals, actualPercent, batchProgress.current, batchProgress.total]);
+  }, [
+    startedAt,
+    hasTotals,
+    actualPercent,
+    batchProgress.current,
+    batchProgress.total,
+  ]);
 
   if (!isOrganizing) return null;
 
-  const percentToShow = hasTotals ? Math.max(visualPercent, actualPercent) : visualPercent;
+  const percentToShow = hasTotals
+    ? Math.max(visualPercent, actualPercent)
+    : visualPercent;
 
   return (
     <div className="py-13">
@@ -66,7 +85,9 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
         </div>
         <div>
           <div className="text-lg font-medium">Organizing Files...</div>
-          <div className="text-xs text-system-gray-600">Do not close the app until completion</div>
+          <div className="text-xs text-system-gray-600">
+            Do not close the app until completion
+          </div>
         </div>
       </div>
 
@@ -75,7 +96,9 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
         <div className="flex justify-between text-sm text-system-gray-600 mb-3">
           <span>
             {hasTotals ? (
-              <>Progress: {batchProgress.current} of {batchProgress.total}</>
+              <>
+                Progress: {batchProgress.current} of {batchProgress.total}
+              </>
             ) : (
               <>Working...</>
             )}
@@ -84,13 +107,18 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
         </div>
         {hasTotals ? (
           <div className="progress-enhanced">
-            <div className="progress-bar-enhanced" style={{ width: `${percentToShow}%` }} />
+            <div
+              className="progress-bar-enhanced"
+              style={{ width: `${percentToShow}%` }}
+            />
           </div>
         ) : (
           <div className="indeterminate-bar" />
         )}
         {batchProgress.currentFile && (
-          <div className="text-xs text-system-gray-500 mt-3 truncate">Currently processing: {batchProgress.currentFile}</div>
+          <div className="text-xs text-system-gray-500 mt-3 truncate">
+            Currently processing: {batchProgress.currentFile}
+          </div>
         )}
         <div className="text-xs text-system-gray-500 mt-3">{etaText}</div>
       </div>
@@ -98,14 +126,20 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
       {/* Preview upcoming or recent operations */}
       {Array.isArray(preview) && preview.length > 0 && (
         <div className="bg-system-gray-50 border border-system-gray-200 rounded-lg p-8">
-          <div className="text-xs font-semibold text-system-gray-700 mb-5">Planned operations</div>
+          <div className="text-xs font-semibold text-system-gray-700 mb-5">
+            Planned operations
+          </div>
           <div className="space-y-5 max-h-40 overflow-y-auto pr-5">
             {preview.slice(0, 6).map((op, idx) => (
               <div key={idx} className="flex items-start gap-8 text-sm">
                 <span className="mt-1">📄</span>
                 <div className="min-w-0">
-                  <div className="font-medium text-system-gray-900 truncate">{op.fileName}</div>
-                  <div className="text-xs text-system-gray-600 truncate">→ {op.destination}</div>
+                  <div className="font-medium text-system-gray-900 truncate">
+                    {op.fileName}
+                  </div>
+                  <div className="text-xs text-system-gray-600 truncate">
+                    → {op.destination}
+                  </div>
                 </div>
               </div>
             ))}
@@ -117,5 +151,3 @@ function OrganizeProgress({ isOrganizing, batchProgress = { current: 0, total: 0
 }
 
 export default OrganizeProgress;
-
-

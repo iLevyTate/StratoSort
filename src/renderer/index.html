@@ -1,28 +1,31 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StratoSort - AI-Powered File Organization</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
     <!-- Enhanced CSP: Allows Ollama API calls and WebSocket connections for HMR -->
-</head>
-<body>
+  </head>
+  <body>
     <!-- Initial loading screen -->
     <div id="initial-loading" class="initial-loading">
-        <section class="initial-section">
-            <div class="initial-icon animate-float" aria-hidden="true">🚀</div>
-            <h1 class="initial-title">Loading StratoSort</h1>
-            <p class="initial-subtitle">AI-Powered File Organization</p>
-            <div class="initial-spinner-wrapper">
-                <div class="loading-spinner"></div>
-            </div>
-        </section>
+      <section class="initial-section">
+        <div class="initial-icon animate-float" aria-hidden="true">🚀</div>
+        <h1 class="initial-title">Loading StratoSort</h1>
+        <p class="initial-subtitle">AI-Powered File Organization</p>
+        <div class="initial-spinner-wrapper">
+          <div class="loading-spinner"></div>
+        </div>
+      </section>
     </div>
-    
+
     <!-- React root container (must be empty for React to work) -->
     <div id="root"></div>
-    
+
     <!-- Webpack will inject the script tags automatically -->
-</body>
+  </body>
 </html>

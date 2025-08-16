@@ -21,22 +21,25 @@ export function useDragAndDrop(onFilesDropped) {
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0 && onFilesDropped) {
-      const fileObjects = files.map(file => ({
-        path: file.path || file.name,
-        name: file.name,
-        type: 'file',
-        size: file.size
-      }));
-      onFilesDropped(fileObjects);
-    }
-  }, [onFilesDropped]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0 && onFilesDropped) {
+        const fileObjects = files.map((file) => ({
+          path: file.path || file.name,
+          name: file.name,
+          type: 'file',
+          size: file.size,
+        }));
+        onFilesDropped(fileObjects);
+      }
+    },
+    [onFilesDropped],
+  );
 
   return {
     isDragging,
@@ -44,9 +47,7 @@ export function useDragAndDrop(onFilesDropped) {
       onDragEnter: handleDragEnter,
       onDragLeave: handleDragLeave,
       onDragOver: handleDragOver,
-      onDrop: handleDrop
-    }
+      onDrop: handleDrop,
+    },
   };
 }
-
-

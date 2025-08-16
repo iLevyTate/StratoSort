@@ -6,7 +6,7 @@
   "files": [
     "dist/**/*",
     "src/main/**/*",
-    "src/preload/**/*", 
+    "src/preload/**/*",
     "src/shared/**/*",
     "package.json"
   ],
@@ -71,4 +71,4 @@
       "filter": ["**/*"]
     }
   ]
-} 
+}

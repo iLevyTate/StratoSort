@@ -19,7 +19,9 @@ describe('SettingsService atomic save', () => {
       .spyOn(fsSync.promises, 'rename')
       .mockRejectedValueOnce(new Error('simulated failure'));
 
-    await expect(service.save({ theme: 'light' })).rejects.toThrow('simulated failure');
+    await expect(service.save({ theme: 'light' })).rejects.toThrow(
+      'simulated failure',
+    );
 
     const content = JSON.parse(await fs.readFile(filePath, 'utf-8'));
     expect(content.theme).toBe('dark');

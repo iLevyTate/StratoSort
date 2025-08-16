@@ -20,7 +20,7 @@ describe('IPC registration', () => {
       getServiceIntegration: () => ({
         undoRedo: {},
         analysisHistory: {},
-        processingState: {}
+        processingState: {},
       }),
       getCustomFolders: () => [],
       setCustomFolders: () => {},
@@ -32,7 +32,7 @@ describe('IPC registration', () => {
       getOllamaModel: () => 'llama3.2:latest',
       getOllamaVisionModel: () => null,
       buildOllamaOptions: async () => ({}),
-      scanDirectory: async () => ([]),
+      scanDirectory: async () => [],
     });
 
     const expectedChannels = [
@@ -55,9 +55,7 @@ describe('IPC registration', () => {
     ];
 
     // Check that handlers are registered for expected channels
-    const missing = expectedChannels.filter(ch => !ipcMain._handlers.has(ch));
+    const missing = expectedChannels.filter((ch) => !ipcMain._handlers.has(ch));
     expect(missing).toEqual([]);
   });
 });
-
-

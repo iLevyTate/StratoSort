@@ -11,7 +11,7 @@ const PHASES = {
   SETUP: 'setup',
   DISCOVER: 'discover',
   ORGANIZE: 'organize',
-  COMPLETE: 'complete'
+  COMPLETE: 'complete',
 };
 
 // Phase transition rules - defines valid navigation paths
@@ -20,16 +20,41 @@ const PHASE_TRANSITIONS = {
   [PHASES.SETUP]: [PHASES.DISCOVER, PHASES.WELCOME],
   [PHASES.DISCOVER]: [PHASES.ORGANIZE, PHASES.SETUP],
   [PHASES.ORGANIZE]: [PHASES.COMPLETE, PHASES.DISCOVER],
-  [PHASES.COMPLETE]: [PHASES.WELCOME, PHASES.ORGANIZE, PHASES.DISCOVER] // Allow going back without losing data
+  [PHASES.COMPLETE]: [PHASES.WELCOME, PHASES.ORGANIZE, PHASES.DISCOVER], // Allow going back without losing data
 };
 
 // Phase metadata for UI display
 const PHASE_METADATA = {
-  [PHASES.WELCOME]: { title: 'Welcome to StratoSort', navLabel: 'Welcome', icon: '🚀', progress: 0 },
-  [PHASES.SETUP]: { title: 'Configure Smart Folders', navLabel: 'Smart Folders', icon: '⚙️', progress: 20 },
-  [PHASES.DISCOVER]: { title: 'Discover & Analyze Files', navLabel: 'Discover Files', icon: '🔎', progress: 50 },
-  [PHASES.ORGANIZE]: { title: 'Review & Organize', navLabel: 'Review Organize', icon: '📂', progress: 80 },
-  [PHASES.COMPLETE]: { title: 'Organization Complete', navLabel: 'Complete', icon: '✅', progress: 100 }
+  [PHASES.WELCOME]: {
+    title: 'Welcome to StratoSort',
+    navLabel: 'Welcome',
+    icon: '🚀',
+    progress: 0,
+  },
+  [PHASES.SETUP]: {
+    title: 'Configure Smart Folders',
+    navLabel: 'Smart Folders',
+    icon: '⚙️',
+    progress: 20,
+  },
+  [PHASES.DISCOVER]: {
+    title: 'Discover & Analyze Files',
+    navLabel: 'Discover Files',
+    icon: '🔎',
+    progress: 50,
+  },
+  [PHASES.ORGANIZE]: {
+    title: 'Review & Organize',
+    navLabel: 'Review Organize',
+    icon: '📂',
+    progress: 80,
+  },
+  [PHASES.COMPLETE]: {
+    title: 'Organization Complete',
+    navLabel: 'Complete',
+    icon: '✅',
+    progress: 100,
+  },
 };
 
 // IPC Channel constants - centralized to avoid magic strings
@@ -49,9 +74,9 @@ const IPC_CHANNELS = {
     REVEAL_FILE: 'reveal-file',
     COPY_FILE: 'copy-file',
     OPEN_FOLDER: 'open-folder',
-    PERFORM_OPERATION: 'perform-file-operation'
+    PERFORM_OPERATION: 'perform-file-operation',
   },
-  
+
   // Smart Folders
   SMART_FOLDERS: {
     GET: 'get-smart-folders',
@@ -62,35 +87,35 @@ const IPC_CHANNELS = {
     ADD: 'add-smart-folder',
     EDIT: 'edit-smart-folder',
     DELETE: 'delete-smart-folder',
-    MATCH: 'match-smart-folder'
+    MATCH: 'match-smart-folder',
   },
-  
+
   // Analysis
   ANALYSIS: {
     ANALYZE_DOCUMENT: 'analyze-document',
     ANALYZE_IMAGE: 'analyze-image',
-    EXTRACT_IMAGE_TEXT: 'extract-text-from-image'
+    EXTRACT_IMAGE_TEXT: 'extract-text-from-image',
   },
-  
+
   // Settings
   SETTINGS: {
     GET: 'get-settings',
-    SAVE: 'save-settings'
+    SAVE: 'save-settings',
   },
 
   // Embeddings / Semantic Matching
   EMBEDDINGS: {
     REBUILD_FOLDERS: 'embeddings-rebuild-folders',
     REBUILD_FILES: 'embeddings-rebuild-files',
-    CLEAR_STORE: 'embeddings-clear-store'
+    CLEAR_STORE: 'embeddings-clear-store',
   },
-  
+
   // Ollama
   OLLAMA: {
     GET_MODELS: 'get-ollama-models',
-    TEST_CONNECTION: 'test-ollama-connection'
+    TEST_CONNECTION: 'test-ollama-connection',
   },
-  
+
   // Undo/Redo
   UNDO_REDO: {
     CAN_UNDO: 'can-undo',
@@ -98,9 +123,9 @@ const IPC_CHANNELS = {
     UNDO: 'undo-action',
     REDO: 'redo-action',
     GET_HISTORY: 'get-action-history',
-    CLEAR_HISTORY: 'clear-action-history'
+    CLEAR_HISTORY: 'clear-action-history',
   },
-  
+
   // Analysis History
   ANALYSIS_HISTORY: {
     GET: 'get-analysis-history',
@@ -108,21 +133,21 @@ const IPC_CHANNELS = {
     GET_STATISTICS: 'get-analysis-statistics',
     GET_FILE_HISTORY: 'get-file-analysis-history',
     CLEAR: 'clear-analysis-history',
-    EXPORT: 'export-analysis-history'
+    EXPORT: 'export-analysis-history',
   },
-  
+
   // System Monitoring
   SYSTEM: {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
-    GET_METRICS: 'get-system-metrics'
+    GET_METRICS: 'get-system-metrics',
   },
-  
+
   // Menu Actions
   MENU: {
     NEW_ANALYSIS: 'menu-new-analysis',
     UNDO: 'menu-undo',
-    REDO: 'menu-redo'
-  }
+    REDO: 'menu-redo',
+  },
 };
 
 // System status constants
@@ -130,7 +155,7 @@ const SYSTEM_STATUS = {
   CHECKING: 'checking',
   HEALTHY: 'healthy',
   UNHEALTHY: 'unhealthy',
-  OFFLINE: 'offline'
+  OFFLINE: 'offline',
 };
 
 // Notification types
@@ -138,7 +163,7 @@ const NOTIFICATION_TYPES = {
   INFO: 'info',
   SUCCESS: 'success',
   WARNING: 'warning',
-  ERROR: 'error'
+  ERROR: 'error',
 };
 
 // File processing states
@@ -150,7 +175,7 @@ const FILE_STATES = {
   PROCESSING: 'processing',
   COMPLETED: 'completed',
   ERROR: 'error',
-  CANCELLED: 'cancelled'
+  CANCELLED: 'cancelled',
 };
 
 // Error types
@@ -162,7 +187,7 @@ const ERROR_TYPES = {
   AI_UNAVAILABLE: 'AI_UNAVAILABLE',
   INVALID_FORMAT: 'INVALID_FORMAT',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
-  PROCESSING_FAILED: 'PROCESSING_FAILED'
+  PROCESSING_FAILED: 'PROCESSING_FAILED',
 };
 
 // Action types for undo/redo
@@ -173,14 +198,14 @@ const ACTION_TYPES = {
   FOLDER_CREATE: 'FOLDER_CREATE',
   FOLDER_DELETE: 'FOLDER_DELETE',
   BATCH_OPERATION: 'BATCH_OPERATION',
-  SETTINGS_CHANGE: 'SETTINGS_CHANGE'
+  SETTINGS_CHANGE: 'SETTINGS_CHANGE',
 };
 
 // Theme constants
 const THEMES = {
   LIGHT: 'light',
   DARK: 'dark',
-  SYSTEM: 'system'
+  SYSTEM: 'system',
 };
 
 // Keyboard shortcuts
@@ -192,14 +217,14 @@ const SHORTCUTS = {
   ESCAPE: 'Escape',
   ENTER: 'Enter',
   TAB: 'Tab',
-  SPACE: 'Space'
+  SPACE: 'Space',
 };
 
 // File size limits
 const LIMITS = {
   MAX_FILE_SIZE: 100 * 1024 * 1024, // 100MB
   MAX_PATH_LENGTH: 260,
-  MAX_FILENAME_LENGTH: 255
+  MAX_FILENAME_LENGTH: 255,
 };
 
 // Time constants - Optimized for faster models
@@ -207,25 +232,75 @@ const TIMEOUTS = {
   AI_REQUEST: 60000, // 1 minute for faster models (llama3.2, whisper-tiny)
   FILE_OPERATION: 10000, // 10 seconds
   DEBOUNCE: 300,
-  THROTTLE: 100
+  THROTTLE: 100,
 };
 
 // File type mappings
-const SUPPORTED_TEXT_EXTENSIONS = ['.txt', '.md', '.rtf', '.json', '.csv', '.xml', '.html', '.htm', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bat', '.ps1', '.yaml', '.yml', '.ini', '.conf', '.log'];
-
-const SUPPORTED_DOCUMENT_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.xlsx', '.pptx',
-  // Legacy Office
-  '.xls', '.ppt',
-  // OpenDocument formats
-  '.odt', '.ods', '.odp',
-  // E-books and email
-  '.epub', '.eml', '.msg',
-  // Geospatial packages (treat as documents for analysis)
-  '.kml', '.kmz'
+const SUPPORTED_TEXT_EXTENSIONS = [
+  '.txt',
+  '.md',
+  '.rtf',
+  '.json',
+  '.csv',
+  '.xml',
+  '.html',
+  '.htm',
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.py',
+  '.java',
+  '.cpp',
+  '.c',
+  '.h',
+  '.css',
+  '.scss',
+  '.sass',
+  '.less',
+  '.sql',
+  '.sh',
+  '.bat',
+  '.ps1',
+  '.yaml',
+  '.yml',
+  '.ini',
+  '.conf',
+  '.log',
 ];
 
-const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
+const SUPPORTED_DOCUMENT_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xlsx',
+  '.pptx',
+  // Legacy Office
+  '.xls',
+  '.ppt',
+  // OpenDocument formats
+  '.odt',
+  '.ods',
+  '.odp',
+  // E-books and email
+  '.epub',
+  '.eml',
+  '.msg',
+  // Geospatial packages (treat as documents for analysis)
+  '.kml',
+  '.kmz',
+];
+
+const SUPPORTED_IMAGE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tiff',
+  '.svg',
+];
 
 // Audio analysis disabled - removed for performance optimization
 const SUPPORTED_AUDIO_EXTENSIONS = [];
@@ -241,15 +316,21 @@ const ALL_SUPPORTED_EXTENSIONS = [
   ...SUPPORTED_IMAGE_EXTENSIONS,
   ...SUPPORTED_AUDIO_EXTENSIONS,
   ...SUPPORTED_VIDEO_EXTENSIONS,
-  ...SUPPORTED_ARCHIVE_EXTENSIONS
+  ...SUPPORTED_ARCHIVE_EXTENSIONS,
 ];
 
 // AI Model configurations - Optimized for speed with smallest available models
 const DEFAULT_AI_MODELS = {
-  TEXT_ANALYSIS: 'llama3.2:latest',        // 2.0GB - Fastest text model
-  IMAGE_ANALYSIS: 'llava:latest',          // 4.7GB - Vision capable model  
+  TEXT_ANALYSIS: 'llama3.2:latest', // 2.0GB - Fastest text model
+  IMAGE_ANALYSIS: 'llava:latest', // 4.7GB - Vision capable model
   // AUDIO_ANALYSIS removed while audio features are disabled
-  FALLBACK_MODELS: ['llama3.2:latest', 'gemma3:4b', 'llama3', 'mistral', 'phi3']
+  FALLBACK_MODELS: [
+    'llama3.2:latest',
+    'gemma3:4b',
+    'llama3',
+    'mistral',
+    'phi3',
+  ],
 };
 
 // AI defaults centralized for analyzers
@@ -266,7 +347,7 @@ const AI_DEFAULTS = {
     HOST: 'http://127.0.0.1:11434',
     TEMPERATURE: 0.2,
     MAX_TOKENS: 1000,
-  }
+  },
 };
 
 // File size limits
@@ -274,7 +355,7 @@ const FILE_SIZE_LIMITS = {
   MAX_TEXT_FILE_SIZE: 50 * 1024 * 1024, // 50MB
   MAX_IMAGE_FILE_SIZE: 100 * 1024 * 1024, // 100MB
   MAX_AUDIO_FILE_SIZE: 500 * 1024 * 1024, // 500MB
-  MAX_DOCUMENT_FILE_SIZE: 200 * 1024 * 1024 // 200MB
+  MAX_DOCUMENT_FILE_SIZE: 200 * 1024 * 1024, // 200MB
 };
 
 // Processing limits - Optimized for faster models
@@ -282,18 +363,18 @@ const PROCESSING_LIMITS = {
   MAX_CONCURRENT_ANALYSIS: 3,
   MAX_BATCH_SIZE: 100,
   ANALYSIS_TIMEOUT: 60000, // 1 minute for faster models
-  RETRY_ATTEMPTS: 3
+  RETRY_ATTEMPTS: 3,
 };
 
 // Renderer/UI specific constants
 const UI_WORKFLOW = {
   RESTORE_MAX_AGE_MS: 60 * 60 * 1000, // 1 hour
-  SAVE_DEBOUNCE_MS: 1000 // 1s
+  SAVE_DEBOUNCE_MS: 1000, // 1s
 };
 
 const RENDERER_LIMITS = {
   FILE_STATS_BATCH_SIZE: 25,
-  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000 // 3 minutes
+  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000, // 3 minutes
 };
 
 // CommonJS exports for Node.js compatibility (main process)
@@ -323,5 +404,5 @@ module.exports = {
   FILE_SIZE_LIMITS,
   PROCESSING_LIMITS,
   UI_WORKFLOW,
-  RENDERER_LIMITS
-}; 
+  RENDERER_LIMITS,
+};

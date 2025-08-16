@@ -3,7 +3,11 @@ import { usePhase } from '../contexts/PhaseContext';
 import { useUndoRedo } from '../components/UndoRedoSystem';
 import { PHASES as SHARED_PHASES } from '../../shared/constants';
 import { useNotification } from '../contexts/NotificationContext';
-import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
+import {
+  PHASES,
+  PHASE_TRANSITIONS,
+  PHASE_METADATA,
+} from '../../shared/constants';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
@@ -13,27 +17,48 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     const handleKeyDown = async (event) => {
       // Ctrl/Cmd + Z for Undo (Organize phase only)
-      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === 'z' &&
+        !event.shiftKey
+      ) {
         event.preventDefault();
         try {
           if (currentPhase === SHARED_PHASES.ORGANIZE) {
             await undo();
           } else {
-            addNotification('Undo is available during Organize phase', 'info', 1500);
+            addNotification(
+              'Undo is available during Organize phase',
+              'info',
+              1500,
+            );
           }
-        } catch (error) { console.error('Undo shortcut failed:', error); }
+        } catch (error) {
+          console.error('Undo shortcut failed:', error);
+        }
       }
 
       // Ctrl/Cmd + Shift + Z or Ctrl+Y for Redo (Organize phase only)
-      if (((event.ctrlKey || event.metaKey) && event.key === 'z' && event.shiftKey) || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y')) {
+      if (
+        ((event.ctrlKey || event.metaKey) &&
+          event.key === 'z' &&
+          event.shiftKey) ||
+        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y')
+      ) {
         event.preventDefault();
         try {
           if (currentPhase === SHARED_PHASES.ORGANIZE) {
             await redo();
           } else {
-            addNotification('Redo is available during Organize phase', 'info', 1500);
+            addNotification(
+              'Redo is available during Organize phase',
+              'info',
+              1500,
+            );
           }
-        } catch (error) { console.error('Redo shortcut failed:', error); }
+        } catch (error) {
+          console.error('Redo shortcut failed:', error);
+        }
       }
 
       // Ctrl/Cmd + , for Settings
@@ -58,7 +83,11 @@ export function useKeyboardShortcuts() {
             const allowedTransitions = PHASE_TRANSITIONS[currentPhase] || [];
             if (allowedTransitions.includes(previousPhase)) {
               actions.advancePhase(previousPhase);
-              addNotification(`Navigated to ${PHASE_METADATA[previousPhase].title}`, 'info', 2000);
+              addNotification(
+                `Navigated to ${PHASE_METADATA[previousPhase].title}`,
+                'info',
+                2000,
+              );
             }
           }
         }
@@ -72,7 +101,11 @@ export function useKeyboardShortcuts() {
             const allowedTransitions = PHASE_TRANSITIONS[currentPhase] || [];
             if (allowedTransitions.includes(nextPhase)) {
               actions.advancePhase(nextPhase);
-              addNotification(`Navigated to ${PHASE_METADATA[nextPhase].title}`, 'info', 2000);
+              addNotification(
+                `Navigated to ${PHASE_METADATA[nextPhase].title}`,
+                'info',
+                2000,
+              );
             }
           }
         }
@@ -83,5 +116,3 @@ export function useKeyboardShortcuts() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [actions, currentPhase, undo, redo, addNotification, showSettings]);
 }
-
-

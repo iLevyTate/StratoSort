@@ -13,7 +13,9 @@ describe('EmbeddingIndexService', () => {
   });
 
   afterEach(async () => {
-    try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('upserts files/folders and queries matches', async () => {
@@ -21,8 +23,16 @@ describe('EmbeddingIndexService', () => {
     const svc = new EmbeddingIndexService();
     await svc.initialize();
 
-    await svc.upsertFolder({ id: 'folder:project', name: 'Projects', vector: [1, 0, 0] });
-    await svc.upsertFolder({ id: 'folder:finance', name: 'Finance', vector: [0, 1, 0] });
+    await svc.upsertFolder({
+      id: 'folder:project',
+      name: 'Projects',
+      vector: [1, 0, 0],
+    });
+    await svc.upsertFolder({
+      id: 'folder:finance',
+      name: 'Finance',
+      vector: [0, 1, 0],
+    });
     await svc.upsertFile({ id: 'file:/tmp/report.txt', vector: [0.9, 0.1, 0] });
 
     const matches = await svc.queryFolders('file:/tmp/report.txt', 1);
@@ -41,5 +51,3 @@ describe('EmbeddingIndexService', () => {
     expect(matches).toEqual([]);
   });
 });
-
-

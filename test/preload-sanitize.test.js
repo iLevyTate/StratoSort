@@ -8,11 +8,13 @@ describe('SecureIPCManager sanitization', () => {
   });
 
   test('sanitizes nested payloads', () => {
-    const payload = [{
-      level1: {
-        level2: '<img src="x" onerror="alert(1)">'
-      }
-    }];
+    const payload = [
+      {
+        level1: {
+          level2: '<img src="x" onerror="alert(1)">',
+        },
+      },
+    ];
     const [sanitized] = manager.sanitizeArguments(payload);
     expect(sanitized.level1.level2).toBe('');
   });

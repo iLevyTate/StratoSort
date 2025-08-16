@@ -1,32 +1,49 @@
 const { withErrorLogging } = require('./withErrorLogging');
 
-function registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel, setOllamaEmbeddingModel }) {
-  ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, withErrorLogging(logger, async () => {
-    try {
-      const loaded = await settingsService.load();
-      return loaded;
-    } catch (error) {
-      logger.error('Failed to get settings:', error);
-      return {};
-    }
-  }));
+function registerSettingsIpc({
+  ipcMain,
+  IPC_CHANNELS,
+  logger,
+  settingsService,
+  setOllamaHost,
+  setOllamaModel,
+  setOllamaVisionModel,
+  setOllamaEmbeddingModel,
+}) {
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS.GET,
+    withErrorLogging(logger, async () => {
+      try {
+        const loaded = await settingsService.load();
+        return loaded;
+      } catch (error) {
+        logger.error('Failed to get settings:', error);
+        return {};
+      }
+    }),
+  );
 
-  ipcMain.handle(IPC_CHANNELS.SETTINGS.SAVE, withErrorLogging(logger, async (event, settings) => {
-    try {
-      const merged = await settingsService.save(settings);
-      if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
-      if (merged.textModel) await setOllamaModel(merged.textModel);
-      if (merged.visionModel) await setOllamaVisionModel(merged.visionModel);
-      if (merged.embeddingModel && typeof setOllamaEmbeddingModel === 'function') await setOllamaEmbeddingModel(merged.embeddingModel);
-      logger.info('[SETTINGS] Saved settings');
-      return { success: true, settings: merged };
-    } catch (error) {
-      logger.error('Failed to save settings:', error);
-      return { success: false, error: error.message };
-    }
-  }));
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS.SAVE,
+    withErrorLogging(logger, async (event, settings) => {
+      try {
+        const merged = await settingsService.save(settings);
+        if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
+        if (merged.textModel) await setOllamaModel(merged.textModel);
+        if (merged.visionModel) await setOllamaVisionModel(merged.visionModel);
+        if (
+          merged.embeddingModel &&
+          typeof setOllamaEmbeddingModel === 'function'
+        )
+          await setOllamaEmbeddingModel(merged.embeddingModel);
+        logger.info('[SETTINGS] Saved settings');
+        return { success: true, settings: merged };
+      } catch (error) {
+        logger.error('Failed to save settings:', error);
+        return { success: false, error: error.message };
+      }
+    }),
+  );
 }
 
 module.exports = registerSettingsIpc;
-
-

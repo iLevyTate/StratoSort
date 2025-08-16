@@ -16,7 +16,9 @@ describe('UndoRedoService', () => {
   });
 
   afterEach(async () => {
-    try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('records actions and persists across instances', async () => {
@@ -30,7 +32,10 @@ describe('UndoRedoService', () => {
     await fs.writeFile(dest, 'moved-content');
 
     // Record a move action (assumes file is currently at dest)
-    await service.recordAction('FILE_MOVE', { originalPath: src, newPath: dest });
+    await service.recordAction('FILE_MOVE', {
+      originalPath: src,
+      newPath: dest,
+    });
 
     // Undo should move file back to original
     const undoResult = await service.undo();
@@ -75,8 +80,8 @@ describe('UndoRedoService', () => {
     await service.recordAction('BATCH_OPERATION', {
       operations: [
         { type: 'move', originalPath: aSrc, newPath: aDest },
-        { type: 'move', originalPath: bSrc, newPath: bDest }
-      ]
+        { type: 'move', originalPath: bSrc, newPath: bDest },
+      ],
     });
 
     await service.undo();
@@ -86,5 +91,3 @@ describe('UndoRedoService', () => {
     expect(fssync.existsSync(bDest)).toBe(false);
   });
 });
-
-

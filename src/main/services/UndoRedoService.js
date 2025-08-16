@@ -7,7 +7,7 @@ class UndoRedoService {
     this.userDataPath = app.getPath('userData');
     this.actionsPath = path.join(this.userDataPath, 'undo-actions.json');
     this.maxActions = 100; // Maximum number of actions to keep
-    
+
     this.actions = [];
     this.currentIndex = -1; // Points to the last executed action
     this.initialized = false;
@@ -15,7 +15,7 @@ class UndoRedoService {
 
   async initialize() {
     if (this.initialized) return;
-    
+
     try {
       await this.loadActions();
       this.initialized = true;
@@ -32,8 +32,8 @@ class UndoRedoService {
     try {
       const actionsData = await fs.readFile(this.actionsPath, 'utf8');
       const data = JSON.parse(actionsData);
-      this.actions = data.actions || [];
-      this.currentIndex = data.currentIndex || -1;
+      this.actions = Array.isArray(data.actions) ? data.actions : [];
+      this.currentIndex = data.currentIndex ?? -1;
     } catch (error) {
       // File doesn't exist or is corrupted, start fresh
       this.actions = [];
@@ -46,20 +46,20 @@ class UndoRedoService {
     const data = {
       actions: this.actions,
       currentIndex: this.currentIndex,
-      lastSaved: new Date().toISOString()
+      lastSaved: new Date().toISOString(),
     };
     await fs.writeFile(this.actionsPath, JSON.stringify(data, null, 2));
   }
 
   async recordAction(actionType, actionData) {
     await this.initialize();
-    
+
     const action = {
       id: this.generateId(),
       type: actionType,
       timestamp: new Date().toISOString(),
       data: actionData,
-      description: this.getActionDescription(actionType, actionData)
+      description: this.getActionDescription(actionType, actionData),
     };
 
     // Remove any actions after the current index (if we're not at the end)
@@ -83,13 +83,13 @@ class UndoRedoService {
 
   async undo() {
     await this.initialize();
-    
+
     if (!this.canUndo()) {
       throw new Error('No actions to undo');
     }
 
     const action = this.actions[this.currentIndex];
-    
+
     try {
       await this.executeReverseAction(action);
       this.currentIndex--;
@@ -97,7 +97,7 @@ class UndoRedoService {
       return {
         success: true,
         action: action,
-        message: `Undid: ${action.description}`
+        message: `Undid: ${action.description}`,
       };
     } catch (error) {
       console.error('Failed to undo action:', error);
@@ -107,13 +107,13 @@ class UndoRedoService {
 
   async redo() {
     await this.initialize();
-    
+
     if (!this.canRedo()) {
       throw new Error('No actions to redo');
     }
 
     const action = this.actions[this.currentIndex + 1];
-    
+
     try {
       await this.executeForwardAction(action);
       this.currentIndex++;
@@ -121,7 +121,7 @@ class UndoRedoService {
       return {
         success: true,
         action: action,
-        message: `Redid: ${action.description}`
+        message: `Redid: ${action.description}`,
       };
     } catch (error) {
       console.error('Failed to redo action:', error);
@@ -143,31 +143,37 @@ class UndoRedoService {
         // Move file back to original location
         await fs.rename(action.data.newPath, action.data.originalPath);
         break;
-        
+
       case 'FILE_RENAME':
         // Rename file back to original name
         await fs.rename(action.data.newPath, action.data.originalPath);
         break;
-        
+
       case 'FILE_DELETE':
         // Restore file from backup (if we have one)
-        if (action.data.backupPath && await this.fileExists(action.data.backupPath)) {
+        if (
+          action.data.backupPath &&
+          (await this.fileExists(action.data.backupPath))
+        ) {
           await fs.rename(action.data.backupPath, action.data.originalPath);
         } else {
           throw new Error('Cannot restore deleted file - backup not found');
         }
         break;
-        
+
       case 'FOLDER_CREATE':
         // Remove the created folder (if empty)
         try {
           await fs.rmdir(action.data.folderPath);
         } catch (error) {
           // Folder might not be empty, try to restore to original state
-          console.warn('Could not remove folder, might contain files:', error.message);
+          console.warn(
+            'Could not remove folder, might contain files:',
+            error.message,
+          );
         }
         break;
-        
+
       case 'BATCH_ORGANIZE':
       case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
         // Reverse each file operation in the batch
@@ -175,7 +181,7 @@ class UndoRedoService {
           await this.reverseFileOperation(operation);
         }
         break;
-        
+
       default:
         throw new Error(`Unknown action type: ${action.type}`);
     }
@@ -187,12 +193,12 @@ class UndoRedoService {
         // Move file to new location
         await fs.rename(action.data.originalPath, action.data.newPath);
         break;
-        
+
       case 'FILE_RENAME':
         // Rename file to new name
         await fs.rename(action.data.originalPath, action.data.newPath);
         break;
-        
+
       case 'FILE_DELETE':
         // Delete file again (move to backup if configured)
         if (action.data.createBackup) {
@@ -201,12 +207,12 @@ class UndoRedoService {
           await fs.unlink(action.data.originalPath);
         }
         break;
-        
+
       case 'FOLDER_CREATE':
         // Create the folder again
         await fs.mkdir(action.data.folderPath, { recursive: true });
         break;
-        
+
       case 'BATCH_ORGANIZE':
       case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
         // Re-execute each file operation in the batch
@@ -214,7 +220,7 @@ class UndoRedoService {
           await this.executeFileOperation(operation);
         }
         break;
-        
+
       default:
         throw new Error(`Unknown action type: ${action.type}`);
     }
@@ -229,7 +235,10 @@ class UndoRedoService {
         await fs.rename(operation.newPath, operation.originalPath);
         break;
       case 'delete':
-        if (operation.backupPath && await this.fileExists(operation.backupPath)) {
+        if (
+          operation.backupPath &&
+          (await this.fileExists(operation.backupPath))
+        ) {
           await fs.rename(operation.backupPath, operation.originalPath);
         }
         break;
@@ -285,22 +294,28 @@ class UndoRedoService {
   }
 
   getActionHistory(limit = 10) {
-    const history = this.actions.slice(Math.max(0, this.currentIndex - limit + 1), this.currentIndex + 1);
-    return history.map(action => ({
+    const history = this.actions.slice(
+      Math.max(0, this.currentIndex - limit + 1),
+      this.currentIndex + 1,
+    );
+    return history.map((action) => ({
       id: action.id,
       description: action.description,
       timestamp: action.timestamp,
-      type: action.type
+      type: action.type,
     }));
   }
 
   getRedoHistory(limit = 10) {
-    const history = this.actions.slice(this.currentIndex + 1, this.currentIndex + 1 + limit);
-    return history.map(action => ({
+    const history = this.actions.slice(
+      this.currentIndex + 1,
+      this.currentIndex + 1 + limit,
+    );
+    return history.map((action) => ({
       id: action.id,
       description: action.description,
       timestamp: action.timestamp,
-      type: action.type
+      type: action.type,
     }));
   }
 
@@ -311,4 +326,4 @@ class UndoRedoService {
   }
 }
 
-module.exports = UndoRedoService; 
+module.exports = UndoRedoService;

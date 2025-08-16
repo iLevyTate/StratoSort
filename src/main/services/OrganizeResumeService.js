@@ -7,11 +7,19 @@ const fs = require('fs').promises;
  *
  * Dependencies are injected for testability and modularity.
  */
-async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow) {
+async function resumeIncompleteBatches(
+  serviceIntegration,
+  logger,
+  getMainWindow,
+) {
   try {
-    const incomplete = serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() || [];
+    const incomplete =
+      serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() ||
+      [];
     if (!incomplete.length) return;
-    logger.warn(`[RESUME] Resuming ${incomplete.length} incomplete organize batch(es)`);
+    logger.warn(
+      `[RESUME] Resuming ${incomplete.length} incomplete organize batch(es)`,
+    );
 
     for (const batch of incomplete) {
       const total = batch.operations.length;
@@ -24,13 +32,16 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
               type: 'batch_organize',
               current: i + 1,
               total,
-              currentFile: path.basename(op.source)
+              currentFile: path.basename(op.source),
             });
           }
           continue;
         }
         try {
-          await serviceIntegration.processingState.markOrganizeOpStarted(batch.id, i);
+          await serviceIntegration.processingState.markOrganizeOpStarted(
+            batch.id,
+            i,
+          );
 
           // Ensure destination directory exists
           const destDir = path.dirname(op.destination);
@@ -67,7 +78,9 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
               const sourceStats = await fs.stat(op.source);
               const destStats = await fs.stat(op.destination);
               if (sourceStats.size !== destStats.size) {
-                throw new Error('File copy verification failed - size mismatch');
+                throw new Error(
+                  'File copy verification failed - size mismatch',
+                );
               }
               await fs.unlink(op.source);
             } else {
@@ -75,7 +88,11 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
             }
           }
 
-          await serviceIntegration.processingState.markOrganizeOpDone(batch.id, i, { destination: op.destination });
+          await serviceIntegration.processingState.markOrganizeOpDone(
+            batch.id,
+            i,
+            { destination: op.destination },
+          );
 
           const win = getMainWindow?.();
           if (win && !win.isDestroyed()) {
@@ -83,15 +100,32 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
               type: 'batch_organize',
               current: i + 1,
               total,
-              currentFile: path.basename(op.source)
+              currentFile: path.basename(op.source),
             });
           }
         } catch (err) {
-          logger?.warn?.('[RESUME] Failed to resume op', i + 1, 'in batch', batch.id, ':', err.message);
-          try { await serviceIntegration.processingState.markOrganizeOpError(batch.id, i, err.message); } catch {}
+          logger?.warn?.(
+            '[RESUME] Failed to resume op',
+            i + 1,
+            'in batch',
+            batch.id,
+            ':',
+            err.message,
+          );
+          try {
+            await serviceIntegration.processingState.markOrganizeOpError(
+              batch.id,
+              i,
+              err.message,
+            );
+          } catch {}
         }
       }
-      try { await serviceIntegration.processingState.completeOrganizeBatch(batch.id); } catch {}
+      try {
+        await serviceIntegration.processingState.completeOrganizeBatch(
+          batch.id,
+        );
+      } catch {}
       logger?.info?.('[RESUME] Completed batch resume:', batch.id);
     }
   } catch (e) {
@@ -102,5 +136,3 @@ async function resumeIncompleteBatches(serviceIntegration, logger, getMainWindow
 module.exports = {
   resumeIncompleteBatches,
 };
-
-

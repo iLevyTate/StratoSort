@@ -1,18 +1,38 @@
-import React, { createContext, useCallback, useContext, useEffect } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+} from 'react';
 import { ToastContainer, useToast } from '../components/Toast';
 
 const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
-  const { toasts, addToast, removeToast, clearAllToasts, showSuccess, showError, showWarning, showInfo } = useToast();
+  const {
+    toasts,
+    addToast,
+    removeToast,
+    clearAllToasts,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
+  } = useToast();
 
-  const addNotification = useCallback((message, severity = 'info', duration = 3000, groupKey = null) => {
-    return addToast(message, severity, duration, groupKey);
-  }, [addToast]);
+  const addNotification = useCallback(
+    (message, severity = 'info', duration = 3000, groupKey = null) => {
+      return addToast(message, severity, duration, groupKey);
+    },
+    [addToast],
+  );
 
-  const removeNotification = useCallback((id) => {
-    removeToast(id);
-  }, [removeToast]);
+  const removeNotification = useCallback(
+    (id) => {
+      removeToast(id);
+    },
+    [removeToast],
+  );
 
   // Bridge main-process errors into our styled UI (toast/modal), avoiding OS dialogs
   useEffect(() => {
@@ -35,26 +55,31 @@ export function NotificationProvider({ children }) {
   }, [showError, showWarning, showInfo]);
 
   return (
-    <NotificationContext.Provider value={{ 
-      notifications: toasts, 
-      addNotification, 
-      removeNotification,
-      clearAllNotifications: clearAllToasts,
-      showSuccess,
-      showError, 
-      showWarning,
-      showInfo
-    }}>
+    <NotificationContext.Provider
+      value={{
+        notifications: toasts,
+        addNotification,
+        removeNotification,
+        clearAllNotifications: clearAllToasts,
+        showSuccess,
+        showError,
+        showWarning,
+        showInfo,
+      }}
+    >
       {children}
-      <ToastContainer toasts={toasts} onRemoveToast={removeToast} onClearAll={clearAllToasts} />
+      <ToastContainer
+        toasts={toasts}
+        onRemoveToast={removeToast}
+        onClearAll={clearAllToasts}
+      />
     </NotificationContext.Provider>
   );
 }
 
 export function useNotification() {
   const context = useContext(NotificationContext);
-  if (!context) throw new Error('useNotification must be used within NotificationProvider');
+  if (!context)
+    throw new Error('useNotification must be used within NotificationProvider');
   return context;
 }
-
-

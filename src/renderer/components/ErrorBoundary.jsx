@@ -18,7 +18,11 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     // Log the error for visibility in development and production logs
     // eslint-disable-next-line no-console
-    console.error('[RENDERER] Unhandled error caught by ErrorBoundary:', error, info);
+    console.error(
+      '[RENDERER] Unhandled error caught by ErrorBoundary:',
+      error,
+      info,
+    );
   }
 
   render() {
@@ -36,4 +40,3 @@ class ErrorBoundary extends React.Component {
 }
 
 export default ErrorBoundary;
-

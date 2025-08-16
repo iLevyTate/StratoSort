@@ -35,12 +35,12 @@ class ProcessingStateService {
       updatedAt: now,
       analysis: {
         jobs: {}, // key: filePath, value: { status: 'pending'|'in_progress'|'done'|'failed', startedAt, completedAt, error }
-        lastUpdated: now
+        lastUpdated: now,
       },
       organize: {
         batches: {}, // key: batchId, value: { id, operations: [{ source, destination, status, error }], startedAt, completedAt }
-        lastUpdated: now
-      }
+        lastUpdated: now,
+      },
     };
   }
 
@@ -74,7 +74,7 @@ class ProcessingStateService {
       status: 'in_progress',
       startedAt: now,
       completedAt: null,
-      error: null
+      error: null,
     };
     this.state.analysis.lastUpdated = now;
     await this.saveState();
@@ -87,7 +87,7 @@ class ProcessingStateService {
       ...(this.state.analysis.jobs[filePath] || {}),
       status: 'done',
       completedAt: now,
-      error: null
+      error: null,
     };
     this.state.analysis.lastUpdated = now;
     await this.saveState();
@@ -100,7 +100,7 @@ class ProcessingStateService {
       ...(this.state.analysis.jobs[filePath] || {}),
       status: 'failed',
       completedAt: now,
-      error: errorMessage || 'Unknown analysis error'
+      error: errorMessage || 'Unknown analysis error',
     };
     this.state.analysis.lastUpdated = now;
     await this.saveState();
@@ -120,9 +120,13 @@ class ProcessingStateService {
     if (!this.state.organize.batches[batchId]) {
       this.state.organize.batches[batchId] = {
         id: batchId,
-        operations: operations.map(op => ({ ...op, status: 'pending', error: null })),
+        operations: operations.map((op) => ({
+          ...op,
+          status: 'pending',
+          error: null,
+        })),
         startedAt: now,
-        completedAt: null
+        completedAt: null,
       };
       this.state.organize.lastUpdated = now;
       await this.saveState();
@@ -174,11 +178,10 @@ class ProcessingStateService {
 
   getIncompleteOrganizeBatches() {
     if (!this.state) return [];
-    return Object.values(this.state.organize.batches)
-      .filter(batch => !batch.completedAt);
+    return Object.values(this.state.organize.batches).filter(
+      (batch) => !batch.completedAt,
+    );
   }
 }
 
 module.exports = ProcessingStateService;
-
-

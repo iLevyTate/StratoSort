@@ -1,31 +1,48 @@
-const { getOllamaModel, loadOllamaConfig, getOllamaClient } = require('../ollamaUtils');
+const {
+  getOllamaModel,
+  loadOllamaConfig,
+  getOllamaClient,
+} = require('../ollamaUtils');
 const { AI_DEFAULTS } = require('../../shared/constants');
 
-const AppConfig = { ai: { textAnalysis: {
-  defaultModel: AI_DEFAULTS.TEXT.MODEL,
-  defaultHost: AI_DEFAULTS.TEXT.HOST,
-  timeout: 60000,
-  maxContentLength: AI_DEFAULTS.TEXT.MAX_CONTENT_LENGTH,
-  temperature: AI_DEFAULTS.TEXT.TEMPERATURE,
-  maxTokens: AI_DEFAULTS.TEXT.MAX_TOKENS,
-} } };
+const AppConfig = {
+  ai: {
+    textAnalysis: {
+      defaultModel: AI_DEFAULTS.TEXT.MODEL,
+      defaultHost: AI_DEFAULTS.TEXT.HOST,
+      timeout: 60000,
+      maxContentLength: AI_DEFAULTS.TEXT.MAX_CONTENT_LENGTH,
+      temperature: AI_DEFAULTS.TEXT.TEMPERATURE,
+      maxTokens: AI_DEFAULTS.TEXT.MAX_TOKENS,
+    },
+  },
+};
 
 // Use shared client from ollamaUtils
 
-async function analyzeTextWithOllama(textContent, originalFileName, smartFolders = []) {
+async function analyzeTextWithOllama(
+  textContent,
+  originalFileName,
+  smartFolders = [],
+) {
   try {
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       const validFolders = smartFolders
-        .filter(f => f && typeof f.name === 'string' && f.name.trim().length > 0)
+        .filter(
+          (f) => f && typeof f.name === 'string' && f.name.trim().length > 0,
+        )
         .slice(0, 10)
-        .map(f => ({
+        .map((f) => ({
           name: f.name.trim().slice(0, 50),
-          description: (f.description || '').trim().slice(0, 140)
+          description: (f.description || '').trim().slice(0, 140),
         }));
       if (validFolders.length > 0) {
         const folderListDetailed = validFolders
-          .map((f, i) => `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`)
+          .map(
+            (f, i) =>
+              `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`,
+          )
           .join('\n');
         folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the document's CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
       }
@@ -56,7 +73,11 @@ Document content (${textContent.length} characters):
 ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
 
     const cfg = await loadOllamaConfig();
-    const modelToUse = getOllamaModel() || cfg.selectedTextModel || cfg.selectedModel || AppConfig.ai.textAnalysis.defaultModel;
+    const modelToUse =
+      getOllamaModel() ||
+      cfg.selectedTextModel ||
+      cfg.selectedModel ||
+      AppConfig.ai.textAnalysis.defaultModel;
     const client = await getOllamaClient();
     const response = await client.generate({
       model: modelToUse,
@@ -73,21 +94,47 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
         const parsedJson = JSON.parse(response.response);
         if (parsedJson.date) {
           try {
-            parsedJson.date = new Date(parsedJson.date).toISOString().split('T')[0];
-          } catch { delete parsedJson.date; }
+            parsedJson.date = new Date(parsedJson.date)
+              .toISOString()
+              .split('T')[0];
+          } catch {
+            delete parsedJson.date;
+          }
         }
-        const finalKeywords = Array.isArray(parsedJson.keywords) ? parsedJson.keywords : [];
-        if (!parsedJson.confidence || parsedJson.confidence < 60 || parsedJson.confidence > 100) {
+        const finalKeywords = Array.isArray(parsedJson.keywords)
+          ? parsedJson.keywords
+          : [];
+        if (
+          !parsedJson.confidence ||
+          parsedJson.confidence < 60 ||
+          parsedJson.confidence > 100
+        ) {
           parsedJson.confidence = Math.floor(Math.random() * 30) + 70;
         }
-        return { rawText: textContent.substring(0, 2000), ...parsedJson, keywords: finalKeywords };
+        return {
+          rawText: textContent.substring(0, 2000),
+          ...parsedJson,
+          keywords: finalKeywords,
+        };
       } catch (e) {
-        return { error: 'Failed to parse document analysis from Ollama.', keywords: [], confidence: 65 };
+        return {
+          error: 'Failed to parse document analysis from Ollama.',
+          keywords: [],
+          confidence: 65,
+        };
       }
     }
-    return { error: 'No content in Ollama response for document', keywords: [], confidence: 60 };
+    return {
+      error: 'No content in Ollama response for document',
+      keywords: [],
+      confidence: 60,
+    };
   } catch (error) {
-    return { error: `Ollama API error for document: ${error.message}`, keywords: [], confidence: 60 };
+    return {
+      error: `Ollama API error for document: ${error.message}`,
+      keywords: [],
+      confidence: 60,
+    };
   }
 }
 
@@ -96,5 +143,3 @@ module.exports = {
   getOllamaClient,
   analyzeTextWithOllama,
 };
-
-

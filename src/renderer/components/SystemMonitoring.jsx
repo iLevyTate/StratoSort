@@ -5,7 +5,7 @@ function SystemMonitoring() {
     uptime: 0,
     cpu: 0,
     memory: { used: 0, total: 0 },
-    disk: { used: 0, total: 0 }
+    disk: { used: 0, total: 0 },
   });
   const [isMonitoring, setIsMonitoring] = useState(false);
 
@@ -30,11 +30,18 @@ function SystemMonitoring() {
       }
     };
     startMonitoring();
-    return () => { if (intervalId) clearInterval(intervalId); setIsMonitoring(false); };
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      setIsMonitoring(false);
+    };
   }, []);
 
   if (!isMonitoring) {
-    return <div className="text-sm text-system-gray-500">System monitoring unavailable</div>;
+    return (
+      <div className="text-sm text-system-gray-500">
+        System monitoring unavailable
+      </div>
+    );
   }
 
   return (
@@ -43,19 +50,31 @@ function SystemMonitoring() {
       <div className="grid grid-cols-2 gap-8 text-sm">
         <div>
           <span className="text-system-gray-600">CPU:</span>
-          <span className="ml-2 font-medium">{systemMetrics.cpu?.toFixed(1) || 0}%</span>
+          <span className="ml-2 font-medium">
+            {systemMetrics.cpu?.toFixed(1) || 0}%
+          </span>
         </div>
         <div>
           <span className="text-system-gray-600">Memory:</span>
-          <span className="ml-2 font-medium">{systemMetrics.memory?.used || 0} / {systemMetrics.memory?.total || 0} MB</span>
+          <span className="ml-2 font-medium">
+            {systemMetrics.memory?.used || 0} /{' '}
+            {systemMetrics.memory?.total || 0} MB
+          </span>
         </div>
         <div>
           <span className="text-system-gray-600">Uptime:</span>
-          <span className="ml-2 font-medium">{Math.floor((systemMetrics.uptime || 0) / 60)}m</span>
+          <span className="ml-2 font-medium">
+            {Math.floor((systemMetrics.uptime || 0) / 60)}m
+          </span>
         </div>
         <div>
           <span className="text-system-gray-600">Disk:</span>
-          <span className="ml-2 font-medium">{((systemMetrics.disk?.used || 0) / (1024*1024*1024)).toFixed(1)}GB used</span>
+          <span className="ml-2 font-medium">
+            {((systemMetrics.disk?.used || 0) / (1024 * 1024 * 1024)).toFixed(
+              1,
+            )}
+            GB used
+          </span>
         </div>
       </div>
     </div>
@@ -63,5 +82,3 @@ function SystemMonitoring() {
 }
 
 export default SystemMonitoring;
-
-

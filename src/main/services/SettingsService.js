@@ -18,7 +18,7 @@ class SettingsService {
       ollamaHost: 'http://127.0.0.1:11434',
       textModel: 'llama3.2:latest',
       visionModel: 'llava:latest',
-      embeddingModel: 'mxbai-embed-large'
+      embeddingModel: 'mxbai-embed-large',
     };
   }
 
@@ -29,7 +29,10 @@ class SettingsService {
       return { ...this.defaults, ...parsed };
     } catch (err) {
       if (err && err.code !== 'ENOENT') {
-        console.warn('[SETTINGS] Failed to read settings, using defaults:', err.message);
+        console.warn(
+          '[SETTINGS] Failed to read settings, using defaults:',
+          err.message,
+        );
       }
       return { ...this.defaults };
     }
@@ -40,7 +43,7 @@ class SettingsService {
     await fs.mkdir(path.dirname(this.settingsPath), { recursive: true });
     const result = await backupAndReplace(
       this.settingsPath,
-      JSON.stringify(merged, null, 2)
+      JSON.stringify(merged, null, 2),
     );
     if (!result.success) {
       throw new Error(result.error || 'Failed to save settings');

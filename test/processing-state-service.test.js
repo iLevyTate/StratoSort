@@ -14,7 +14,9 @@ describe('ProcessingStateService', () => {
   });
 
   afterEach(async () => {
-    try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test('tracks analysis jobs lifecycle', async () => {
@@ -35,7 +37,7 @@ describe('ProcessingStateService', () => {
     const batchId = 'batch-test';
     const ops = [
       { source: '/from/a.txt', destination: '/to/a.txt' },
-      { source: '/from/b.txt', destination: '/to/b.txt' }
+      { source: '/from/b.txt', destination: '/to/b.txt' },
     ];
 
     const batch = await svc.createOrLoadOrganizeBatch(batchId, ops);
@@ -49,8 +51,8 @@ describe('ProcessingStateService', () => {
 
     const incomplete = svc.getIncompleteOrganizeBatches();
     expect(Array.isArray(incomplete)).toBe(true);
-    expect(incomplete.length === 0 || incomplete.every(b => !!b.completedAt)).toBe(true);
+    expect(
+      incomplete.length === 0 || incomplete.every((b) => !!b.completedAt),
+    ).toBe(true);
   });
 });
-
-

@@ -14,7 +14,9 @@ async function extractTextFromPdf(filePath, fileName) {
   const dataBuffer = await fs.readFile(filePath);
   const pdfData = await pdf(dataBuffer);
   if (!pdfData.text || pdfData.text.trim().length === 0) {
-    throw new FileProcessingError('PDF_NO_TEXT_CONTENT', fileName, { suggestion: 'PDF may be image-based or corrupted' });
+    throw new FileProcessingError('PDF_NO_TEXT_CONTENT', fileName, {
+      suggestion: 'PDF may be image-based or corrupted',
+    });
   }
   return pdfData.text;
 }
@@ -23,7 +25,11 @@ async function ocrPdfIfNeeded(filePath) {
   try {
     const pdfBuffer = await fs.readFile(filePath);
     const rasterPng = await sharp(pdfBuffer, { density: 200 }).png().toBuffer();
-    const ocrText = await tesseract.recognize(rasterPng, { lang: 'eng', oem: 1, psm: 3 });
+    const ocrText = await tesseract.recognize(rasterPng, {
+      lang: 'eng',
+      oem: 1,
+      psm: 3,
+    });
     return ocrText && ocrText.trim().length > 0 ? ocrText : '';
   } catch {
     return '';
@@ -41,7 +47,8 @@ async function extractTextFromDoc(filePath) {
 
 async function extractTextFromDocx(filePath) {
   const result = await mammoth.extractRawText({ path: filePath });
-  if (!result.value || result.value.trim().length === 0) throw new Error('No text content in DOCX');
+  if (!result.value || result.value.trim().length === 0)
+    throw new Error('No text content in DOCX');
   return result.value;
 }
 
@@ -56,7 +63,10 @@ async function extractTextFromXlsx(filePath) {
       if (Array.isArray(values)) {
         for (const row of values) {
           if (Array.isArray(row)) {
-            allText += row.filter(cell => cell !== null && cell !== undefined).join(' ') + '\n';
+            allText +=
+              row
+                .filter((cell) => cell !== null && cell !== undefined)
+                .join(' ') + '\n';
           }
         }
       }
@@ -69,15 +79,21 @@ async function extractTextFromXlsx(filePath) {
 
 async function extractTextFromPptx(filePath) {
   const result = await officeParser.parseOfficeAsync(filePath);
-  const text = typeof result === 'string' ? result : (result && result.text) || '';
-  if (!text || text.trim().length === 0) throw new Error('No text content in PPTX');
+  const text =
+    typeof result === 'string' ? result : (result && result.text) || '';
+  if (!text || text.trim().length === 0)
+    throw new Error('No text content in PPTX');
   return text;
 }
 
 function extractPlainTextFromRtf(rtf) {
   try {
     const decoded = rtf.replace(/\\'([0-9a-fA-F]{2})/g, (_, hex) => {
-      try { return String.fromCharCode(parseInt(hex, 16)); } catch { return ''; }
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return '';
+      }
     });
     const noGroups = decoded.replace(/[{}]/g, '');
     const noControls = noGroups.replace(/\\[a-zA-Z]+-?\d* ?/g, '');
@@ -90,7 +106,10 @@ function extractPlainTextFromRtf(rtf) {
 function extractPlainTextFromHtml(html) {
   try {
     const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, '');
-    const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, '');
+    const withoutStyles = withoutScripts.replace(
+      /<style[\s\S]*?<\/style>/gi,
+      '',
+    );
     const withoutTags = withoutStyles.replace(/<[^>]+>/g, ' ');
     const entitiesDecoded = withoutTags
       .replace(/&nbsp;/g, ' ')
@@ -120,7 +139,11 @@ async function extractTextFromEpub(filePath) {
   let text = '';
   for (const e of entries) {
     const name = e.entryName.toLowerCase();
-    if (name.endsWith('.xhtml') || name.endsWith('.html') || name.endsWith('.htm')) {
+    if (
+      name.endsWith('.xhtml') ||
+      name.endsWith('.html') ||
+      name.endsWith('.htm')
+    ) {
       try {
         const html = e.getData().toString('utf8');
         text += extractPlainTextFromHtml(html) + '\n';
@@ -135,9 +158,9 @@ async function extractTextFromEml(filePath) {
   const parts = raw.split(/\r?\n\r?\n/);
   const headers = parts[0] || '';
   const body = parts.slice(1).join('\n\n');
-  const subject = (headers.match(/^Subject:\s*(.*)$/mi) || [])[1] || '';
-  const from = (headers.match(/^From:\s*(.*)$/mi) || [])[1] || '';
-  const to = (headers.match(/^To:\s*(.*)$/mi) || [])[1] || '';
+  const subject = (headers.match(/^Subject:\s*(.*)$/im) || [])[1] || '';
+  const from = (headers.match(/^From:\s*(.*)$/im) || [])[1] || '';
+  const to = (headers.match(/^To:\s*(.*)$/im) || [])[1] || '';
   return [subject, from, to, body].filter(Boolean).join('\n');
 }
 
@@ -145,7 +168,8 @@ async function extractTextFromMsg(filePath) {
   // Best-effort using officeparser; if unavailable, return empty string
   try {
     const result = await officeParser.parseOfficeAsync(filePath);
-    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    const text =
+      typeof result === 'string' ? result : (result && result.text) || '';
     return text || '';
   } catch {
     return '';
@@ -159,7 +183,9 @@ async function extractTextFromKml(filePath) {
 
 async function extractTextFromKmz(filePath) {
   const zip = new AdmZip(filePath);
-  let kmlEntry = zip.getEntry('doc.kml') || zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.kml'));
+  const kmlEntry =
+    zip.getEntry('doc.kml') ||
+    zip.getEntries().find((e) => e.entryName.toLowerCase().endsWith('.kml'));
   if (!kmlEntry) return '';
   const xml = kmlEntry.getData().toString('utf8');
   return extractPlainTextFromHtml(xml);
@@ -168,7 +194,8 @@ async function extractTextFromKmz(filePath) {
 async function extractTextFromXls(filePath) {
   try {
     const result = await officeParser.parseOfficeAsync(filePath);
-    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    const text =
+      typeof result === 'string' ? result : (result && result.text) || '';
     if (text && text.trim()) return text;
   } catch {}
   return '';
@@ -177,7 +204,8 @@ async function extractTextFromXls(filePath) {
 async function extractTextFromPpt(filePath) {
   try {
     const result = await officeParser.parseOfficeAsync(filePath);
-    const text = typeof result === 'string' ? result : (result && result.text) || '';
+    const text =
+      typeof result === 'string' ? result : (result && result.text) || '';
     return text || '';
   } catch {
     return '';
@@ -202,5 +230,3 @@ module.exports = {
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
 };
-
-

@@ -22,12 +22,12 @@ function createMainWindow() {
       backgroundThrottling: false,
       devTools: isDev,
       hardwareAcceleration: true,
-      enableWebGL: true
+      enableWebGL: true,
     },
     icon: path.join(__dirname, '../../../assets/stratosort-logo.png'),
     show: false,
     titleBarStyle: 'default',
-    autoHideMenuBar: !isDev
+    autoHideMenuBar: !isDev,
   });
 
   logger.debug('[DEBUG] BrowserWindow created');
@@ -38,7 +38,10 @@ function createMainWindow() {
       logger.info('Loading from built files instead...');
       const distPath = path.join(__dirname, '../../../dist/index.html');
       win.loadFile(distPath).catch((fileError) => {
-        logger.error('Failed to load from built files, trying original:', fileError);
+        logger.error(
+          'Failed to load from built files, trying original:',
+          fileError,
+        );
         win.loadFile(path.join(__dirname, '../../renderer/index.html'));
       });
     });
@@ -53,25 +56,34 @@ function createMainWindow() {
     });
   }
 
-    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
-      let wsHost = '';
-      try {
-        const url = new URL(ollamaHost);
-        wsHost = url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
-      } catch {
-        wsHost = '';
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+    try {
+      const { getOllamaHost } = require('../ollamaUtils');
+      const configured =
+        typeof getOllamaHost === 'function' ? getOllamaHost() : null;
+      if (configured && typeof configured === 'string') {
+        ollamaHost = configured;
       }
+    } catch {}
+    let wsHost = '';
+    try {
+      const url = new URL(ollamaHost);
+      wsHost =
+        url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+    } catch {
+      wsHost = '';
+    }
 
-      const csp = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
+    const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
 
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [csp]
-        }
-      });
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
     });
+  });
 
   win.once('ready-to-show', () => {
     win.show();
@@ -80,7 +92,7 @@ function createMainWindow() {
     logger.debug('[DEBUG] Window state:', {
       isVisible: win.isVisible(),
       isFocused: win.isFocused(),
-      isMinimized: win.isMinimized()
+      isMinimized: win.isMinimized(),
     });
   });
 
@@ -94,9 +106,9 @@ function createMainWindow() {
       'https://docs.github.com',
       'https://microsoft.com',
       'https://docs.microsoft.com',
-      'https://ollama.ai'
+      'https://ollama.ai',
     ];
-    if (allowedDomains.some(domain => url.startsWith(domain))) {
+    if (allowedDomains.some((domain) => url.startsWith(domain))) {
       shell.openExternal(url);
     }
     return { action: 'deny' };
@@ -106,5 +118,3 @@ function createMainWindow() {
 }
 
 module.exports = createMainWindow;
-
-

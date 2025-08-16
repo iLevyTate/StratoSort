@@ -14,15 +14,18 @@ describe('Embeddings/Semantic IPC', () => {
     const upserts = [];
     jest.doMock('../src/main/services/FolderMatchingService', () =>
       jest.fn().mockImplementation(() => ({
-        upsertFolderEmbedding: jest.fn(async (f) => { upserts.push(f); return f; }),
-        upsertFileEmbedding: jest.fn(async () => {})
-      }))
+        upsertFolderEmbedding: jest.fn(async (f) => {
+          upserts.push(f);
+          return f;
+        }),
+        upsertFileEmbedding: jest.fn(async () => {}),
+      })),
     );
     jest.doMock('../src/main/services/EmbeddingIndexService', () =>
       jest.fn().mockImplementation(() => ({
         resetFolders: jest.fn(async () => {}),
         resetFiles: jest.fn(async () => {}),
-      }))
+      })),
     );
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
@@ -34,11 +37,17 @@ describe('Embeddings/Semantic IPC', () => {
       IPC_CHANNELS,
       logger,
       systemAnalytics: { collectMetrics: jest.fn(async () => ({})) },
-      getServiceIntegration: () => ({ analysisHistory: { getRecentAnalysis: jest.fn(async () => []) } }),
-      getCustomFolders: () => ([{ id: '1', name: 'Finance', description: 'Invoices' }])
+      getServiceIntegration: () => ({
+        analysisHistory: { getRecentAnalysis: jest.fn(async () => []) },
+      }),
+      getCustomFolders: () => [
+        { id: '1', name: 'Finance', description: 'Invoices' },
+      ],
     });
 
-    const handler = ipcMain._handlers.get(IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS);
+    const handler = ipcMain._handlers.get(
+      IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS,
+    );
     const result = await handler();
     expect(result).toMatchObject({ success: true });
     expect(upserts.length).toBe(1);
@@ -52,22 +61,31 @@ describe('Embeddings/Semantic IPC', () => {
     jest.doMock('../src/main/services/FolderMatchingService', () =>
       jest.fn().mockImplementation(() => ({
         upsertFolderEmbedding: jest.fn(async () => {}),
-        upsertFileEmbedding: jest.fn(async (id, summary) => { inserted.push({ id, summary }); })
-      }))
+        upsertFileEmbedding: jest.fn(async (id, summary) => {
+          inserted.push({ id, summary });
+        }),
+      })),
     );
     jest.doMock('../src/main/services/EmbeddingIndexService', () =>
       jest.fn().mockImplementation(() => ({
         resetFolders: jest.fn(async () => {}),
         resetFiles: jest.fn(async () => {}),
-      }))
+      })),
     );
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     const mockHistory = {
-      getRecentAnalysis: jest.fn(async () => ([{
-        originalPath: 'C:/docs/report.pdf',
-        analysis: { subject: 'Q1', summary: 'Quarterly report', tags: ['finance'], extractedText: 'numbers' }
-      }]))
+      getRecentAnalysis: jest.fn(async () => [
+        {
+          originalPath: 'C:/docs/report.pdf',
+          analysis: {
+            subject: 'Q1',
+            summary: 'Quarterly report',
+            tags: ['finance'],
+            extractedText: 'numbers',
+          },
+        },
+      ]),
     };
 
     registerAllIpc({
@@ -76,10 +94,12 @@ describe('Embeddings/Semantic IPC', () => {
       logger,
       systemAnalytics: { collectMetrics: jest.fn(async () => ({})) },
       getServiceIntegration: () => ({ analysisHistory: mockHistory }),
-      getCustomFolders: () => ([{ id: '1', name: 'Finance' }])
+      getCustomFolders: () => [{ id: '1', name: 'Finance' }],
     });
 
-    const handler = ipcMain._handlers.get(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES);
+    const handler = ipcMain._handlers.get(
+      IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES,
+    );
     const result = await handler();
     expect(result.success).toBe(true);
     expect(result.files).toBe(1);
@@ -94,8 +114,10 @@ describe('Embeddings/Semantic IPC', () => {
     const resetAllCalls = [];
     jest.doMock('../src/main/services/EmbeddingIndexService', () =>
       jest.fn().mockImplementation(() => ({
-        resetAll: jest.fn(async () => { resetAllCalls.push(1); })
-      }))
+        resetAll: jest.fn(async () => {
+          resetAllCalls.push(1);
+        }),
+      })),
     );
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
@@ -104,8 +126,10 @@ describe('Embeddings/Semantic IPC', () => {
       IPC_CHANNELS,
       logger,
       systemAnalytics: { collectMetrics: jest.fn(async () => ({})) },
-      getServiceIntegration: () => ({ analysisHistory: { getRecentAnalysis: jest.fn(async () => []) } }),
-      getCustomFolders: () => ([])
+      getServiceIntegration: () => ({
+        analysisHistory: { getRecentAnalysis: jest.fn(async () => []) },
+      }),
+      getCustomFolders: () => [],
     });
 
     const handler = ipcMain._handlers.get(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE);
@@ -114,5 +138,3 @@ describe('Embeddings/Semantic IPC', () => {
     expect(resetAllCalls.length).toBe(1);
   });
 });
-
-

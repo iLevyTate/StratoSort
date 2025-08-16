@@ -1,5 +1,6 @@
 const { Ollama } = require('ollama');
-const { withErrorLogging } = require('./withErrorLogging');
+const { withErrorLogging, withValidation } = require('./withErrorLogging');
+let z; try { z = require('zod'); } catch { z = null; }
 
 function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getOllama, getOllamaModel, getOllamaVisionModel, getOllamaEmbeddingModel, getOllamaHost }) {
   ipcMain.handle(IPC_CHANNELS.OLLAMA.GET_MODELS, withErrorLogging(logger, async () => {
@@ -37,7 +38,22 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
     }
   }));
 
-  ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, withErrorLogging(logger, async (event, hostUrl) => {
+  const hostSchema = z ? z.string().url().or(z.string().length(0)).optional() : null;
+  ipcMain.handle(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, (z && hostSchema)
+    ? withValidation(logger, hostSchema, async (event, hostUrl) => {
+      try {
+        const testUrl = hostUrl || 'http://127.0.0.1:11434';
+        const testOllama = new Ollama({ host: testUrl });
+        const response = await testOllama.list();
+        systemAnalytics.ollamaHealth = { status: 'healthy', host: testUrl, modelCount: response.models.length, lastCheck: Date.now() };
+        return { success: true, host: testUrl, modelCount: response.models.length, models: response.models.map(m => m.name), ollamaHealth: systemAnalytics.ollamaHealth };
+      } catch (error) {
+        logger.error('[IPC] Ollama connection test failed:', error);
+        systemAnalytics.ollamaHealth = { status: 'unhealthy', host: hostUrl || 'http://localhost:11434', error: error.message, lastCheck: Date.now() };
+        return { success: false, host: hostUrl || 'http://127.0.0.1:11434', error: error.message, ollamaHealth: systemAnalytics.ollamaHealth };
+      }
+    })
+    : withErrorLogging(logger, async (event, hostUrl) => {
     try {
       const testUrl = hostUrl || 'http://127.0.0.1:11434';
       const testOllama = new Ollama({ host: testUrl });
@@ -49,7 +65,8 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
       systemAnalytics.ollamaHealth = { status: 'unhealthy', host: hostUrl || 'http://localhost:11434', error: error.message, lastCheck: Date.now() };
       return { success: false, host: hostUrl || 'http://127.0.0.1:11434', error: error.message, ollamaHealth: systemAnalytics.ollamaHealth };
     }
-  }));
+    })
+  );
 }
 
 module.exports = registerOllamaIpc;

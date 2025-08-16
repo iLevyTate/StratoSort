@@ -1,4 +1,5 @@
-const { withErrorLogging } = require('./withErrorLogging');
+const { withErrorLogging, withValidation } = require('./withErrorLogging');
+let z; try { z = require('zod'); } catch { z = null; }
 
 function registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration }) {
   ipcMain.handle(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS, withErrorLogging(logger, async () => {

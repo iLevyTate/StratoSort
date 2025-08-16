@@ -2,9 +2,13 @@ const path = require('path');
 const fs = require('fs').promises;
 const { app } = require('electron');
 const { SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_ARCHIVE_EXTENSIONS, ACTION_TYPES } = require('../../shared/constants');
-const { withErrorLogging } = require('./withErrorLogging');
+const { withErrorLogging, withValidation } = require('./withErrorLogging');
+let z;
+try { z = require('zod'); } catch { z = null; }
 
 function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMainWindow, getServiceIntegration }) {
+  const stringSchema = z ? z.string().min(1) : null;
+  const opSchema = z ? z.object({ type: z.enum(['move','copy','delete','batch_organize']), source: z.string().optional(), destination: z.string().optional(), operations: z.array(z.object({ source: z.string(), destination: z.string(), type: z.string().optional() })).optional() }) : null;
   // Select files (and folders scanned shallowly)
   ipcMain.handle(IPC_CHANNELS.FILES.SELECT, withErrorLogging(logger, async () => {
     logger.info('[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====');
@@ -120,10 +124,17 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
     try { return app.getPath('documents'); } catch (error) { logger.error('Failed to get documents path:', error); return null; }
   }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS, withErrorLogging(logger, async (event, filePath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.GET_FILE_STATS,
+    (z && stringSchema)
+      ? withValidation(logger, stringSchema, async (event, filePath) => {
+          try { const stats = await fs.stat(filePath); return { size: stats.size, isDirectory: stats.isDirectory(), isFile: stats.isFile(), modified: stats.mtime, created: stats.birthtime }; }
+          catch (error) { logger.error('Failed to get file stats:', error); return null; }
+        })
+      : withErrorLogging(logger, async (event, filePath) => {
     try { const stats = await fs.stat(filePath); return { size: stats.size, isDirectory: stats.isDirectory(), isFile: stats.isFile(), modified: stats.mtime, created: stats.birthtime }; }
     catch (error) { logger.error('Failed to get file stats:', error); return null; }
-  }));
+        })
+  );
   ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER, withErrorLogging(logger, async (event, basePath, folderName) => {
     try {
       const folderPath = path.join(basePath, folderName);
@@ -136,7 +147,31 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
     }
   }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT, withErrorLogging(logger, async (event, fullPath) => {
+  ipcMain.handle(IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT,
+    (z && stringSchema)
+      ? withValidation(logger, stringSchema, async (event, fullPath) => {
+          try {
+            const normalizedPath = path.resolve(fullPath);
+            try {
+              const stats = await fs.stat(normalizedPath);
+              if (stats.isDirectory()) {
+                logger.info('[FILE-OPS] Folder already exists:', normalizedPath);
+                return { success: true, path: normalizedPath, existed: true };
+              }
+            } catch {}
+            await fs.mkdir(normalizedPath, { recursive: true });
+            logger.info('[FILE-OPS] Created folder:', normalizedPath);
+            return { success: true, path: normalizedPath, existed: false };
+          } catch (error) {
+            logger.error('[FILE-OPS] Error creating folder:', error);
+            let userMessage = 'Failed to create folder';
+            if (error.code === 'EACCES' || error.code === 'EPERM') userMessage = 'Permission denied - check folder permissions';
+            else if (error.code === 'ENOTDIR') userMessage = 'Invalid path - parent is not a directory';
+            else if (error.code === 'EEXIST') userMessage = 'Folder already exists';
+            return { success: false, error: userMessage, details: error.message, code: error.code };
+          }
+        })
+      : withErrorLogging(logger, async (event, fullPath) => {
     try {
       const normalizedPath = path.resolve(fullPath);
       try {
@@ -157,7 +192,8 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
       else if (error.code === 'EEXIST') userMessage = 'Folder already exists';
       return { success: false, error: userMessage, details: error.message, code: error.code };
     }
-  }));
+        })
+  );
 
   ipcMain.handle(IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY, withErrorLogging(logger, async (event, dirPath) => {
     try {
@@ -176,78 +212,153 @@ function registerFilesIpc({ ipcMain, IPC_CHANNELS, logger, dialog, shell, getMai
     }
   }));
 
-  ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION, withErrorLogging(logger, async (event, operation) => {
-    try {
-      logger.info('[FILE-OPS] Performing operation:', operation.type);
-      logger.info('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
-      switch (operation.type) {
-        case 'move':
-          await fs.rename(operation.source, operation.destination);
+  ipcMain.handle(IPC_CHANNELS.FILES.PERFORM_OPERATION,
+    (z && opSchema)
+      ? withValidation(logger, opSchema, async (event, operation) => {
           try {
-            await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.FILE_MOVE, {
-              originalPath: operation.source,
-              newPath: operation.destination
-            });
-          } catch {}
-          return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
-        case 'copy':
-          await fs.copyFile(operation.source, operation.destination);
-          return { success: true, message: `Copied ${operation.source} to ${operation.destination}` };
-        case 'delete':
-          await fs.unlink(operation.source);
-          return { success: true, message: `Deleted ${operation.source}` };
-        case 'batch_organize': {
-          const results = [];
-          let successCount = 0;
-          let failCount = 0;
-          const batchId = `batch_${Date.now()}`;
-          try {
-            const svc = getServiceIntegration();
-            const batch = await svc?.processingState?.createOrLoadOrganizeBatch(batchId, operation.operations);
-            for (let i = 0; i < batch.operations.length; i += 1) {
-              const op = batch.operations[i];
-              if (op.status === 'done') { results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move', resumed: true }); successCount++; continue; }
-              try {
-                await getServiceIntegration()?.processingState?.markOrganizeOpStarted(batchId, i);
-                if (!op.source || !op.destination) throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
-                const destDir = path.dirname(op.destination);
-                await fs.mkdir(destDir, { recursive: true });
-                try { await fs.access(op.source); } catch { throw new Error(`Source file does not exist: ${op.source}`); }
+            logger.info('[FILE-OPS] Performing operation:', operation.type);
+            logger.info('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
+            switch (operation.type) {
+              case 'move':
+                await fs.rename(operation.source, operation.destination);
                 try {
-                  await fs.access(op.destination);
-                  let counter = 1; let uniqueDestination = op.destination; const ext = path.extname(op.destination); const baseName = op.destination.slice(0, -ext.length);
-                  while (true) { try { await fs.access(uniqueDestination); counter++; uniqueDestination = `${baseName}_${counter}${ext}`; if (counter > 1000) throw new Error('Too many name collisions while generating unique destination'); } catch { break; } }
-                  if (uniqueDestination !== op.destination) op.destination = uniqueDestination;
+                  await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.FILE_MOVE, {
+                    originalPath: operation.source,
+                    newPath: operation.destination
+                  });
                 } catch {}
-                try { await fs.rename(op.source, op.destination); } catch (renameError) { if (renameError.code === 'EXDEV') { await fs.copyFile(op.source, op.destination); const sourceStats = await fs.stat(op.source); const destStats = await fs.stat(op.destination); if (sourceStats.size !== destStats.size) throw new Error('File copy verification failed - size mismatch'); await fs.unlink(op.source); } else { throw renameError; } }
-                await getServiceIntegration()?.processingState?.markOrganizeOpDone(batchId, i, { destination: op.destination });
-                results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move' }); successCount++;
-                const win = getMainWindow();
-                if (win && !win.isDestroyed()) {
-                  win.webContents.send('operation-progress', { type: 'batch_organize', current: i + 1, total: batch.operations.length, currentFile: path.basename(op.source) });
-                }
-              } catch (error) {
-                await getServiceIntegration()?.processingState?.markOrganizeOpError(batchId, i, error.message);
-                results.push({ success: false, source: op.source, destination: op.destination, error: error.message, operation: op.type || 'move' }); failCount++;
+                return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
+              case 'copy':
+                await fs.copyFile(operation.source, operation.destination);
+                return { success: true, message: `Copied ${operation.source} to ${operation.destination}` };
+              case 'delete':
+                await fs.unlink(operation.source);
+                return { success: true, message: `Deleted ${operation.source}` };
+              case 'batch_organize': {
+                const results = [];
+                let successCount = 0;
+                let failCount = 0;
+                const batchId = `batch_${Date.now()}`;
+                try {
+                  const svc = getServiceIntegration();
+                  const batch = await svc?.processingState?.createOrLoadOrganizeBatch(batchId, operation.operations);
+                  for (let i = 0; i < batch.operations.length; i += 1) {
+                    const op = batch.operations[i];
+                    if (op.status === 'done') { results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move', resumed: true }); successCount++; continue; }
+                    try {
+                      await getServiceIntegration()?.processingState?.markOrganizeOpStarted(batchId, i);
+                      if (!op.source || !op.destination) throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
+                      const destDir = path.dirname(op.destination);
+                      await fs.mkdir(destDir, { recursive: true });
+                      try { await fs.access(op.source); } catch { throw new Error(`Source file does not exist: ${op.source}`); }
+                      try {
+                        await fs.access(op.destination);
+                        let counter = 1; let uniqueDestination = op.destination; const ext = path.extname(op.destination); const baseName = op.destination.slice(0, -ext.length);
+                        while (true) { try { await fs.access(uniqueDestination); counter++; uniqueDestination = `${baseName}_${counter}${ext}`; if (counter > 1000) throw new Error('Too many name collisions while generating unique destination'); } catch { break; } }
+                        if (uniqueDestination !== op.destination) op.destination = uniqueDestination;
+                      } catch {}
+                      try { await fs.rename(op.source, op.destination); } catch (renameError) { if (renameError.code === 'EXDEV') { await fs.copyFile(op.source, op.destination); const sourceStats = await fs.stat(op.source); const destStats = await fs.stat(op.destination); if (sourceStats.size !== destStats.size) throw new Error('File copy verification failed - size mismatch'); await fs.unlink(op.source); } else { throw renameError; } }
+                      await getServiceIntegration()?.processingState?.markOrganizeOpDone(batchId, i, { destination: op.destination });
+                      results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move' }); successCount++;
+                      const win = getMainWindow();
+                      if (win && !win.isDestroyed()) {
+                        win.webContents.send('operation-progress', { type: 'batch_organize', current: i + 1, total: batch.operations.length, currentFile: path.basename(op.source) });
+                      }
+                    } catch (error) {
+                      await getServiceIntegration()?.processingState?.markOrganizeOpError(batchId, i, error.message);
+                      results.push({ success: false, source: op.source, destination: op.destination, error: error.message, operation: op.type || 'move' }); failCount++;
+                    }
+                  }
+                  await getServiceIntegration()?.processingState?.completeOrganizeBatch(batchId);
+                  try {
+                    const undoOps = batch.operations.map(op => ({ type: 'move', originalPath: op.source, newPath: op.destination }));
+                    await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.BATCH_OPERATION, { operations: undoOps });
+                  } catch {}
+                } catch {}
+                return { success: successCount > 0, results, successCount, failCount, summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`, batchId };
               }
+              default:
+                logger.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
+                return { success: false, error: `Unknown operation type: ${operation.type}` };
             }
-            await getServiceIntegration()?.processingState?.completeOrganizeBatch(batchId);
-            try {
-              const undoOps = batch.operations.map(op => ({ type: 'move', originalPath: op.source, newPath: op.destination }));
-              await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.BATCH_OPERATION, { operations: undoOps });
-            } catch {}
-          } catch {}
-          return { success: successCount > 0, results, successCount, failCount, summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`, batchId };
-        }
-        default:
-          logger.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
-          return { success: false, error: `Unknown operation type: ${operation.type}` };
-      }
-    } catch (error) {
-      logger.error('[FILE-OPS] Error performing operation:', error);
-      return { success: false, error: error.message };
-    }
-  }));
+          } catch (error) {
+            logger.error('[FILE-OPS] Error performing operation:', error);
+            return { success: false, error: error.message };
+          }
+        })
+      : withErrorLogging(logger, async (event, operation) => {
+          try {
+            logger.info('[FILE-OPS] Performing operation:', operation.type);
+            logger.info('[FILE-OPS] Operation details:', JSON.stringify(operation, null, 2));
+            switch (operation.type) {
+              case 'move':
+                await fs.rename(operation.source, operation.destination);
+                try {
+                  await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.FILE_MOVE, {
+                    originalPath: operation.source,
+                    newPath: operation.destination
+                  });
+                } catch {}
+                return { success: true, message: `Moved ${operation.source} to ${operation.destination}` };
+              case 'copy':
+                await fs.copyFile(operation.source, operation.destination);
+                return { success: true, message: `Copied ${operation.source} to ${operation.destination}` };
+              case 'delete':
+                await fs.unlink(operation.source);
+                return { success: true, message: `Deleted ${operation.source}` };
+              case 'batch_organize': {
+                const results = [];
+                let successCount = 0;
+                let failCount = 0;
+                const batchId = `batch_${Date.now()}`;
+                try {
+                  const svc = getServiceIntegration();
+                  const batch = await svc?.processingState?.createOrLoadOrganizeBatch(batchId, operation.operations);
+                  for (let i = 0; i < batch.operations.length; i += 1) {
+                    const op = batch.operations[i];
+                    if (op.status === 'done') { results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move', resumed: true }); successCount++; continue; }
+                    try {
+                      await getServiceIntegration()?.processingState?.markOrganizeOpStarted(batchId, i);
+                      if (!op.source || !op.destination) throw new Error(`Invalid operation data: source="${op.source}", destination="${op.destination}"`);
+                      const destDir = path.dirname(op.destination);
+                      await fs.mkdir(destDir, { recursive: true });
+                      try { await fs.access(op.source); } catch { throw new Error(`Source file does not exist: ${op.source}`); }
+                      try {
+                        await fs.access(op.destination);
+                        let counter = 1; let uniqueDestination = op.destination; const ext = path.extname(op.destination); const baseName = op.destination.slice(0, -ext.length);
+                        while (true) { try { await fs.access(uniqueDestination); counter++; uniqueDestination = `${baseName}_${counter}${ext}`; if (counter > 1000) throw new Error('Too many name collisions while generating unique destination'); } catch { break; } }
+                        if (uniqueDestination !== op.destination) op.destination = uniqueDestination;
+                      } catch {}
+                      try { await fs.rename(op.source, op.destination); } catch (renameError) { if (renameError.code === 'EXDEV') { await fs.copyFile(op.source, op.destination); const sourceStats = await fs.stat(op.source); const destStats = await fs.stat(op.destination); if (sourceStats.size !== destStats.size) throw new Error('File copy verification failed - size mismatch'); await fs.unlink(op.source); } else { throw renameError; } }
+                      await getServiceIntegration()?.processingState?.markOrganizeOpDone(batchId, i, { destination: op.destination });
+                      results.push({ success: true, source: op.source, destination: op.destination, operation: op.type || 'move' }); successCount++;
+                      const win = getMainWindow();
+                      if (win && !win.isDestroyed()) {
+                        win.webContents.send('operation-progress', { type: 'batch_organize', current: i + 1, total: batch.operations.length, currentFile: path.basename(op.source) });
+                      }
+                    } catch (error) {
+                      await getServiceIntegration()?.processingState?.markOrganizeOpError(batchId, i, error.message);
+                      results.push({ success: false, source: op.source, destination: op.destination, error: error.message, operation: op.type || 'move' }); failCount++;
+                    }
+                  }
+                  await getServiceIntegration()?.processingState?.completeOrganizeBatch(batchId);
+                  try {
+                    const undoOps = batch.operations.map(op => ({ type: 'move', originalPath: op.source, newPath: op.destination }));
+                    await getServiceIntegration()?.undoRedo?.recordAction?.(ACTION_TYPES.BATCH_OPERATION, { operations: undoOps });
+                  } catch {}
+                } catch {}
+                return { success: successCount > 0, results, successCount, failCount, summary: `Processed ${operation.operations.length} files: ${successCount} successful, ${failCount} failed`, batchId };
+              }
+              default:
+                logger.error(`[FILE-OPS] Unknown operation type: ${operation.type}`);
+                return { success: false, error: `Unknown operation type: ${operation.type}` };
+            }
+          } catch (error) {
+            logger.error('[FILE-OPS] Error performing operation:', error);
+            return { success: false, error: error.message };
+          }
+        })
+  );
 
   ipcMain.handle(IPC_CHANNELS.FILES.DELETE_FILE, withErrorLogging(logger, async (event, filePath) => {
     try {

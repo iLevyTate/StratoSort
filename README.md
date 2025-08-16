@@ -16,29 +16,28 @@
 
 ## 🚀 Overview
 
-**StratoSort** is a production-ready, privacy-focused AI document organization system that intelligently categorizes and organizes your files using local AI processing. Built with modern technologies and featuring a beautiful glassmorphism interface, StratoSort provides enterprise-grade file management without compromising your privacy.
+**StratoSort** is a production-ready, privacy-focused AI document organization system that intelligently categorizes and organizes your files using local AI processing (Ollama). It features a modern UI, fast content analysis, semantic folder matching, and safe, undoable batch operations.
 
-## ✅ Feature status
+## ✅ Capabilities
 
-- **Available now**
-  - **Document analysis**: PDFs, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX with Ollama-backed extraction and sensible fallbacks
-  - **Image analysis**: PNG/JPG/JPEG/GIF/BMP/WEBP/TIFF/SVG via vision models; basic OCR support
-  - **Smart folders**: add/edit/delete, directory creation/validation, folder structure scan, semantic matching (embeddings/LLM fallback)
-  - **Batch organize**: conflict-safe moves with progress events and unique-name handling
-  - **Undo/Redo**: action history with confirmation for destructive operations and a history modal
-  - **Analysis history**: record, search, statistics, and JSON export
-  - **Settings**: Ollama host and model selection persisted to user data
-  - **File selection**: select files or scan directories (recursively) for supported types
+- **AI analysis**
+  - Documents: PDF, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX; automatic fallbacks on parsing errors
+  - Images: PNG/JPG/JPEG/GIF/BMP/WEBP/TIFF/SVG with vision models; optional OCR
+  - Smart categorization with embeddings-based refinement to match your configured folders
+- **Safe organization**
+  - Batch organize with conflict-safe moves, EXDEV handling, and unique name resolution
+  - Live progress updates and ETA; operations are undoable/redone via history
+- **Persistence & history**
+  - Analysis history with search, statistics, export
+  - Crash-resilient processing state; resumes incomplete batches after restart
+- **Customization**
+  - Settings for Ollama host and model selection (text/vision/embeddings); user-configurable models
+  - Smart folders CRUD, structure scan, and semantic matching
+- **Keyboard shortcuts**
+  - Organize phase: Undo (Ctrl/Cmd+Z), Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)
+- Disabled in this build: Audio analysis/transcription (models/UI endpoints exist but are disabled)
 
-- **Disabled in this build**
-  - **Audio analysis/transcription**: modules exist, but UI and IPC are disabled. References are commented in `src/preload/preload.js`, `src/renderer/App.js`, and `src/main/simple-main.js`.
-
-- **Planned / in progress**
-  - In-app semantic search UI leveraging stored analysis and embeddings
-  - Expanded accessibility and theming options
-  - Optional video analysis
-
-### 🔑 Key Benefits
+### 🔑 Benefits
 
 - **🔒 100% Privacy**: All AI processing happens locally using Ollama
 - **🎨 Modern Design**: Beautiful glassmorphism UI with Apple-inspired aesthetics  
@@ -104,7 +103,7 @@
 
 1. **Clone & Install**
    ```bash
-   git clone https://github.com/yourusername/stratosort.git
+   git clone https://github.com/stratosort/stratosort.git
    cd stratosort
    npm install
    ```
@@ -137,7 +136,7 @@
 
 ---
 
-## 🧠 Using Ollama locally
+## 🧠 Ollama setup (local inference)
 
 ### Windows
 
@@ -237,6 +236,45 @@ stratosort/
 └── test/                   # Test suites
 ```
 
+### System diagram
+
+```mermaid
+flowchart TD
+  subgraph Renderer [Renderer (React/Tailwind)]
+    UI[Phases & Components]
+    Undo[Undo/Redo System]
+    Events[operation-progress listener]
+  end
+
+  subgraph Preload [Preload]
+    Bridge[Context bridge: electronAPI]
+  end
+
+  subgraph Main [Main (Electron)]
+    IPC[IPC Handlers]
+    Services[ServiceIntegration (History, Undo, ProcessingState)]
+    Analyze[Analyzers: Document/Image]
+    Embeddings[EmbeddingIndex + FolderMatcher]
+    System[System Analytics]
+  end
+
+  subgraph Ollama [Ollama]
+    Models[Text/Vision/Embeddings]
+  end
+
+  UI --> Bridge
+  Undo --> Bridge
+  Events --> Bridge
+  Bridge --> IPC
+  IPC --> Analyze
+  IPC --> Services
+  IPC --> Embeddings
+  Analyze --> Ollama
+  Embeddings --> Ollama
+  Services --> IPC
+  IPC -->|operation-progress| Bridge
+```
+
 ---
 
 ## 💻 Development
@@ -274,6 +312,22 @@ npm run ollama:serve       # Alias to 'ollama serve'
 
 # Linting
 npm run lint               # Code linting
+ 
+# Pre-commit (local)
+pwsh scripts/precommit.ps1         # run checks (lint/format/typecheck/tests)
+pwsh scripts/precommit.ps1 -Fix    # auto-fix lint/format, then typecheck/tests
+
+---
+
+## 📦 Windows installer
+
+Build locally on Windows (PowerShell):
+```powershell
+pwsh scripts/build-windows.ps1
+```
+Artifacts will be in `release/build` (e.g., `.exe`/`.msi`).
+
+CI build: GitHub Actions workflow `Build Windows Installer` (`.github/workflows/release-windows.yml`) builds and uploads installers on tagged releases (vX.Y.Z) or on manual dispatch.
 ```
 
 ### Development Features

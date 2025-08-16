@@ -45,6 +45,13 @@
     "build:renderer": "webpack --mode=production",
     "postinstall-disabled": "electron-builder install-app-deps",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "validate": "npm run lint && npm run format:check && npm run typecheck && npm test",
+    "precommit": "npm run validate",
+    "prepare": "husky install",
     "package": "rimraf dist && npm run build && electron-builder build --publish never",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "node scripts/verify-setup.js",
@@ -217,7 +224,9 @@
     "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^4.15.1",
-    "webpack-merge": "^5.9.0"
+    "webpack-merge": "^5.9.0",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.10"
   },
   "build": {
     "productName": "Stratosort",
@@ -279,6 +288,15 @@
     },
     "extraResources": [
       "./assets/**"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --cache --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,scss}": [
+      "prettier --write"
     ]
   },
   "collective": {

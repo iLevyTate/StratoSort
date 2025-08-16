@@ -35,6 +35,10 @@
 }
 
 @layer components {
+  /* App Regions for custom Windows title bar */
+  .app-region-drag { -webkit-app-region: drag; }
+  .app-region-no-drag { -webkit-app-region: no-drag; }
+  .drag-safe { padding-top: 6px; }
   /* Modern Form Components */
   .form-input-enhanced {
     padding: 8px 13px;

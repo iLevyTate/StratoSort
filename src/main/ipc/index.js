@@ -7,6 +7,7 @@ const registerOllamaIpc = require('./ollama');
 const registerAnalysisIpc = require('./analysis');
 const registerSettingsIpc = require('./settings');
 const registerEmbeddingsIpc = require('./semantic');
+const registerWindowIpc = require('./window');
 
 function registerAllIpc({
   ipcMain,
@@ -45,6 +46,7 @@ function registerAllIpc({
   registerAnalysisIpc({ ipcMain, IPC_CHANNELS, logger, tesseract, systemAnalytics, analyzeDocumentFile, analyzeImageFile, getServiceIntegration, getCustomFolders });
   registerSettingsIpc({ ipcMain, IPC_CHANNELS, logger, settingsService, setOllamaHost, setOllamaModel, setOllamaVisionModel, setOllamaEmbeddingModel });
   registerEmbeddingsIpc({ ipcMain, IPC_CHANNELS, logger, getCustomFolders, getServiceIntegration });
+  registerWindowIpc({ ipcMain, IPC_CHANNELS, logger, getMainWindow });
 }
 
 module.exports = { registerAllIpc };

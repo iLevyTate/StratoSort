@@ -1,37 +1,31 @@
 import { useEffect } from 'react';
 import { usePhase } from '../contexts/PhaseContext';
-import { useUndoRedo } from '../components/UndoRedoSystem';
 import { useNotification } from '../contexts/NotificationContext';
 import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
-  const { executeAction } = useUndoRedo();
   const { addNotification } = useNotification();
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       // Ctrl/Cmd + Z for Undo
-      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
-          try {
-            addNotification('Use Ctrl+Z in organize phase for undo', 'info', 2000);
-          } catch (error) {
-            console.error('Undo shortcut failed:', error);
-          }
+        try {
+          window.electronAPI?.undoRedo?.undo?.();
+        } catch (error) {
+          console.error('Undo shortcut failed:', error);
         }
       }
 
-      // Ctrl/Cmd + Shift + Z for Redo
-      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && event.shiftKey) {
+      // Ctrl/Cmd + Shift + Z for Redo (also support Ctrl+Y on Windows)
+      if ((event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) {
         event.preventDefault();
-        if (typeof executeAction === 'function') {
-          try {
-            addNotification('Use Ctrl+Shift+Z in organize phase for redo', 'info', 2000);
-          } catch (error) {
-            console.error('Redo shortcut failed:', error);
-          }
+        try {
+          window.electronAPI?.undoRedo?.redo?.();
+        } catch (error) {
+          console.error('Redo shortcut failed:', error);
         }
       }
 
@@ -80,7 +74,7 @@ export function useKeyboardShortcuts() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [actions, currentPhase, executeAction, addNotification, showSettings]);
+  }, [actions, currentPhase, addNotification, showSettings]);
 }
 
 

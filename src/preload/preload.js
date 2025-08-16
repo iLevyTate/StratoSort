@@ -19,7 +19,8 @@ const ALLOWED_CHANNELS = {
   ANALYSIS_HISTORY: Object.values(IPC_CHANNELS.ANALYSIS_HISTORY),
   EMBEDDINGS: Object.values(IPC_CHANNELS.EMBEDDINGS),
 
-  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM)
+  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM),
+  WINDOW: Object.values(IPC_CHANNELS.WINDOW)
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -326,7 +327,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // System Monitoring (only metrics and app statistics currently implemented)
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
-    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS)
+    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS),
+    applyUpdate: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.APPLY_UPDATE)
+  },
+
+  // Window controls (Windows custom title bar)
+  window: {
+    minimize: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.MINIMIZE),
+    maximize: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.MAXIMIZE),
+    unmaximize: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.UNMAXIMIZE),
+    toggleMaximize: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.TOGGLE_MAXIMIZE),
+    isMaximized: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.IS_MAXIMIZED),
+    close: () => secureIPC.safeInvoke(IPC_CHANNELS.WINDOW.CLOSE)
   },
 
   // Ollama (only implemented endpoints)

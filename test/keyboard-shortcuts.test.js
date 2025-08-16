@@ -12,13 +12,13 @@ describe('useKeyboardShortcuts (static)', () => {
     // Accept either strict equality or normalized lower-case checks for 'z'
     expect(
       content.includes("event.key === 'z'") ||
-        content.includes("event.key.toLowerCase() === 'z'")
+        content.includes("event.key.toLowerCase() === 'z'"),
     ).toBe(true);
     expect(content).toContain('advancePhase');
     // Accept ',' check in either strict or normalized form
     expect(
       content.includes("event.key === ','") ||
-        content.includes("event.key.toLowerCase() === ','")
+        content.includes("event.key.toLowerCase() === ','"),
     ).toBe(true);
     expect(content).toContain("event.key === 'Escape'");
   });

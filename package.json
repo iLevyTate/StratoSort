@@ -122,7 +122,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sharp": "^0.33.2",
-    "xlsx-populate": "^1.21.0"
+    "xlsx-populate": "^1.21.0",
+    "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",
@@ -216,70 +217,10 @@
     "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^4.15.1",
-    "webpack-merge": "^5.9.0"
+    "webpack-merge": "^5.9.0",
+    "zod": "^3.23.8"
   },
-  "build": {
-    "productName": "Stratosort",
-    "appId": "com.stratosort.app",
-    "asar": true,
-    "asarUnpack": "**\\*.{node,dll}",
-    "files": [
-      "src",
-      "assets",
-      "startup-check.js",
-      "package.json"
-    ],
-    "mac": {
-      "icon": "assets/icons/icons/mac/icon.icns",
-      "target": {
-        "target": "default",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
-      },
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "win": {
-      "icon": "assets/icons/icons/win/icon.ico",
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "icon": "assets/icon.png",
-      "target": [
-        "AppImage"
-      ],
-      "category": "Office"
-    },
-    "directories": {
-      "app": "release/app",
-      "buildResources": "assets",
-      "output": "release/build"
-    },
-    "extraResources": [
-      "./assets/**"
-    ]
-  },
+  
   "collective": {
     "url": "https://opencollective.com/electron-react-boilerplate-594"
   }

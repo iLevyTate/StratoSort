@@ -30,6 +30,15 @@
         "arch": ["x64"]
       }
     ],
+    "fileAssociations": [
+      { "ext": "pdf", "name": "PDF Document" },
+      { "ext": "doc" },
+      { "ext": "docx" },
+      { "ext": "xlsx" },
+      { "ext": "pptx" },
+      { "ext": "txt" },
+      { "ext": "md" }
+    ],
     "publisherName": "StratoSort Team"
   },
   "nsis": {
@@ -38,7 +47,9 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "StratoSort"
+    "shortcutName": "StratoSort",
+    "include": "build/installer.nsh",
+    "allowElevation": true
   },
   "mac": {
     "icon": "assets/icons/icons/png/512x512.png",

@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
+import {
+  PHASES,
+  PHASE_TRANSITIONS,
+  PHASE_METADATA,
+} from '../../shared/constants';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
@@ -10,7 +14,11 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       // Ctrl/Cmd + Z for Undo
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'z' &&
+        !event.shiftKey
+      ) {
         event.preventDefault();
         try {
           window.electronAPI?.undoRedo?.undo?.();
@@ -20,7 +28,11 @@ export function useKeyboardShortcuts() {
       }
 
       // Ctrl/Cmd + Shift + Z for Redo (also support Ctrl+Y on Windows)
-      if ((event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        ((event.key.toLowerCase() === 'z' && event.shiftKey) ||
+          event.key.toLowerCase() === 'y')
+      ) {
         event.preventDefault();
         try {
           window.electronAPI?.undoRedo?.redo?.();

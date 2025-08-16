@@ -7,5 +7,3 @@ if (typeof globalThis === 'undefined') {
   // eslint-disable-next-line no-undef
   window.globalThis = window;
 }
-
-

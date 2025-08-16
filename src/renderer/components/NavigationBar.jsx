@@ -40,9 +40,12 @@ function NavigationBar() {
     return filtered.slice(0, 2).join(' ');
   };
 
-  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+  const isWindows =
+    typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
   return (
-    <nav className={`glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40`}>
+    <nav
+      className={`glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40`}
+    >
       <div className="container-enhanced">
         <div className="flex items-center justify-between min-h-[56px] gap-8">
           <div className={`${' '}flex flex-1 items-center gap-13 min-w-0`}>

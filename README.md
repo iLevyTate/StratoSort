@@ -119,27 +119,31 @@
 ### Windows Installer with Ollama Bootstrap
 
 The Windows installer will:
+
 - Check for Ollama on PATH
 - If missing, download and install Ollama silently
 - Pull base models (llama3.2:latest, llava:latest, mxbai-embed-large)
 - Install StratoSort
 
 Build the installer:
+
 ```bash
 npm run dist:win
 ```
 
 Notes:
+
 - The NSIS include script is at `build/installer.nsh` and is referenced by `electron-builder.json` → `nsis.include`.
 - If you prefer to skip model pulls, remove those lines in `build/installer.nsh`.
 
 ### Setup Ollama
+
 ```bash
 # Install Ollama (https://ollama.ai)
 # Windows
 winget install Ollama.Ollama
 
-# macOS  
+# macOS
 brew install ollama
 
 # Linux
@@ -147,6 +151,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ```
 
 3. **Install Required Models**
+
 ```bash
 ollama pull llama3.2:latest
 ollama pull llava:latest
@@ -155,7 +160,8 @@ ollama pull llava:latest
 ```
 
 4. **Environment Variables**
-Create a `.env` file in the project root. These variables are optional but recommended for clarity:
+   Create a `.env` file in the project root. These variables are optional but recommended for clarity:
+
 ```ini
 # See .env.example for the full list and documentation
 NODE_ENV=development
@@ -167,6 +173,7 @@ OLLAMA_EMBEDDING_MODEL=mxbai-embed-large
 ```
 
 5. **Start StratoSort**
+
 ```bash
 npm run dev
 ```

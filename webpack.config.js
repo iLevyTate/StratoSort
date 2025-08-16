@@ -15,7 +15,7 @@ module.exports = (env, argv) => {
       filename: 'renderer.js',
       clean: true,
       publicPath: '',
-      globalObject: 'globalThis'
+      globalObject: 'globalThis',
     },
     target: 'electron-renderer',
     module: {
@@ -29,20 +29,22 @@ module.exports = (env, argv) => {
               presets: ['@babel/preset-react'],
               plugins: [
                 '@babel/plugin-transform-react-jsx',
-                ...(process.env.WEBPACK_DEV_SERVER === 'true' ? ['react-refresh/babel'] : []),
-              ]
-            }
-          }
+                ...(process.env.WEBPACK_DEV_SERVER === 'true'
+                  ? ['react-refresh/babel']
+                  : []),
+              ],
+            },
+          },
         },
         {
           test: /\.css$/,
           use: [
             isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
             'css-loader',
-            'postcss-loader'
-          ]
-        }
-      ]
+            'postcss-loader',
+          ],
+        },
+      ],
     },
     resolve: {
       extensions: ['.js', '.jsx'],
@@ -80,11 +82,13 @@ module.exports = (env, argv) => {
       }),
       new webpack.ProvidePlugin({
         process: 'process/browser',
-        Buffer: ['buffer', 'Buffer']
+        Buffer: ['buffer', 'Buffer'],
       }),
       ...(isProduction
         ? [new MiniCssExtractPlugin({ filename: 'styles.css' })]
-        : (process.env.WEBPACK_DEV_SERVER === 'true' ? [new ReactRefreshWebpackPlugin({ overlay: false })] : []))
+        : process.env.WEBPACK_DEV_SERVER === 'true'
+          ? [new ReactRefreshWebpackPlugin({ overlay: false })]
+          : []),
     ],
     // Use secure devtool options
     devtool: isProduction ? false : 'source-map',
@@ -110,7 +114,7 @@ module.exports = (env, argv) => {
     optimization: {
       minimize: isProduction,
       // Keep splitChunks disabled for simplicity in Electron; dynamic imports will still code-split
-      splitChunks: false
-    }
+      splitChunks: false,
+    },
   };
 };

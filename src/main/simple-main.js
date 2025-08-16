@@ -1,4 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  Menu,
+  Tray,
+  nativeImage,
+} = require('electron');
 const { autoUpdater } = require('electron-updater');
 // const { performance } = require('perf_hooks'); // no longer used
 const isDev = process.env.NODE_ENV === 'development';
@@ -308,14 +317,22 @@ if (!gotTheLock) {
       try {
         const args = process.argv.slice(1);
         if (args.includes('--open-documents')) {
-          try { const docs = app.getPath('documents'); shell.openPath(docs); } catch {}
+          try {
+            const docs = app.getPath('documents');
+            shell.openPath(docs);
+          } catch {}
         }
         if (args.includes('--analyze-folder')) {
           // Bring window to front and trigger select directory
           const win = BrowserWindow.getAllWindows()[0];
           if (win) {
             win.focus();
-            try { win.webContents.send('operation-progress', { type: 'hint', message: 'Use Select Directory to analyze a folder' }); } catch {}
+            try {
+              win.webContents.send('operation-progress', {
+                type: 'hint',
+                message: 'Use Select Directory to analyze a folder',
+              });
+            } catch {}
           }
         }
       } catch {}
@@ -333,7 +350,7 @@ if (!gotTheLock) {
                   program: process.execPath,
                   args: '--analyze-folder',
                   iconPath: process.execPath,
-                  iconIndex: 0
+                  iconIndex: 0,
                 },
                 {
                   type: 'task',
@@ -341,10 +358,10 @@ if (!gotTheLock) {
                   program: process.execPath,
                   args: '--open-documents',
                   iconPath: process.execPath,
-                  iconIndex: 0
-                }
-              ]
-            }
+                  iconIndex: 0,
+                },
+              ],
+            },
           ]);
         }
       } catch {}
@@ -373,7 +390,10 @@ if (!gotTheLock) {
       // Install React DevTools in development (opt-in to avoid noisy warnings)
       try {
         if (isDev && process.env.REACT_DEVTOOLS === 'true') {
-          const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+          const {
+            default: installExtension,
+            REACT_DEVELOPER_TOOLS,
+          } = require('electron-devtools-installer');
           await installExtension(REACT_DEVELOPER_TOOLS).catch(() => {});
         }
       } catch {}
@@ -382,11 +402,21 @@ if (!gotTheLock) {
       try {
         if (!isDev) {
           autoUpdater.autoDownload = true;
-          autoUpdater.on('error', (err) => logger.error('[UPDATER] Error:', err));
-          autoUpdater.on('update-available', () => logger.info('[UPDATER] Update available'));
-          autoUpdater.on('update-not-available', () => logger.info('[UPDATER] No updates available'));
-          autoUpdater.on('update-downloaded', () => logger.info('[UPDATER] Update downloaded'));
-          autoUpdater.checkForUpdatesAndNotify().catch((e) => logger.error('[UPDATER] check failed', e));
+          autoUpdater.on('error', (err) =>
+            logger.error('[UPDATER] Error:', err),
+          );
+          autoUpdater.on('update-available', () =>
+            logger.info('[UPDATER] Update available'),
+          );
+          autoUpdater.on('update-not-available', () =>
+            logger.info('[UPDATER] No updates available'),
+          );
+          autoUpdater.on('update-downloaded', () =>
+            logger.info('[UPDATER] Update downloaded'),
+          );
+          autoUpdater
+            .checkForUpdatesAndNotify()
+            .catch((e) => logger.error('[UPDATER] check failed', e));
         }
       } catch {}
     } catch (error) {
@@ -491,7 +521,10 @@ logger.debug(
 let tray = null;
 function createSystemTray() {
   try {
-    const iconPath = require('path').join(__dirname, '../../assets/icons/icons/win/icon.ico');
+    const iconPath = require('path').join(
+      __dirname,
+      '../../assets/icons/icons/win/icon.ico',
+    );
     const trayIcon = nativeImage.createFromPath(iconPath);
     tray = new Tray(trayIcon);
     tray.setToolTip('StratoSort');
@@ -501,30 +534,41 @@ function createSystemTray() {
         click: () => {
           const win = BrowserWindow.getAllWindows()[0] || createWindow();
           if (win && win.isMinimized()) win.restore();
-          if (win) { win.show(); win.focus(); }
-        }
+          if (win) {
+            win.show();
+            win.focus();
+          }
+        },
       },
       {
         label: 'Analyze Folder…',
         click: async () => {
           const win = BrowserWindow.getAllWindows()[0] || createWindow();
           if (win && win.isMinimized()) win.restore();
-          if (win) { win.show(); win.focus(); }
+          if (win) {
+            win.show();
+            win.focus();
+          }
           try {
-            const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'dontAddToRecent'] });
+            const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+              properties: ['openDirectory', 'dontAddToRecent'],
+            });
             if (!canceled && filePaths && filePaths[0]) {
-              win.webContents.send('operation-progress', { type: 'hint', message: `Selected folder: ${filePaths[0]}` });
+              win.webContents.send('operation-progress', {
+                type: 'hint',
+                message: `Selected folder: ${filePaths[0]}`,
+              });
             }
           } catch {}
-        }
+        },
       },
       { type: 'separator' },
       {
         label: 'Quit',
         click: () => {
           app.quit();
-        }
-      }
+        },
+      },
     ]);
     tray.setContextMenu(contextMenu);
   } catch (e) {

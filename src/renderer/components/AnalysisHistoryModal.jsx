@@ -48,9 +48,13 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
       const res = await window.electronAPI.analysisHistory.export(format);
       if (!res || res.success === false)
         throw new Error(res?.error || 'Export failed');
-      const blob = new Blob([typeof res.data === 'string' ? res.data : JSON.stringify(res.data)], {
-        type: res.mime || (format === 'csv' ? 'text/csv' : 'application/json'),
-      });
+      const blob = new Blob(
+        [typeof res.data === 'string' ? res.data : JSON.stringify(res.data)],
+        {
+          type:
+            res.mime || (format === 'csv' ? 'text/csv' : 'application/json'),
+        },
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

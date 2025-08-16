@@ -153,7 +153,6 @@ const IPC_CHANNELS = {
     IS_MAXIMIZED: 'window-is-maximized',
     CLOSE: 'window-close',
   },
-  },
 
   // Menu Actions
   MENU: {

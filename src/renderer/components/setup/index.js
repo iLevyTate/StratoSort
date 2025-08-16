@@ -8,9 +8,21 @@ export default function FirstRunWizard({ onComplete }) {
   const [results, setResults] = useState([]);
 
   const models = [
-    { id: 'llama3.2:latest', label: 'Text model (llama3.2:latest)', defaultChecked: true },
-    { id: 'llava:latest', label: 'Vision model (llava:latest)', defaultChecked: true },
-    { id: 'mxbai-embed-large', label: 'Embeddings (mxbai-embed-large)', defaultChecked: true },
+    {
+      id: 'llama3.2:latest',
+      label: 'Text model (llama3.2:latest)',
+      defaultChecked: true,
+    },
+    {
+      id: 'llava:latest',
+      label: 'Vision model (llava:latest)',
+      defaultChecked: true,
+    },
+    {
+      id: 'mxbai-embed-large',
+      label: 'Embeddings (mxbai-embed-large)',
+      defaultChecked: true,
+    },
   ];
 
   useEffect(() => {
@@ -27,7 +39,9 @@ export default function FirstRunWizard({ onComplete }) {
   const handlePull = async () => {
     try {
       setPulling(true);
-      const selections = Array.from(document.querySelectorAll('input[name="model-pull"]:checked')).map(i => i.value);
+      const selections = Array.from(
+        document.querySelectorAll('input[name="model-pull"]:checked'),
+      ).map((i) => i.value);
       const res = await window.electronAPI?.ollama?.pullModels?.(selections);
       setResults(res?.results || []);
     } finally {
@@ -47,18 +61,36 @@ export default function FirstRunWizard({ onComplete }) {
         {step === 0 && (
           <div>
             <h2 className="text-heading-2 mb-8">Set up AI locally</h2>
-            <p className="text-body mb-8">StratoSort uses Ollama to run models locally. We can pull the base models for you.</p>
+            <p className="text-body mb-8">
+              StratoSort uses Ollama to run models locally. We can pull the base
+              models for you.
+            </p>
             <div className="space-y-5 mb-13">
-              {models.map(m => (
+              {models.map((m) => (
                 <label key={m.id} className="flex items-center gap-5">
-                  <input type="checkbox" name="model-pull" defaultChecked={m.defaultChecked} value={m.id} />
+                  <input
+                    type="checkbox"
+                    name="model-pull"
+                    defaultChecked={m.defaultChecked}
+                    value={m.id}
+                  />
                   <span>{m.label}</span>
                 </label>
               ))}
             </div>
             <div className="flex items-center justify-end gap-8">
-              <Button onClick={onComplete} variant="secondary">Skip</Button>
-              <Button onClick={() => { setStep(1); handlePull(); }} disabled={pulling}>{pulling ? 'Pulling…' : 'Pull models'}</Button>
+              <Button onClick={onComplete} variant="secondary">
+                Skip
+              </Button>
+              <Button
+                onClick={() => {
+                  setStep(1);
+                  handlePull();
+                }}
+                disabled={pulling}
+              >
+                {pulling ? 'Pulling…' : 'Pull models'}
+              </Button>
             </div>
           </div>
         )}
@@ -66,18 +98,23 @@ export default function FirstRunWizard({ onComplete }) {
           <div>
             <h2 className="text-heading-2 mb-8">Pulling models…</h2>
             {results.length === 0 ? (
-              <p className="text-body">This may take a few minutes depending on your connection.</p>
+              <p className="text-body">
+                This may take a few minutes depending on your connection.
+              </p>
             ) : (
               <div className="space-y-5">
-                {results.map(r => (
+                {results.map((r) => (
                   <div key={r.model} className="text-sm">
-                    {r.success ? '✅' : '⚠️'} {r.model} {r.success ? 'ready' : `failed: ${r.error}`}
+                    {r.success ? '✅' : '⚠️'} {r.model}{' '}
+                    {r.success ? 'ready' : `failed: ${r.error}`}
                   </div>
                 ))}
               </div>
             )}
             <div className="flex items-center justify-end gap-8 mt-13">
-              <Button onClick={onComplete} variant="primary">Continue</Button>
+              <Button onClick={onComplete} variant="primary">
+                Continue
+              </Button>
             </div>
           </div>
         )}

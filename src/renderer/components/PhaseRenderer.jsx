@@ -34,7 +34,9 @@ function PhaseRenderer() {
 
   return (
     <>
-      <Suspense fallback={<div className="p-13 text-system-gray-500">Loading…</div>}>
+      <Suspense
+        fallback={<div className="p-13 text-system-gray-500">Loading…</div>}
+      >
         {renderCurrentPhase()}
       </Suspense>
       {showSettings && <SettingsPanel />}

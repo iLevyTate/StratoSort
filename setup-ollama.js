@@ -5,12 +5,19 @@ const { spawnSync } = require('child_process');
 const chalk = require('chalk');
 
 function run(cmd, args = [], opts = {}) {
-  const res = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32', ...opts });
+  const res = spawnSync(cmd, args, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    ...opts,
+  });
   return res.status === 0;
 }
 
 function check(cmd, args = []) {
-  const res = spawnSync(cmd, args, { encoding: 'utf8', shell: process.platform === 'win32' });
+  const res = spawnSync(cmd, args, {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
   return { ok: res.status === 0, stdout: (res.stdout || '').toString() };
 }
 
@@ -23,14 +30,24 @@ const host = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 if (isCheck) {
   // eslint-disable-next-line no-console
   console.log(chalk.cyan('Checking Ollama status...'));
-  const curl = check(process.platform === 'win32' ? 'powershell.exe' : 'curl', process.platform === 'win32'
-    ? ['-NoProfile', '-Command', `(Invoke-WebRequest -Uri "${host}/api/tags" -UseBasicParsing).StatusCode`]
-    : ['-s', '-o', '/dev/null', '-w', '%{http_code}', `${host}/api/tags`]
+  const curl = check(
+    process.platform === 'win32' ? 'powershell.exe' : 'curl',
+    process.platform === 'win32'
+      ? [
+          '-NoProfile',
+          '-Command',
+          `(Invoke-WebRequest -Uri "${host}/api/tags" -UseBasicParsing).StatusCode`,
+        ]
+      : ['-s', '-o', '/dev/null', '-w', '%{http_code}', `${host}/api/tags`],
   );
   const code = (curl.stdout || '').trim();
   const ok = code && code !== '0' && code !== '000';
   // eslint-disable-next-line no-console
-  console.log(ok ? chalk.green(`✓ Ollama reachable at ${host}`) : chalk.yellow(`! Ollama not reachable at ${host}`));
+  console.log(
+    ok
+      ? chalk.green(`✓ Ollama reachable at ${host}`)
+      : chalk.yellow(`! Ollama not reachable at ${host}`),
+  );
   process.exit(ok ? 0 : 1);
 }
 
@@ -66,6 +83,8 @@ run('ollama', ['pull', 'llava:latest']);
 run('ollama', ['pull', 'mxbai-embed-large']);
 
 // eslint-disable-next-line no-console
-console.log(chalk.green('\nSetup steps attempted. You can start the server with: ollama serve'));
-
-
+console.log(
+  chalk.green(
+    '\nSetup steps attempted. You can start the server with: ollama serve',
+  ),
+);

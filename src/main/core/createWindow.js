@@ -9,10 +9,15 @@ function createMainWindow() {
   logger.debug('[DEBUG] Creating new window...');
 
   // Ensure AppUserModelID for Windows integration (notifications, jump list)
-  try { app.setAppUserModelId('com.stratosort.app'); } catch {}
+  try {
+    app.setAppUserModelId('com.stratosort.app');
+  } catch {}
 
   // Restore previous window position/size
-  const mainWindowState = windowStateKeeper({ defaultWidth: 1200, defaultHeight: 800 });
+  const mainWindowState = windowStateKeeper({
+    defaultWidth: 1200,
+    defaultHeight: 800,
+  });
 
   const isWindows = process.platform === 'win32';
   const win = new BrowserWindow({
@@ -77,7 +82,8 @@ function createMainWindow() {
     let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
     try {
       const { getOllamaHost } = require('../ollamaUtils');
-      const configured = typeof getOllamaHost === 'function' ? getOllamaHost() : null;
+      const configured =
+        typeof getOllamaHost === 'function' ? getOllamaHost() : null;
       if (configured && typeof configured === 'string') {
         ollamaHost = configured;
       }
@@ -85,7 +91,8 @@ function createMainWindow() {
     let wsHost = '';
     try {
       const url = new URL(ollamaHost);
-      wsHost = url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+      wsHost =
+        url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
     } catch {
       wsHost = '';
     }

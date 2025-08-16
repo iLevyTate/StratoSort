@@ -34,24 +34,45 @@ function main() {
   const hasWebpackConfig = checkFileExists('webpack.config.js');
   const hasRendererIndex = checkFileExists('src/renderer/index.html');
   printStatus(hasWebpackConfig, 'Webpack config present', 'webpack.config.js');
-  printStatus(hasRendererIndex, 'Renderer index present', 'src/renderer/index.html');
+  printStatus(
+    hasRendererIndex,
+    'Renderer index present',
+    'src/renderer/index.html',
+  );
   printStatus(hasDistIndex, 'Built renderer present', 'dist/index.html');
 
   // Check Ollama (optional)
   const ollamaHost = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  const curl = runCmd(process.platform === 'win32' ? 'powershell.exe' : 'curl', process.platform === 'win32'
-    ? ['-NoProfile', '-Command', `try { (Invoke-WebRequest -Uri "${ollamaHost}/api/tags" -UseBasicParsing).StatusCode } catch { 0 }`]
-    : ['-s', '-o', '/dev/null', '-w', '%{http_code}', `${ollamaHost}/api/tags`]
+  const curl = runCmd(
+    process.platform === 'win32' ? 'powershell.exe' : 'curl',
+    process.platform === 'win32'
+      ? [
+          '-NoProfile',
+          '-Command',
+          `try { (Invoke-WebRequest -Uri "${ollamaHost}/api/tags" -UseBasicParsing).StatusCode } catch { 0 }`,
+        ]
+      : [
+          '-s',
+          '-o',
+          '/dev/null',
+          '-w',
+          '%{http_code}',
+          `${ollamaHost}/api/tags`,
+        ],
   );
   const httpCode = (curl.stdout || '').toString().trim();
   const connected = httpCode && httpCode !== '0' && httpCode !== '000';
-  printStatus(connected, 'Ollama reachable', connected ? `${ollamaHost}` : 'Optional: start with "ollama serve"');
+  printStatus(
+    connected,
+    'Ollama reachable',
+    connected ? `${ollamaHost}` : 'Optional: start with "ollama serve"',
+  );
 
   // Final hint
   // eslint-disable-next-line no-console
-  console.log(`\n${chalk.gray('Tip:')} Run ${chalk.yellow('npm run dev')} to build and launch in development mode.`);
+  console.log(
+    `\n${chalk.gray('Tip:')} Run ${chalk.yellow('npm run dev')} to build and launch in development mode.`,
+  );
 }
 
 main();
-
-

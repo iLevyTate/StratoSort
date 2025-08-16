@@ -27,13 +27,13 @@ function initializeApp() {
         <App />
       </React.StrictMode>,
     );
-    
+
     // Remove initial loading after first paint
     requestAnimationFrame(() => {
       const initialLoading = document.getElementById('initial-loading');
       if (initialLoading) initialLoading.remove();
     });
-    
+
     console.log('[RENDERER] React application initialized successfully');
   } catch (error) {
     console.error('[RENDERER] Failed to initialize React application:', error);

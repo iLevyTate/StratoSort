@@ -1,6 +1,11 @@
 const { Ollama } = require('ollama');
 const { withErrorLogging, withValidation } = require('./withErrorLogging');
-let z; try { z = require('zod'); } catch { z = null; }
+let z;
+try {
+  z = require('zod');
+} catch {
+  z = null;
+}
 
 function registerOllamaIpc({
   ipcMain,
@@ -23,8 +28,10 @@ function registerOllamaIpc({
         const categories = { text: [], vision: [], embedding: [] };
         for (const m of models) {
           const name = m.name || '';
-          if (/llava|vision|clip|sam/gi.test(name)) categories.vision.push(name);
-          else if (/embed|embedding/gi.test(name)) categories.embedding.push(name);
+          if (/llava|vision|clip|sam/gi.test(name))
+            categories.vision.push(name);
+          else if (/embed|embedding/gi.test(name))
+            categories.embedding.push(name);
           else categories.text.push(name);
         }
         // Ensure we update health on every models fetch
@@ -46,7 +53,8 @@ function registerOllamaIpc({
                 : null,
           },
           ollamaHealth: systemAnalytics.ollamaHealth,
-          host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined,
+          host:
+            typeof getOllamaHost === 'function' ? getOllamaHost() : undefined,
         };
       } catch (error) {
         logger.error('[IPC] Error fetching Ollama models:', error);
@@ -69,17 +77,20 @@ function registerOllamaIpc({
                 : null,
           },
           error: error.message,
-          host: typeof getOllamaHost === 'function' ? getOllamaHost() : undefined,
+          host:
+            typeof getOllamaHost === 'function' ? getOllamaHost() : undefined,
           ollamaHealth: systemAnalytics.ollamaHealth,
         };
       }
     }),
   );
 
-  const hostSchema = z ? z.string().url().or(z.string().length(0)).optional() : null;
+  const hostSchema = z
+    ? z.string().url().or(z.string().length(0)).optional()
+    : null;
   ipcMain.handle(
     IPC_CHANNELS.OLLAMA.TEST_CONNECTION,
-    (z && hostSchema)
+    z && hostSchema
       ? withValidation(logger, hostSchema, async (event, hostUrl) => {
           try {
             const testUrl = hostUrl || 'http://127.0.0.1:11434';

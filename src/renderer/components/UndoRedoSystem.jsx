@@ -23,18 +23,9 @@ function useSimpleNotifications() {
   };
 }
 
-// Action types that can be undone
-const ACTION_TYPES = {
-  FILE_MOVE: 'file_move',
-  FILE_DELETE: 'file_delete',
-  FILE_RENAME: 'file_rename',
-  FOLDER_CREATE: 'folder_create',
-  FOLDER_DELETE: 'folder_delete',
-  FOLDER_RENAME: 'folder_rename',
-  SETTINGS_CHANGE: 'settings_change',
-  ANALYSIS_RESULT: 'analysis_result',
-  BATCH_OPERATION: 'batch_operation'
-};
+// Use shared action type constants so renderer/main/tests are aligned
+import { ACTION_TYPES as SHARED_ACTION_TYPES } from '../../shared/constants';
+const ACTION_TYPES = SHARED_ACTION_TYPES;
 
 // Action metadata for user-friendly descriptions
 const ACTION_METADATA = {
@@ -537,26 +528,29 @@ export function UndoRedoToolbar({ className = '' }) {
 }
 
 // Helper functions for common actions
-export const createFileAction = (type, description, filePath, operation) => ({
-  type,
+// Update createFileAction to conform to main IPC payloads
+export const createFileAction = ({
+  actionType,
+  description,
+  source,
+  destination
+}) => ({
+  type: actionType,
   description,
   execute: async () => {
-    return await window.electronAPI.files.performOperation({
-      operation,
-      filePath,
-      type
-    });
+    // Only move/copy/delete are supported here; match the main payload shape
+    if (destination) {
+      return await window.electronAPI.files.performOperation({ type: 'move', source, destination });
+    }
+    throw new Error('Unsupported operation: destination required for move');
   },
   undo: async () => {
-    // Implement reverse operation
-    const reverseOp = getReverseOperation(operation);
-    return await window.electronAPI.files.performOperation({
-      operation: reverseOp,
-      filePath,
-      type
-    });
+    if (destination) {
+      return await window.electronAPI.files.performOperation({ type: 'move', source: destination, destination: source });
+    }
+    throw new Error('Unsupported undo operation');
   },
-  metadata: { filePath, operation }
+  metadata: { source, destination }
 });
 
 export const createSettingsAction = (description, newSettings, oldSettings) => ({
@@ -621,15 +615,7 @@ export const createBatchAction = (description, actions) => ({
 });
 
 // Helper to get reverse operation
-function getReverseOperation(operation) {
-  const reverseMap = {
-    'move': 'move', // Move back to original location
-    'delete': 'restore',
-    'rename': 'rename', // Rename back to original name
-    'create': 'delete'
-  };
-  return reverseMap[operation] || operation;
-}
+function getReverseOperation() { return 'move'; }
 
 export default {
   UndoRedoProvider,

@@ -336,7 +336,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // System Monitoring (only metrics and app statistics currently implemented)
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
-    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS)
+    getApplicationStatistics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS),
+    applyUpdate: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.APPLY_UPDATE)
   },
 
   // Window controls (Windows custom title bar)

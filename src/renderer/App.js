@@ -8,6 +8,7 @@ import PhaseRenderer from './components/PhaseRenderer';
 
 import AppProviders from './components/AppProviders';
 import ErrorBoundary from './components/ErrorBoundary';
+import FirstRunWizard from './components/setup';
 // ProgressIndicator folded into NavigationBar
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <AppShell header={<NavigationBar />}>
           <PhaseRenderer />
           <TooltipManager />
+          <FirstRunWizard onComplete={() => { /* no-op: hidden after connect ok */ }} />
         </AppShell>
       </AppProviders>
     </ErrorBoundary>

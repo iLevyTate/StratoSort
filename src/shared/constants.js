@@ -88,7 +88,8 @@ const IPC_CHANNELS = {
   // Ollama
   OLLAMA: {
     GET_MODELS: 'get-ollama-models',
-    TEST_CONNECTION: 'test-ollama-connection'
+    TEST_CONNECTION: 'test-ollama-connection',
+    PULL_MODELS: 'ollama-pull-models'
   },
   
   // Undo/Redo
@@ -114,7 +115,8 @@ const IPC_CHANNELS = {
   // System Monitoring
   SYSTEM: {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
-    GET_METRICS: 'get-system-metrics'
+    GET_METRICS: 'get-system-metrics',
+    APPLY_UPDATE: 'apply-update'
   },
   
   // Window Controls

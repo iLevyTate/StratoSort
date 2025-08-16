@@ -67,6 +67,26 @@ function registerOllamaIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
     }
     })
   );
+
+  // Pull models (best-effort, returns status per model)
+  ipcMain.handle(IPC_CHANNELS.OLLAMA.PULL_MODELS, withErrorLogging(logger, async (_event, models = []) => {
+    try {
+      const ollama = getOllama();
+      const results = [];
+      for (const model of Array.isArray(models) ? models : []) {
+        try {
+          await ollama.pull({ model });
+          results.push({ model, success: true });
+        } catch (e) {
+          results.push({ model, success: false, error: e.message });
+        }
+      }
+      return { success: true, results };
+    } catch (error) {
+      logger.error('[IPC] Pull models failed:', error);
+      return { success: false, error: error.message };
+    }
+  }));
 }
 
 module.exports = registerOllamaIpc;

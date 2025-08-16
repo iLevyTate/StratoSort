@@ -1,6 +1,7 @@
 import React from 'react';
 import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
+import UpdateIndicator from './UpdateIndicator';
 
 function NavigationBar() {
   const { currentPhase, actions } = usePhase();
@@ -81,6 +82,8 @@ function NavigationBar() {
             </div>
           </div>
           <div className={`flex items-center gap-10 flex-shrink-0`}>
+            {/* Auto-update banner (icon button triggers update when available) */}
+            <UpdateIndicator />
             <button
               onClick={actions.toggleSettings}
               className="p-6 text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-100 rounded-lg transition-colors"

@@ -28,6 +28,18 @@ function registerSystemIpc({ ipcMain, IPC_CHANNELS, logger, systemAnalytics, get
       return {};
     }
   }));
+
+  // Apply update (if downloaded)
+  ipcMain.handle(IPC_CHANNELS.SYSTEM.APPLY_UPDATE, withErrorLogging(logger, async () => {
+    try {
+      const { autoUpdater } = require('electron-updater');
+      autoUpdater.quitAndInstall();
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to apply update:', error);
+      return { success: false, error: error.message };
+    }
+  }));
 }
 
 module.exports = registerSystemIpc;

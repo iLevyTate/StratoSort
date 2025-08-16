@@ -9,9 +9,17 @@ describe('useKeyboardShortcuts (static)', () => {
     );
     const content = fs.readFileSync(file, 'utf8');
     expect(content).toContain('event.ctrlKey');
-    expect(content).toContain("event.key === 'z'");
+    // Accept either strict equality or normalized lower-case checks for 'z'
+    expect(
+      content.includes("event.key === 'z'") ||
+        content.includes("event.key.toLowerCase() === 'z'")
+    ).toBe(true);
     expect(content).toContain('advancePhase');
-    expect(content).toContain("event.key === ','");
+    // Accept ',' check in either strict or normalized form
+    expect(
+      content.includes("event.key === ','") ||
+        content.includes("event.key.toLowerCase() === ','")
+    ).toBe(true);
     expect(content).toContain("event.key === 'Escape'");
   });
 });

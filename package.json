@@ -164,7 +164,7 @@
     "core-js": "^3.32.2",
     "cross-env": "^7.0.3",
     "crypto-browserify": "^3.12.1",
-    "css-loader": "^6.11.0",
+    "css-loader": "^7.1.2",
     "css-minimizer-webpack-plugin": "^5.0.1",
     "detect-port": "^1.5.1",
     "electron": "^26.2.1",

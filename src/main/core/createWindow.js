@@ -123,5 +123,3 @@ function createMainWindow() {
 }
 
 module.exports = createMainWindow;
-
-

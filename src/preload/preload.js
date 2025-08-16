@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
+const sanitizeHtml = require('sanitize-html');
 
 console.log('[PRELOAD] Secure preload script loaded');
 
@@ -156,40 +157,30 @@ class SecureIPCManager {
    * Sanitize arguments to prevent injection attacks
    */
   sanitizeArguments(args) {
-    return args.map(arg => {
-      if (typeof arg === 'string') {
-        // Basic XSS prevention
-        return arg.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      }
-      if (typeof arg === 'object' && arg !== null) {
-        // Deep sanitization for objects
-        return this.sanitizeObject(arg);
-      }
-      return arg;
-    });
+    return args.map(arg => this.sanitizeObject(arg));
   }
 
   /**
    * Deep sanitization for objects
    */
   sanitizeObject(obj) {
+    if (typeof obj === 'string') {
+      return sanitizeHtml(obj, { allowedTags: [], allowedAttributes: {} });
+    }
+
     if (Array.isArray(obj)) {
       return obj.map(item => this.sanitizeObject(item));
     }
-    
-    if (typeof obj === 'object' && obj !== null) {
+
+    if (obj && typeof obj === 'object') {
       const sanitized = {};
       for (const [key, value] of Object.entries(obj)) {
-        const cleanKey = key.replace(/[<>'"]/g, '');
+        const cleanKey = sanitizeHtml(key, { allowedTags: [], allowedAttributes: {} });
         sanitized[cleanKey] = this.sanitizeObject(value);
       }
       return sanitized;
     }
-    
-    if (typeof obj === 'string') {
-      return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    }
-    
+
     return obj;
   }
 
@@ -383,4 +374,6 @@ contextBridge.exposeInMainWorld('electron', {
   }
 });
 
-console.log('[PRELOAD] Secure context bridge exposed with structured API'); 
+console.log('[PRELOAD] Secure context bridge exposed with structured API');
+
+module.exports = { SecureIPCManager };

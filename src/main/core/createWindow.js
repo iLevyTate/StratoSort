@@ -71,14 +71,21 @@ function createMainWindow() {
   }
 
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+    let wsHost = '';
+    try {
+      const url = new URL(ollamaHost);
+      wsHost = url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+    } catch {
+      wsHost = '';
+    }
+    const isProduction = process.env.NODE_ENV === 'production';
+    const styleSrc = isProduction ? "'self'" : "'self' 'unsafe-inline'";
+    const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          process.env.NODE_ENV === 'production'
-            ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434; object-src 'none'; base-uri 'self'; form-action 'self';"
-            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:11434 http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';"
-        ]
+        'Content-Security-Policy': [csp]
       }
     });
   });

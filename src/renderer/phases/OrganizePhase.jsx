@@ -49,6 +49,16 @@ function OrganizePhase() {
   }, []);
 
   useEffect(() => {
+    // Resolve a real default destination base (Documents folder) from main process
+    (async () => {
+      try {
+        const docsPath = await window.electronAPI?.files?.getDocumentsPath?.();
+        if (docsPath && typeof docsPath === 'string') {
+          setDefaultLocation(docsPath);
+        }
+      } catch {}
+    })();
+
     const loadPersistedData = () => {
       const persistedStates = phaseData.fileStates || {};
       setFileStates(persistedStates);
@@ -75,6 +85,21 @@ function OrganizePhase() {
     };
     loadPersistedData();
   }, [phaseData, analysisResults, actions]);
+
+  // Subscribe to progress events from main for batch organize
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.events?.onOperationProgress?.((payload) => {
+      try {
+        if (!payload || payload.type !== 'batch_organize') return;
+        setBatchProgress({
+          current: Number(payload.current) || 0,
+          total: Number(payload.total) || 0,
+          currentFile: payload.currentFile || ''
+        });
+      } catch {}
+    });
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, []);
 
   const isAnalysisRunning = phaseData.isAnalyzing || false;
   const analysisProgressFromDiscover = phaseData.analysisProgress || { current: 0, total: 0 };
@@ -145,7 +170,9 @@ function OrganizePhase() {
         const smartFolder = findSmartFolderForCategory(currentCategory);
         const destinationDir = smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
         const newName = edits.suggestedName || fileWithEdits.analysis?.suggestedName || file.name;
-        return { type: 'move', source: file.path, destination: `${destinationDir}/${newName}` };
+        const dest = `${destinationDir}/${newName}`;
+        const normalized = window.electronAPI?.files?.normalizePath?.(dest) || dest;
+        return { type: 'move', source: file.path, destination: normalized };
       });
 
       // Prepare a lightweight preview list for the progress UI
@@ -157,7 +184,9 @@ function OrganizePhase() {
           const smartFolder = findSmartFolderForCategory(currentCategory);
           const destinationDir = smartFolder ? (smartFolder.path || `${defaultLocation}/${smartFolder.name}`) : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
           const newName = edits.suggestedName || fileWithEdits.analysis?.suggestedName || file.name;
-          return { fileName: newName, destination: `${destinationDir}/${newName}` };
+          const dest = `${destinationDir}/${newName}`;
+          const normalized = window.electronAPI?.files?.normalizePath?.(dest) || dest;
+          return { fileName: newName, destination: normalized };
         });
         setOrganizePreview(preview);
       } catch {}

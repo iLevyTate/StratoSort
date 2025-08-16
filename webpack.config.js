@@ -58,7 +58,8 @@ module.exports = (env, argv) => {
       new HtmlWebpackPlugin({
         template: './src/renderer/index.html',
         filename: 'index.html',
-        inject: true
+        inject: true,
+        scriptLoading: 'blocking'
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),

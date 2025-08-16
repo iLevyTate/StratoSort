@@ -4,18 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StratoSort - AI-Powered File Organization</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';">
-    <!-- Enhanced CSP: Allows Ollama API calls and WebSocket connections for HMR -->
+    <!-- CSP is set by the main process. Keeping meta minimal to avoid conflicts. -->
 </head>
 <body>
     <!-- Initial loading screen -->
-    <div id="initial-loading" style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Inter', -apple-system, sans-serif;">
-        <section style="text-align: center; max-width: 400px;">
-            <div class="animate-float" style="font-size: 48px; margin-bottom: 16px;" aria-hidden="true">🚀</div>
-            <h1 style="color: #334155; margin: 0; font-size: 24px; font-weight: 600;">Loading StratoSort</h1>
-            <p style="color: #64748B; margin: 8px 0 0 0; font-size: 14px;">AI-Powered File Organization</p>
-            <div style="margin-top: 24px;">
-                <div class="loading-spinner" style="width: 24px; height: 24px; border: 2px solid #E2E8F0; border-top: 2px solid #2563EB; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+    <div id="initial-loading" class="h-screen flex items-center justify-center font-sans">
+        <section class="text-center max-w-[400px]">
+            <div class="animate-float text-[48px] mb-4" aria-hidden="true">🚀</div>
+            <h1 class="text-system-gray-800 m-0 text-xl font-semibold">Loading StratoSort</h1>
+            <p class="text-system-gray-500 mt-2 text-sm">AI-Powered File Organization</p>
+            <div class="mt-6">
+                <div class="loading-spinner w-6 h-6 border-2 border-system-gray-200 border-b-stratosort-blue rounded-full mx-auto"></div>
             </div>
         </section>
     </div>
@@ -23,25 +22,7 @@
     <!-- React root container (must be empty for React to work) -->
     <div id="root"></div>
     
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-6px); }
-        }
-        
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
-        }
-        
-        .loading-spinner {
-            animation: spin 1s linear infinite;
-        }
-    </style>
+    <!-- All animations/styles are defined in Tailwind CSS -->
     
     <!-- Webpack will inject the script tags automatically -->
 </body>

@@ -12,5 +12,3 @@ export default function AppShell({ header, subheader, footer, children }) {
     </div>
   );
 }
-
-

@@ -13,7 +13,9 @@ const jestArgs = [];
 
 if (args.includes('--help')) {
   // eslint-disable-next-line no-console
-  console.log('Usage: node run-tests.js [--coverage] [--bail] [--categories <name>]');
+  console.log(
+    'Usage: node run-tests.js [--coverage] [--bail] [--categories <name>]',
+  );
   process.exit(0);
 }
 
@@ -34,11 +36,13 @@ if (catIndex !== -1) {
   }
 }
 
-const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test', '--', ...jestArgs], {
-  stdio: 'inherit',
-  env: process.env,
-});
+const child = spawn(
+  process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  ['test', '--', ...jestArgs],
+  {
+    stdio: 'inherit',
+    env: process.env,
+  },
+);
 
 child.on('close', (code) => process.exit(code ?? 0));
-
-

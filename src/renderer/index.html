@@ -1,29 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>StratoSort - AI-Powered File Organization</title>
-	<!-- CSP is set by the main process. Keeping meta minimal to avoid conflicts. -->
-</head>
-<body>
-	<!-- Initial loading screen -->
-	<div id="initial-loading" class="h-screen flex items-center justify-center font-sans">
-		<section class="text-center max-w-[400px]">
-			<div class="animate-float text-[48px] mb-4" aria-hidden="true">🚀</div>
-			<h1 class="text-system-gray-800 m-0 text-xl font-semibold">Loading StratoSort</h1>
-			<p class="text-system-gray-500 mt-2 text-sm">AI-Powered File Organization</p>
-			<div class="mt-6">
-				<div class="loading-spinner w-6 h-6 border-2 border-system-gray-200 border-b-stratosort-blue rounded-full mx-auto"></div>
-			</div>
-		</section>
-	</div>
-	
-	<!-- React root container (must be empty for React to work) -->
-	<div id="root"></div>
-	
-	<!-- All animations/styles are defined in Tailwind CSS -->
-	
-	<!-- Webpack will inject the script tags automatically -->
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StratoSort - AI-Powered File Organization</title>
+    <!-- CSP is set by the main process. Keeping meta minimal to avoid conflicts. -->
+  </head>
+  <body>
+    <!-- Initial loading screen -->
+    <div
+      id="initial-loading"
+      class="h-screen flex items-center justify-center font-sans"
+    >
+      <section class="text-center max-w-[400px]">
+        <div class="animate-float text-[48px] mb-4" aria-hidden="true">🚀</div>
+        <h1 class="text-system-gray-800 m-0 text-xl font-semibold">
+          Loading StratoSort
+        </h1>
+        <p class="text-system-gray-500 mt-2 text-sm">
+          AI-Powered File Organization
+        </p>
+        <div class="mt-6">
+          <div
+            class="loading-spinner w-6 h-6 border-2 border-system-gray-200 border-b-stratosort-blue rounded-full mx-auto"
+          ></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- React root container (must be empty for React to work) -->
+    <div id="root"></div>
+
+    <!-- All animations/styles are defined in Tailwind CSS -->
+
+    <!-- Webpack will inject the script tags automatically -->
+  </body>
 </html>

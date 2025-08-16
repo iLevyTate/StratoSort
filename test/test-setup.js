@@ -9,7 +9,7 @@ global.console = {
   log: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
-  debug: jest.fn()
+  debug: jest.fn(),
 };
 
 // Mock DOM environment for Electron
@@ -18,14 +18,14 @@ global.document = {
   querySelectorAll: jest.fn(() => []),
   createElement: jest.fn(() => ({
     click: jest.fn(),
-    addEventListener: jest.fn()
-  }))
+    addEventListener: jest.fn(),
+  })),
 };
 
 global.window = {
   location: { href: 'http://localhost' },
   addEventListener: jest.fn(),
-  removeEventListener: jest.fn()
+  removeEventListener: jest.fn(),
 };
 
 // Initialize test state
@@ -37,19 +37,19 @@ global.aiConfig = {
   confidenceThreshold: 0.7,
   folderNamingPattern: '{category}/{type}',
   enableDateExtraction: true,
-  categories: ['Financial', 'Legal', 'Project', 'Personal', 'Technical']
+  categories: ['Financial', 'Legal', 'Project', 'Personal', 'Technical'],
 };
 
 // Test file system simulation
 global.testFileSystem = {
   files: new Map(),
   directories: new Set(),
-  
+
   writeFile: jest.fn((path, content) => {
     global.testFileSystem.files.set(path, content);
     return Promise.resolve();
   }),
-  
+
   readFile: jest.fn((path) => {
     const content = global.testFileSystem.files.get(path);
     if (content === undefined) {
@@ -57,27 +57,30 @@ global.testFileSystem = {
     }
     return Promise.resolve(content);
   }),
-  
+
   mkdir: jest.fn((path) => {
     global.testFileSystem.directories.add(path);
     return Promise.resolve();
   }),
-  
+
   exists: jest.fn((path) => {
-    return global.testFileSystem.files.has(path) || global.testFileSystem.directories.has(path);
+    return (
+      global.testFileSystem.files.has(path) ||
+      global.testFileSystem.directories.has(path)
+    );
   }),
-  
+
   clear: () => {
     global.testFileSystem.files.clear();
     global.testFileSystem.directories.clear();
-  }
+  },
 };
 
 // Mock performance monitoring
 global.performance = {
   mark: jest.fn(),
   measure: jest.fn(),
-  now: jest.fn(() => Date.now())
+  now: jest.fn(() => Date.now()),
 };
 
 // Test utilities for document processing
@@ -88,9 +91,9 @@ global.testUtils = {
     type: 'application/pdf',
     size: 1024,
     content: 'Mock document content for testing',
-    ...overrides
+    ...overrides,
   }),
-  
+
   createMockAnalysisResult: (overrides = {}) => ({
     category: 'Test',
     purpose: 'Testing document analysis',
@@ -98,18 +101,18 @@ global.testUtils = {
     confidence: 0.85,
     suggestedFolder: 'Test/Documents',
     extractedDate: '2024',
-    ...overrides
+    ...overrides,
   }),
-  
-  waitForAsync: (ms = 100) => new Promise(resolve => setTimeout(resolve, ms)),
-  
+
+  waitForAsync: (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms)),
+
   generateLargeContent: (sizeKB = 100) => {
     const chunkSize = 1024;
     const chunks = sizeKB;
-    return Array.from({ length: chunks }, (_, i) => 
-      `Mock content chunk ${i + 1} `.repeat(50)
+    return Array.from({ length: chunks }, (_, i) =>
+      `Mock content chunk ${i + 1} `.repeat(50),
     ).join('\n');
-  }
+  },
 };
 
 // Performance testing utilities
@@ -121,27 +124,27 @@ global.performanceUtils = {
       return Number(end - start) / 1000000; // Convert to milliseconds
     };
   },
-  
+
   measureMemory: () => process.memoryUsage(),
-  
+
   trackResourceUsage: () => {
     const startMemory = process.memoryUsage();
     const startTime = process.hrtime.bigint();
-    
+
     return () => {
       const endMemory = process.memoryUsage();
       const endTime = process.hrtime.bigint();
-      
+
       return {
         memoryDelta: {
           heapUsed: endMemory.heapUsed - startMemory.heapUsed,
           heapTotal: endMemory.heapTotal - startMemory.heapTotal,
-          external: endMemory.external - startMemory.external
+          external: endMemory.external - startMemory.external,
         },
-        timeElapsed: Number(endTime - startTime) / 1000000 // milliseconds
+        timeElapsed: Number(endTime - startTime) / 1000000, // milliseconds
       };
     };
-  }
+  },
 };
 
 // Test data generators
@@ -155,9 +158,9 @@ global.testDataGenerators = {
       Payment Terms: Net 30
     `,
     expectedCategory: 'Financial',
-    expectedFolder: 'Financial/Invoices'
+    expectedFolder: 'Financial/Invoices',
   }),
-  
+
   contract: () => ({
     content: `
       SERVICE AGREEMENT
@@ -168,9 +171,9 @@ global.testDataGenerators = {
       Value: $${(Math.random() * 50000 + 10000).toFixed(2)}
     `,
     expectedCategory: 'Legal',
-    expectedFolder: 'Legal/Contracts'
+    expectedFolder: 'Legal/Contracts',
   }),
-  
+
   report: () => ({
     content: `
       PROJECT STATUS REPORT
@@ -181,8 +184,8 @@ global.testDataGenerators = {
       Timeline: Meeting milestones
     `,
     expectedCategory: 'Project',
-    expectedFolder: 'Projects/Reports'
-  })
+    expectedFolder: 'Projects/Reports',
+  }),
 };
 
 // Import and setup mock services
@@ -199,7 +202,7 @@ beforeEach(() => {
   global.stateListeners = [];
   global.progressListeners = [];
   global.testFileSystem.clear();
-  
+
   // Reset mock services to default behavior
   mockOllamaService.analyze.mockResolvedValue({
     status: 'success',
@@ -209,10 +212,10 @@ beforeEach(() => {
       keywords: ['invoice', 'payment', 'financial'],
       confidence: 0.92,
       suggestedFolder: 'Financial/Invoices',
-      suggestedName: 'Invoice_Test_2024-06-04.pdf'
-    }
+      suggestedName: 'Invoice_Test_2024-06-04.pdf',
+    },
   });
-  
+
   mockOllamaService.isConnected.mockReturnValue(true);
 });
 
@@ -227,4 +230,4 @@ beforeAll(() => {
 afterAll(() => {
   console.log('✅ All Stratosort tests completed');
   console.log('🧹 Test environment cleaned up');
-}); 
+});

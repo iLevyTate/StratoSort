@@ -1,19 +1,19 @@
 import React from 'react';
 
 // Generic skeleton loader
-const Skeleton = ({ 
-  width = 'w-full', 
-  height = 'h-4', 
-  className = '', 
+const Skeleton = ({
+  width = 'w-full',
+  height = 'h-4',
+  className = '',
   rounded = 'rounded',
-  animated = true 
+  animated = true,
 }) => (
-  <div 
+  <div
     className={`
       ${width} ${height} ${rounded} ${className}
       bg-gradient-to-r from-system-gray-200 via-system-gray-100 to-system-gray-200
       ${animated ? 'animate-pulse' : ''}
-    `} 
+    `}
   />
 );
 
@@ -21,7 +21,10 @@ const Skeleton = ({
 export const FileOperationSkeleton = ({ count = 3 }) => (
   <div className="space-y-13">
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
+      <div
+        key={index}
+        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-13 flex-1">
             <Skeleton width="w-10" height="h-10" rounded="rounded-lg" />
@@ -44,7 +47,10 @@ export const FileOperationSkeleton = ({ count = 3 }) => (
 export const SmartFolderSkeleton = ({ count = 4 }) => (
   <div className="space-y-13">
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
+      <div
+        key={index}
+        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-13 flex-1">
             <Skeleton width="w-8" height="h-8" rounded="rounded-md" />
@@ -68,7 +74,10 @@ export const SmartFolderSkeleton = ({ count = 4 }) => (
 export const FileAnalysisSkeleton = ({ count = 5 }) => (
   <div className="space-y-8">
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
+      <div
+        key={index}
+        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
+      >
         <div className="flex items-start gap-13">
           <Skeleton width="w-12" height="h-12" rounded="rounded-lg" />
           <div className="flex-1 space-y-8">
@@ -103,7 +112,12 @@ export const FileAnalysisSkeleton = ({ count = 5 }) => (
 export const DirectoryScanSkeleton = () => (
   <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
     <div className="space-y-13">
-      <Skeleton width="w-16" height="h-16" rounded="rounded-xl" className="mx-auto" />
+      <Skeleton
+        width="w-16"
+        height="h-16"
+        rounded="rounded-xl"
+        className="mx-auto"
+      />
       <div className="space-y-5">
         <Skeleton width="w-48" height="h-5" className="mx-auto" />
         <Skeleton width="w-32" height="h-4" className="mx-auto" />
@@ -120,7 +134,10 @@ export const DirectoryScanSkeleton = () => (
 export const SettingsFormSkeleton = () => (
   <div className="space-y-21">
     {Array.from({ length: 3 }).map((_, sectionIndex) => (
-      <div key={sectionIndex} className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21">
+      <div
+        key={sectionIndex}
+        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
+      >
         <div className="space-y-13">
           <Skeleton width="w-48" height="h-6" />
           <div className="space-y-8">
@@ -145,10 +162,12 @@ export const LoadingOverlay = ({ message = 'Loading...', show = true }) => {
     <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
       <div className="text-center space-y-8">
         <div className="animate-spin w-8 h-8 border-2 border-stratosort-blue border-t-transparent rounded-full mx-auto"></div>
-        <div className="text-sm text-system-gray-600 font-medium">{message}</div>
+        <div className="text-sm text-system-gray-600 font-medium">
+          {message}
+        </div>
       </div>
     </div>
   );
 };
 
-export default Skeleton; 
+export default Skeleton;

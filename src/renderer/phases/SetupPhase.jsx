@@ -10,7 +10,8 @@ import { SmartFolderItem } from '../components/setup';
 function SetupPhase() {
   const { actions, phaseData } = usePhase();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
-  const { showSuccess, showError, showWarning, showInfo, addNotification } = useNotification();
+  const { showSuccess, showError, showWarning, showInfo, addNotification } =
+    useNotification();
 
   const [smartFolders, setSmartFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState('');
@@ -23,7 +24,6 @@ function SetupPhase() {
   const [isEditingFolder, setIsEditingFolder] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(null);
-  
 
   useEffect(() => {
     const initializeSetup = async () => {
@@ -73,7 +73,10 @@ function SetupPhase() {
       setSmartFolders(folders || []);
       actions.setPhaseData('smartFolders', folders || []);
       if (folders && folders.length > 0 && smartFolders.length > 0) {
-        showInfo('Smart folders updated. Files may need re-analysis to match new folder structure.', 7000);
+        showInfo(
+          'Smart folders updated. Files may need re-analysis to match new folder structure.',
+          7000,
+        );
       }
     } catch (error) {
       console.error('Failed to load smart folders:', error);
@@ -93,9 +96,13 @@ function SetupPhase() {
         targetPath = newFolderPath.trim();
       } else {
         let resolvedDefaultLocation = defaultLocation;
-        if (!/^[A-Za-z]:[\\/]/.test(resolvedDefaultLocation) && !resolvedDefaultLocation.startsWith('/')) {
+        if (
+          !/^[A-Za-z]:[\\/]/.test(resolvedDefaultLocation) &&
+          !resolvedDefaultLocation.startsWith('/')
+        ) {
           try {
-            const documentsPath = await window.electronAPI.files.getDocumentsPath();
+            const documentsPath =
+              await window.electronAPI.files.getDocumentsPath();
             if (documentsPath) {
               resolvedDefaultLocation = documentsPath;
             }
@@ -105,7 +112,8 @@ function SetupPhase() {
       }
       if (!/^[A-Za-z]:[\\/]/.test(targetPath) && !targetPath.startsWith('/')) {
         try {
-          const documentsPath = await window.electronAPI.files.getDocumentsPath();
+          const documentsPath =
+            await window.electronAPI.files.getDocumentsPath();
           if (documentsPath) {
             targetPath = `${documentsPath}/${targetPath}`;
           }
@@ -114,51 +122,73 @@ function SetupPhase() {
 
       const illegalChars = /[<>:"|?*\x00-\x1f]/g;
       if (illegalChars.test(newFolderName)) {
-        showError('Folder name contains invalid characters. Please avoid: < > : " | ? *');
+        showError(
+          'Folder name contains invalid characters. Please avoid: < > : " | ? *',
+        );
         return;
       }
 
-      const existingFolder = smartFolders.find(f => 
-        f.name.toLowerCase() === newFolderName.trim().toLowerCase() ||
-        (f.path && f.path.toLowerCase() === targetPath.toLowerCase())
+      const existingFolder = smartFolders.find(
+        (f) =>
+          f.name.toLowerCase() === newFolderName.trim().toLowerCase() ||
+          (f.path && f.path.toLowerCase() === targetPath.toLowerCase()),
       );
       if (existingFolder) {
-        showWarning(`A smart folder with name "${existingFolder.name}" or path "${existingFolder.path}" already exists`);
+        showWarning(
+          `A smart folder with name "${existingFolder.name}" or path "${existingFolder.path}" already exists`,
+        );
         return;
       }
 
-      const parentPath = targetPath.substring(0, targetPath.lastIndexOf('/') || targetPath.lastIndexOf('\\'));
+      const parentPath = targetPath.substring(
+        0,
+        targetPath.lastIndexOf('/') || targetPath.lastIndexOf('\\'),
+      );
       try {
         if (parentPath) {
-          const parentStats = await window.electronAPI.files.getStats(parentPath);
+          const parentStats =
+            await window.electronAPI.files.getStats(parentPath);
           if (!parentStats || !parentStats.isDirectory) {
-            showError(`Parent directory "${parentPath}" does not exist or is not accessible`);
+            showError(
+              `Parent directory "${parentPath}" does not exist or is not accessible`,
+            );
             return;
           }
         }
       } catch {
-        showWarning('Cannot verify parent directory permissions. Folder creation may fail.');
+        showWarning(
+          'Cannot verify parent directory permissions. Folder creation may fail.',
+        );
       }
 
       const newFolder = {
         name: newFolderName.trim(),
         path: targetPath,
-        description: newFolderDescription.trim() || `Smart folder for ${newFolderName.trim()}`,
-        isDefault: false
+        description:
+          newFolderDescription.trim() ||
+          `Smart folder for ${newFolderName.trim()}`,
+        isDefault: false,
       };
       const result = await window.electronAPI.smartFolders.add(newFolder);
       if (result.success) {
         if (result.directoryCreated) {
-          showSuccess(`✅ Added smart folder and created directory: ${newFolder.name}`);
+          showSuccess(
+            `✅ Added smart folder and created directory: ${newFolder.name}`,
+          );
         } else if (result.directoryExisted) {
-          showSuccess(`✅ Added smart folder: ${newFolder.name} (directory already exists)`);
+          showSuccess(
+            `✅ Added smart folder: ${newFolder.name} (directory already exists)`,
+          );
         } else {
           showSuccess(`✅ Added smart folder: ${newFolder.name}`);
         }
         if (result.llmEnhanced) {
           showInfo('🤖 Smart folder enhanced with AI suggestions', 5000);
         }
-        showInfo('💡 Tip: You can reanalyze files to see how they fit with your new smart folder', 5000);
+        showInfo(
+          '💡 Tip: You can reanalyze files to see how they fit with your new smart folder',
+          5000,
+        );
         await loadSmartFolders();
         setNewFolderName('');
         setNewFolderPath('');
@@ -186,10 +216,16 @@ function SetupPhase() {
     }
     setIsSavingEdit(true);
     try {
-      const result = await window.electronAPI.smartFolders.edit(editingFolder.id, editingFolder);
+      const result = await window.electronAPI.smartFolders.edit(
+        editingFolder.id,
+        editingFolder,
+      );
       if (result.success) {
         showSuccess(`✅ Updated folder: ${editingFolder.name}`);
-        showInfo('💡 Tip: You can reanalyze files to see how they fit with updated smart folders', 5000);
+        showInfo(
+          '💡 Tip: You can reanalyze files to see how they fit with updated smart folders',
+          5000,
+        );
         await loadSmartFolders();
         setEditingFolder(null);
       } else {
@@ -209,15 +245,16 @@ function SetupPhase() {
   };
 
   const handleDeleteFolder = async (folderId) => {
-    const folder = smartFolders.find(f => f.id === folderId);
+    const folder = smartFolders.find((f) => f.id === folderId);
     if (!folder) return;
     const confirmDelete = await showConfirm({
       title: 'Delete Smart Folder',
-      message: 'Are you sure you want to remove this smart folder from StratoSort? This will not delete the physical directory or its files.',
+      message:
+        'Are you sure you want to remove this smart folder from StratoSort? This will not delete the physical directory or its files.',
       confirmText: 'Remove Folder',
       cancelText: 'Cancel',
       variant: 'danger',
-      fileName: folder.name
+      fileName: folder.name,
     });
     if (!confirmDelete) return;
     setIsDeletingFolder(folderId);
@@ -240,8 +277,6 @@ function SetupPhase() {
       setIsDeletingFolder(null);
     }
   };
-
-  
 
   const handleBrowseFolder = async () => {
     try {
@@ -283,18 +318,22 @@ function SetupPhase() {
     <div className="w-full animate-slide-up">
       <div className="mb-21 text-center">
         <h2 className="heading-primary">
-          ⚙️ Configure <span className="text-gradient inline-block">Smart Folders</span>
+          ⚙️ Configure{' '}
+          <span className="text-gradient inline-block">Smart Folders</span>
         </h2>
         <p className="text-lg text-system-gray-600 leading-relaxed max-w-2xl mx-auto">
-          Set up smart folders where StratoSort will organize your files based on AI analysis.
+          Set up smart folders where StratoSort will organize your files based
+          on AI analysis.
         </p>
         <div className="flex items-center justify-center gap-8 mt-8">
           <button
             className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
             onClick={() => {
               try {
-                const keys = ['setup-current-folders','setup-add-folder'];
-                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'true'));
+                const keys = ['setup-current-folders', 'setup-add-folder'];
+                keys.forEach((k) =>
+                  window.localStorage.setItem(`collapsible:${k}`, 'true'),
+                );
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -306,8 +345,10 @@ function SetupPhase() {
             className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
             onClick={() => {
               try {
-                const keys = ['setup-current-folders','setup-add-folder'];
-                keys.forEach(k => window.localStorage.setItem(`collapsible:${k}`, 'false'));
+                const keys = ['setup-current-folders', 'setup-add-folder'];
+                keys.forEach((k) =>
+                  window.localStorage.setItem(`collapsible:${k}`, 'false'),
+                );
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -319,9 +360,34 @@ function SetupPhase() {
 
       <Collapsible
         title={<span>📁 Current Smart Folders</span>}
-        actions={smartFolders.length > 0 ? (
-          <Button onClick={async () => { try { const res = await window.electronAPI.embeddings.rebuildFolders(); if (res?.success) { showSuccess(`🧠 Rebuilt ${res.folders || 0} folder embeddings`); } else { showError(`Failed to rebuild embeddings: ${res?.error || 'Unknown error'}`); } } catch (e) { showError(`Failed: ${e.message}`); } }} variant="primary" className="text-sm" title="Rebuild all smart folder embeddings">🧠 Rebuild Embeddings</Button>
-        ) : null}
+        actions={
+          smartFolders.length > 0 ? (
+            <Button
+              onClick={async () => {
+                try {
+                  const res =
+                    await window.electronAPI.embeddings.rebuildFolders();
+                  if (res?.success) {
+                    showSuccess(
+                      `🧠 Rebuilt ${res.folders || 0} folder embeddings`,
+                    );
+                  } else {
+                    showError(
+                      `Failed to rebuild embeddings: ${res?.error || 'Unknown error'}`,
+                    );
+                  }
+                } catch (e) {
+                  showError(`Failed: ${e.message}`);
+                }
+              }}
+              variant="primary"
+              className="text-sm"
+              title="Rebuild all smart folder embeddings"
+            >
+              🧠 Rebuild Embeddings
+            </Button>
+          ) : null
+        }
         defaultOpen
         persistKey="setup-current-folders"
         contentClassName="max-h-[420px] overflow-y-auto pr-8"
@@ -330,8 +396,16 @@ function SetupPhase() {
           <SmartFolderSkeleton count={3} />
         ) : smartFolders.length === 0 ? (
           <div className="text-center py-21">
-            <div className="text-4xl mb-8 opacity-50" role="img" aria-label="empty folder">📂</div>
-            <p className="text-muted italic">No smart folders configured yet.</p>
+            <div
+              className="text-4xl mb-8 opacity-50"
+              role="img"
+              aria-label="empty folder"
+            >
+              📂
+            </div>
+            <p className="text-muted italic">
+              No smart folders configured yet.
+            </p>
           </div>
         ) : (
           <div className="space-y-8">
@@ -357,43 +431,140 @@ function SetupPhase() {
         )}
       </Collapsible>
 
-      <Collapsible title="Add New Smart Folder" defaultOpen={false} persistKey="setup-add-folder">
+      <Collapsible
+        title="Add New Smart Folder"
+        defaultOpen={false}
+        persistKey="setup-add-folder"
+      >
         <div className="space-y-13">
           <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-5">Folder Name</label>
-            <Input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newFolderName.trim() && !isAddingFolder) { handleAddFolder(); } }} placeholder="e.g., Documents, Photos, Projects" className="w-full" aria-describedby="folder-name-help" />
-            <div id="folder-name-help" className="text-xs text-system-gray-500 mt-3">Enter a descriptive name for your smart folder. Press Enter to add the folder.</div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-5">Target Path (optional)</label>
-            <div className="flex gap-8 flex-col sm:flex-row">
-              <Input type="text" value={newFolderPath} onChange={(e) => setNewFolderPath(e.target.value)} placeholder="e.g., Documents/Work, Pictures/Family" className="flex-1" />
-              <Button onClick={handleBrowseFolder} variant="secondary" title="Browse for folder" className="w-full sm:w-auto">📁 Browse</Button>
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">
+              Folder Name
+            </label>
+            <Input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === 'Enter' &&
+                  newFolderName.trim() &&
+                  !isAddingFolder
+                ) {
+                  handleAddFolder();
+                }
+              }}
+              placeholder="e.g., Documents, Photos, Projects"
+              className="w-full"
+              aria-describedby="folder-name-help"
+            />
+            <div
+              id="folder-name-help"
+              className="text-xs text-system-gray-500 mt-3"
+            >
+              Enter a descriptive name for your smart folder. Press Enter to add
+              the folder.
             </div>
-            <p className="text-xs text-system-gray-500 mt-3">Leave empty to use default {defaultLocation}/{newFolderName || 'FolderName'}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-system-gray-700 mb-5">Description <span className="text-stratosort-blue font-semibold">(Important for AI)</span></label>
-            <Textarea value={newFolderDescription} onChange={(e) => setNewFolderDescription(e.target.value)} placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'" className="w-full" rows={4} aria-describedby="description-help" />
-            <div id="description-help" className="text-xs text-system-gray-500 mt-3">💡 <strong>Tip:</strong> The more specific your description, the better the AI will organize your files. Include file types, content themes, and use cases.</div>
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">
+              Target Path (optional)
+            </label>
+            <div className="flex gap-8 flex-col sm:flex-row">
+              <Input
+                type="text"
+                value={newFolderPath}
+                onChange={(e) => setNewFolderPath(e.target.value)}
+                placeholder="e.g., Documents/Work, Pictures/Family"
+                className="flex-1"
+              />
+              <Button
+                onClick={handleBrowseFolder}
+                variant="secondary"
+                title="Browse for folder"
+                className="w-full sm:w-auto"
+              >
+                📁 Browse
+              </Button>
+            </div>
+            <p className="text-xs text-system-gray-500 mt-3">
+              Leave empty to use default {defaultLocation}/
+              {newFolderName || 'FolderName'}
+            </p>
           </div>
-          <Button onClick={handleAddFolder} disabled={!newFolderName.trim() || isAddingFolder} variant="primary" className="w-full sm:w-auto" aria-label={isAddingFolder ? 'Adding folder...' : 'Add smart folder'}>
-            {isAddingFolder ? (<><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>Adding...</>) : (<>➕ Add Smart Folder</>)}
+          <div>
+            <label className="block text-sm font-medium text-system-gray-700 mb-5">
+              Description{' '}
+              <span className="text-stratosort-blue font-semibold">
+                (Important for AI)
+              </span>
+            </label>
+            <Textarea
+              value={newFolderDescription}
+              onChange={(e) => setNewFolderDescription(e.target.value)}
+              placeholder="Describe what types of files should go in this folder. E.g., 'Work documents, contracts, and business correspondence' or 'Family photos from vacations and special events'"
+              className="w-full"
+              rows={4}
+              aria-describedby="description-help"
+            />
+            <div
+              id="description-help"
+              className="text-xs text-system-gray-500 mt-3"
+            >
+              💡 <strong>Tip:</strong> The more specific your description, the
+              better the AI will organize your files. Include file types,
+              content themes, and use cases.
+            </div>
+          </div>
+          <Button
+            onClick={handleAddFolder}
+            disabled={!newFolderName.trim() || isAddingFolder}
+            variant="primary"
+            className="w-full sm:w-auto"
+            aria-label={
+              isAddingFolder ? 'Adding folder...' : 'Add smart folder'
+            }
+          >
+            {isAddingFolder ? (
+              <>
+                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></div>
+                Adding...
+              </>
+            ) : (
+              <>➕ Add Smart Folder</>
+            )}
           </Button>
         </div>
       </Collapsible>
 
       <div className="flex flex-col sm:flex-row justify-between gap-8">
-        <Button onClick={() => actions.advancePhase(PHASES.WELCOME)} variant="secondary" className="w-full sm:w-auto">← Back to Welcome</Button>
-        <Button onClick={() => { if (smartFolders.length === 0) { showWarning('Please add at least one smart folder before continuing'); } else { actions.advancePhase(PHASES.DISCOVER); } }} variant="primary" className="w-full sm:w-auto">Continue to File Discovery →</Button>
+        <Button
+          onClick={() => actions.advancePhase(PHASES.WELCOME)}
+          variant="secondary"
+          className="w-full sm:w-auto"
+        >
+          ← Back to Welcome
+        </Button>
+        <Button
+          onClick={() => {
+            if (smartFolders.length === 0) {
+              showWarning(
+                'Please add at least one smart folder before continuing',
+              );
+            } else {
+              actions.advancePhase(PHASES.DISCOVER);
+            }
+          }}
+          variant="primary"
+          className="w-full sm:w-auto"
+        >
+          Continue to File Discovery →
+        </Button>
       </div>
 
       <ConfirmDialog />
-      
     </div>
   );
 }
 
 export default SetupPhase;
-
-

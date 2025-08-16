@@ -40,7 +40,8 @@ export default function TooltipManager() {
 
     const showTooltip = (target) => {
       if (!tooltipRef.current) return;
-      const title = target.getAttribute('data-tooltip') || target.getAttribute('title');
+      const title =
+        target.getAttribute('data-tooltip') || target.getAttribute('title');
       if (!title) return;
 
       // Prevent native tooltip by clearing title temporarily
@@ -178,5 +179,3 @@ export default function TooltipManager() {
 
   return null;
 }
-
-

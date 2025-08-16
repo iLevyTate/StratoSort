@@ -4,7 +4,10 @@
  */
 
 const { Ollama } = require('ollama');
-const { ModelMissingError, OllamaConnectionError } = require('../errors/AnalysisError');
+const {
+  ModelMissingError,
+  OllamaConnectionError,
+} = require('../errors/AnalysisError');
 const { DEFAULT_AI_MODELS } = require('../../shared/constants');
 
 class ModelVerifier {
@@ -14,12 +17,12 @@ class ModelVerifier {
     this.essentialModels = [
       DEFAULT_AI_MODELS.TEXT_ANALYSIS, // llama3.2:latest (2GB)
       DEFAULT_AI_MODELS.IMAGE_ANALYSIS, // llava:latest (4.7GB)
-      'mxbai-embed-large' // For semantic search
+      'mxbai-embed-large', // For semantic search
     ];
     this.recommendedModels = [
       ...DEFAULT_AI_MODELS.FALLBACK_MODELS, // llama3.2, llama3, mistral, phi3
       'whisper:medium', // Better accuracy Whisper model
-      'whisper:large' // Highest accuracy Whisper model
+      'whisper:large', // Highest accuracy Whisper model
     ];
   }
 
@@ -31,10 +34,10 @@ class ModelVerifier {
       }
       return { connected: false, error: 'HTTP error: ' + response.status };
     } catch (error) {
-      return { 
-        connected: false, 
+      return {
+        connected: false,
         error: error.message,
-        suggestion: 'Make sure Ollama is running. Use: ollama serve'
+        suggestion: 'Make sure Ollama is running. Use: ollama serve',
       };
     }
   }
@@ -45,28 +48,28 @@ class ModelVerifier {
       return {
         success: true,
         models: models.models || [],
-        total: models.models?.length || 0
+        total: models.models?.length || 0,
       };
     } catch (error) {
       return {
         success: false,
         error: error.message,
         models: [],
-        total: 0
+        total: 0,
       };
     }
   }
 
   async verifyEssentialModels() {
     console.log('[ModelVerifier] Checking essential models...');
-    
+
     const connectionCheck = await this.checkOllamaConnection();
     if (!connectionCheck.connected) {
       return {
         success: false,
         error: 'Ollama connection failed',
         details: connectionCheck,
-        missingModels: this.essentialModels
+        missingModels: this.essentialModels,
       };
     }
 
@@ -76,20 +79,23 @@ class ModelVerifier {
         success: false,
         error: 'Could not fetch model list',
         details: modelsResult,
-        missingModels: this.essentialModels
+        missingModels: this.essentialModels,
       };
     }
 
-    const installedModelNames = modelsResult.models.map(m => m.name.toLowerCase());
+    const installedModelNames = modelsResult.models.map((m) =>
+      m.name.toLowerCase(),
+    );
     const missingModels = [];
     const availableModels = [];
 
     for (const modelName of this.essentialModels) {
       const normalizedName = modelName.toLowerCase();
-      const isInstalled = installedModelNames.some(installed => 
-        installed === normalizedName || 
-        installed.startsWith(normalizedName + ':') ||
-        normalizedName.startsWith(installed.split(':')[0])
+      const isInstalled = installedModelNames.some(
+        (installed) =>
+          installed === normalizedName ||
+          installed.startsWith(normalizedName + ':') ||
+          normalizedName.startsWith(installed.split(':')[0]),
       );
 
       if (isInstalled) {
@@ -100,10 +106,20 @@ class ModelVerifier {
     }
 
     // Special check for Whisper models (optional while audio disabled)
-    const whisperVariants = ['whisper', 'whisper:base', 'whisper:small', 'whisper:medium', 'whisper:large'];
-    const hasWhisper = installedModelNames.some(installed => installed.startsWith('whisper'));
+    const whisperVariants = [
+      'whisper',
+      'whisper:base',
+      'whisper:small',
+      'whisper:medium',
+      'whisper:large',
+    ];
+    const hasWhisper = installedModelNames.some((installed) =>
+      installed.startsWith('whisper'),
+    );
 
-    console.log(`[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`);
+    console.log(
+      `[ModelVerifier] Found ${availableModels.length}/${this.essentialModels.length} essential models`,
+    );
     console.log(`[ModelVerifier] Whisper available: ${hasWhisper}`);
 
     return {
@@ -112,7 +128,7 @@ class ModelVerifier {
       missingModels,
       hasWhisper,
       installationCommands: this.generateInstallCommands(missingModels),
-      recommendations: this.generateRecommendations(missingModels, hasWhisper)
+      recommendations: this.generateRecommendations(missingModels, hasWhisper),
     };
   }
 
@@ -122,21 +138,21 @@ class ModelVerifier {
     return [
       '# Install missing models with these commands:',
       '',
-      ...missingModels.map(model => {
+      ...missingModels.map((model) => {
         // Special handling for Whisper
         if (model === 'whisper') {
           return [
             `ollama pull whisper`,
             `# Alternative Whisper models:`,
             `# ollama pull whisper:medium  # Better accuracy`,
-            `# ollama pull whisper:large   # Highest accuracy`
+            `# ollama pull whisper:large   # Highest accuracy`,
           ].join('\n');
         }
         return `ollama pull ${model}`;
       }),
       '',
       '# Verify installation:',
-      'ollama list'
+      'ollama list',
     ];
   }
 
@@ -147,7 +163,7 @@ class ModelVerifier {
       recommendations.push({
         type: 'critical',
         message: 'Gemma3:4b is required for document and image analysis',
-        action: 'Run: ollama pull gemma3:4b'
+        action: 'Run: ollama pull gemma3:4b',
       });
     }
 
@@ -155,7 +171,8 @@ class ModelVerifier {
       recommendations.push({
         type: 'important',
         message: 'Whisper is required for audio transcription and analysis',
-        action: 'Run: ollama pull whisper (or whisper:medium for better accuracy)'
+        action:
+          'Run: ollama pull whisper (or whisper:medium for better accuracy)',
       });
     }
 
@@ -163,7 +180,7 @@ class ModelVerifier {
       recommendations.push({
         type: 'feature',
         message: 'mxbai-embed-large enables semantic search capabilities',
-        action: 'Run: ollama pull mxbai-embed-large'
+        action: 'Run: ollama pull mxbai-embed-large',
       });
     }
 
@@ -171,7 +188,7 @@ class ModelVerifier {
       recommendations.push({
         type: 'success',
         message: 'All essential models are installed and ready!',
-        action: null
+        action: null,
       });
     }
 
@@ -180,7 +197,7 @@ class ModelVerifier {
 
   async testModelFunctionality() {
     console.log('[ModelVerifier] Testing model functionality...');
-    
+
     const tests = [];
 
     // Test text analysis
@@ -188,21 +205,21 @@ class ModelVerifier {
       const textTest = await this.ollama.generate({
         model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
         prompt: 'Respond with just "OK" if you can process this message.',
-        options: { temperature: 0 }
+        options: { temperature: 0 },
       });
-      
+
       tests.push({
         model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
         type: 'text',
         success: textTest.response?.toLowerCase().includes('ok'),
-        response: textTest.response?.substring(0, 100)
+        response: textTest.response?.substring(0, 100),
       });
     } catch (error) {
       tests.push({
         model: DEFAULT_AI_MODELS.TEXT_ANALYSIS,
         type: 'text',
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
 
@@ -210,20 +227,22 @@ class ModelVerifier {
     try {
       // We can't easily test audio without a file, so just check if model responds
       const whisperTest = await this.ollama.list();
-      const hasWhisper = whisperTest.models?.some(m => m.name.toLowerCase().includes('whisper'));
-      
+      const hasWhisper = whisperTest.models?.some((m) =>
+        m.name.toLowerCase().includes('whisper'),
+      );
+
       tests.push({
         model: 'whisper',
         type: 'audio',
         success: hasWhisper,
-        response: hasWhisper ? 'Model available' : 'Model not found'
+        response: hasWhisper ? 'Model available' : 'Model not found',
       });
     } catch (error) {
       tests.push({
         model: 'whisper',
         type: 'audio',
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
 
@@ -234,26 +253,30 @@ class ModelVerifier {
       const embeddingTest = await this.ollama.embeddings({
         model: 'mxbai-embed-large',
         prompt: 'test',
-        options: { ...perfOptions }
+        options: { ...perfOptions },
       });
-      
+
       tests.push({
         model: 'mxbai-embed-large',
         type: 'embeddings',
-        success: Array.isArray(embeddingTest.embedding) && embeddingTest.embedding.length > 0,
-        response: `Generated ${embeddingTest.embedding?.length || 0} dimensions`
+        success:
+          Array.isArray(embeddingTest.embedding) &&
+          embeddingTest.embedding.length > 0,
+        response: `Generated ${embeddingTest.embedding?.length || 0} dimensions`,
       });
     } catch (error) {
       tests.push({
         model: 'mxbai-embed-large',
         type: 'embeddings',
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
 
-    const successfulTests = tests.filter(t => t.success).length;
-    console.log(`[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`);
+    const successfulTests = tests.filter((t) => t.success).length;
+    console.log(
+      `[ModelVerifier] ${successfulTests}/${tests.length} functionality tests passed`,
+    );
 
     return {
       success: successfulTests >= Math.ceil(tests.length * 0.5), // At least half should work
@@ -261,8 +284,8 @@ class ModelVerifier {
       summary: {
         total: tests.length,
         successful: successfulTests,
-        failed: tests.length - successfulTests
-      }
+        failed: tests.length - successfulTests,
+      },
     };
   }
 
@@ -277,15 +300,18 @@ class ModelVerifier {
       models,
       functionality,
       overall: {
-        healthy: connection.connected && models.success && functionality.success,
+        healthy:
+          connection.connected && models.success && functionality.success,
         issues: [
           ...(!connection.connected ? ['Ollama not connected'] : []),
-          ...(models.missingModels.length > 0 ? [`Missing models: ${models.missingModels.join(', ')}`] : []),
-          ...(!functionality.success ? ['Model functionality issues'] : [])
-        ]
-      }
+          ...(models.missingModels.length > 0
+            ? [`Missing models: ${models.missingModels.join(', ')}`]
+            : []),
+          ...(!functionality.success ? ['Model functionality issues'] : []),
+        ],
+      },
     };
   }
 }
 
-module.exports = ModelVerifier; 
+module.exports = ModelVerifier;

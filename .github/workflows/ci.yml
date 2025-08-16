@@ -1,41 +1,45 @@
 name: CI
 
 on:
-  push:
-    branches: [ main, master, develop, '**/feature/**', '**/fix/**' ]
   pull_request:
-    branches: [ main, master, develop ]
+  push:
+    branches:
+      - '**'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  quality:
+    name: Lint, Typecheck, Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint --silent || true
+      - name: ESLint
+        run: npm run lint
 
-      - name: Run tests
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Tests
         env:
           CI: true
-          NODE_ENV: test
-          OLLAMA_BASE_URL: http://127.0.0.1:11434
-        run: npm test -- --runInBand
-
-      - name: Build (renderer)
-        env:
-          NODE_ENV: production
-        run: npm run build
+        run: npm test -- --coverage
 
   windows-smoke:
     runs-on: windows-latest
@@ -58,5 +62,3 @@ jobs:
           NODE_ENV: test
           OLLAMA_BASE_URL: http://127.0.0.1:11434
         run: npm test -- --bail --runInBand
-
-

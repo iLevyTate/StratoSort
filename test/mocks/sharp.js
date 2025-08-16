@@ -13,13 +13,13 @@ const mockSharp = jest.fn(() => ({
     format: 'jpeg',
     size: 100000,
     channels: 3,
-    density: 72
+    density: 72,
   }),
   extract: jest.fn().mockReturnThis(),
   trim: jest.fn().mockReturnThis(),
   png: jest.fn().mockReturnThis(),
   jpeg: jest.fn().mockReturnThis(),
-  webp: jest.fn().mockReturnThis()
+  webp: jest.fn().mockReturnThis(),
 }));
 
 // Static methods
@@ -27,7 +27,7 @@ mockSharp.cache = jest.fn();
 mockSharp.concurrency = jest.fn();
 mockSharp.counters = jest.fn().mockReturnValue({
   queue: 0,
-  process: 0
+  process: 0,
 });
 
-module.exports = mockSharp; 
+module.exports = mockSharp;

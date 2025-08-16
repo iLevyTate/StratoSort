@@ -4,44 +4,39 @@ module.exports = {
     browser: true,
     node: true,
     es2021: true,
-    jest: true
+    jest: true,
   },
   extends: [
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
-    'plugin:jsx-a11y/recommended'
+    'plugin:jsx-a11y/recommended',
   ],
   parserOptions: {
     ecmaVersion: 2021,
     sourceType: 'module',
     ecmaFeatures: {
-      jsx: true
-    }
+      jsx: true,
+    },
   },
-  plugins: [
-    'react',
-    'react-hooks',
-    'jsx-a11y',
-    'import'
-  ],
+  plugins: ['react', 'react-hooks', 'jsx-a11y', 'import'],
   settings: {
     react: {
-      version: 'detect'
+      version: 'detect',
     },
     'import/resolver': {
       node: {
-        extensions: ['.js', '.jsx', '.ts', '.tsx']
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
       },
       alias: {
         map: [
           ['@', './electron-react-app/src'],
           ['@main', './electron-react-app/src/main'],
           ['@renderer', './electron-react-app/src/renderer'],
-          ['@shared', './electron-react-app/src/shared']
-        ]
-      }
-    }
+          ['@shared', './electron-react-app/src/shared'],
+        ],
+      },
+    },
   },
   rules: {
     // General
@@ -54,25 +49,28 @@ module.exports = {
     'no-constant-condition': 'off',
     'no-useless-catch': 'off',
     'prefer-template': 'off',
-    
+
     // React
     'react/prop-types': 'off', // We'll use TypeScript eventually
     'react/react-in-jsx-scope': 'off', // Not needed in React 17+
     'react/jsx-uses-react': 'off',
-    'react/jsx-filename-extension': ['off', { extensions: ['.js', '.jsx', '.tsx'] }],
+    'react/jsx-filename-extension': [
+      'off',
+      { extensions: ['.js', '.jsx', '.tsx'] },
+    ],
     'react/jsx-props-no-spreading': 'off',
     'react/function-component-definition': 'off',
-    
+
     // React Hooks
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'off',
-    
+
     // Import
     'import/order': 'off',
     'import/no-duplicates': 'off',
     'import/no-unresolved': 'off',
     'import/newline-after-import': 'off',
-    
+
     // Accessibility
     'jsx-a11y/anchor-is-valid': 'error',
     'jsx-a11y/click-events-have-key-events': 'off',
@@ -82,11 +80,11 @@ module.exports = {
     'jsx-a11y/no-noninteractive-tabindex': 'off',
     'jsx-a11y/no-noninteractive-element-interactions': 'off',
     'no-control-regex': 'off',
-    
+
     // Code style
-    'indent': 'off',
-    'quotes': 'off',
-    'semi': 'off',
+    indent: 'off',
+    quotes: 'off',
+    semi: 'off',
     'comma-dangle': 'off',
     'max-len': 'off',
     'arrow-parens': ['off', 'as-needed'],
@@ -94,28 +92,28 @@ module.exports = {
     'array-bracket-spacing': 'off',
     'space-before-function-paren': 'off',
     'no-empty': 'off',
-    'react/no-unescaped-entities': 'off'
+    'react/no-unescaped-entities': 'off',
   },
   overrides: [
     {
       files: ['*.test.js', '*.spec.js'],
       env: {
-        jest: true
+        jest: true,
       },
       rules: {
         'no-console': 'off',
         'import/order': 'off',
-        'quotes': 'off',
+        quotes: 'off',
         'comma-dangle': 'off',
-        'arrow-parens': 'off'
-      }
+        'arrow-parens': 'off',
+      },
     },
     {
       files: ['electron-react-app/src/main/**/*.js'],
       env: {
         browser: false,
-        node: true
-      }
-    }
-  ]
-}; 
+        node: true,
+      },
+    },
+  ],
+};

@@ -45,6 +45,13 @@
     "build:renderer": "webpack --mode=production",
     "postinstall-disabled": "electron-builder install-app-deps",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "validate": "npm run lint && npm run format:check && npm run typecheck && npm test",
+    "precommit": "npm run validate",
+    "prepare": "husky install",
     "package": "rimraf dist && npm run build && electron-builder build --publish never",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "node scripts/verify-setup.js",
@@ -113,6 +120,7 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^6.1.4",
+    "electron-window-state": "^5.0.3",
     "framer-motion": "^12.18.1",
     "mammoth": "^1.9.1",
     "node-tesseract-ocr": "^2.2.1",
@@ -123,8 +131,7 @@
     "react-dom": "^18.2.0",
     "sanitize-html": "^2.17.0",
     "sharp": "^0.33.2",
-    "xlsx-populate": "^1.21.0",
-    "electron-window-state": "^5.0.3"
+    "xlsx-populate": "^1.21.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",
@@ -185,9 +192,11 @@
     "file-loader": "^6.2.0",
     "html-webpack-plugin": "^5.5.3",
     "https-browserify": "^1.0.0",
+    "husky": "^9.0.11",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "lint-staged": "^15.2.10",
     "mini-css-extract-plugin": "^2.7.6",
     "os-browserify": "^0.3.0",
     "path-browserify": "^1.0.1",
@@ -221,7 +230,77 @@
     "webpack-merge": "^5.9.0",
     "zod": "^3.23.8"
   },
-  
+  "build": {
+    "productName": "Stratosort",
+    "appId": "com.stratosort.app",
+    "asar": true,
+    "asarUnpack": "**\\*.{node,dll}",
+    "files": [
+      "src",
+      "assets",
+      "startup-check.js",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "assets/icons/icons/mac/icon.icns",
+      "target": {
+        "target": "default",
+        "arch": [
+          "arm64",
+          "x64"
+        ]
+      },
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/icons/win/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "directories": {
+      "app": "release/app",
+      "buildResources": "assets",
+      "output": "release/build"
+    },
+    "extraResources": [
+      "./assets/**"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --cache --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,scss}": [
+      "prettier --write"
+    ]
+  },
   "collective": {
     "url": "https://opencollective.com/electron-react-boilerplate-594"
   }

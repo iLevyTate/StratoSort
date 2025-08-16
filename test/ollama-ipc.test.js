@@ -2,7 +2,7 @@ const { ipcMain } = require('./mocks/electron');
 const { IPC_CHANNELS } = require('../src/shared/constants');
 
 jest.mock('ollama', () => ({
-  Ollama: jest.fn()
+  Ollama: jest.fn(),
 }));
 const { Ollama } = require('ollama');
 const registerOllamaIpc = require('../src/main/ipc/ollama');
@@ -16,11 +16,13 @@ describe('registerOllamaIpc', () => {
 
   test('GET_MODELS returns categorized model data', async () => {
     const mockOllama = {
-      list: jest.fn().mockResolvedValue({ models: [
-        { name: 'gemma3:4b' },
-        { name: 'clip' },
-        { name: 'mxbai-embed-large' }
-      ] })
+      list: jest.fn().mockResolvedValue({
+        models: [
+          { name: 'gemma3:4b' },
+          { name: 'clip' },
+          { name: 'mxbai-embed-large' },
+        ],
+      }),
     };
     const systemAnalytics = {};
     registerOllamaIpc({
@@ -32,7 +34,7 @@ describe('registerOllamaIpc', () => {
       getOllamaModel: () => 'text-model',
       getOllamaVisionModel: () => 'vision-model',
       getOllamaEmbeddingModel: () => 'embed-model',
-      getOllamaHost: () => 'http://host'
+      getOllamaHost: () => 'http://host',
     });
 
     const handler = ipcMain._handlers.get(IPC_CHANNELS.OLLAMA.GET_MODELS);
@@ -44,7 +46,7 @@ describe('registerOllamaIpc', () => {
     expect(result.selected).toEqual({
       textModel: 'text-model',
       visionModel: 'vision-model',
-      embeddingModel: 'embed-model'
+      embeddingModel: 'embed-model',
     });
     expect(result.host).toBe('http://host');
   });
@@ -52,20 +54,27 @@ describe('registerOllamaIpc', () => {
   test('TEST_CONNECTION reports healthy on success', async () => {
     let constructedHost;
     const list = jest.fn().mockResolvedValue({ models: [{ name: 'a' }] });
-    Ollama.mockImplementation(opts => { constructedHost = opts.host; return { list }; });
+    Ollama.mockImplementation((opts) => {
+      constructedHost = opts.host;
+      return { list };
+    });
     const systemAnalytics = {};
     registerOllamaIpc({
       ipcMain,
       IPC_CHANNELS,
       logger: { error: jest.fn() },
       systemAnalytics,
-      getOllamaModel: () => 'text'
+      getOllamaModel: () => 'text',
     });
 
     const handler = ipcMain._handlers.get(IPC_CHANNELS.OLLAMA.TEST_CONNECTION);
     const result = await handler(null, 'http://custom');
     expect(constructedHost).toBe('http://custom');
-    expect(result).toMatchObject({ success: true, host: 'http://custom', modelCount: 1 });
+    expect(result).toMatchObject({
+      success: true,
+      host: 'http://custom',
+      modelCount: 1,
+    });
     expect(systemAnalytics.ollamaHealth.status).toBe('healthy');
   });
 
@@ -82,7 +91,7 @@ describe('registerOllamaIpc', () => {
       getOllama: () => mockOllama,
       getOllamaModel: () => 'text-model',
       getOllamaVisionModel: () => 'vision-model',
-      getOllamaEmbeddingModel: () => 'embed-model'
+      getOllamaEmbeddingModel: () => 'embed-model',
     });
     const handler = ipcMain._handlers.get(IPC_CHANNELS.OLLAMA.GET_MODELS);
     const result = await handler();
@@ -90,4 +99,3 @@ describe('registerOllamaIpc', () => {
     expect(systemAnalytics.ollamaHealth.status).toBe('unhealthy');
   });
 });
-

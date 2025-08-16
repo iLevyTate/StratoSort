@@ -16,32 +16,31 @@
 
 ## 🚀 Overview
 
-**StratoSort** is a production-ready, privacy-focused AI document organization system that intelligently categorizes and organizes your files using local AI processing. Built with modern technologies and featuring a beautiful glassmorphism interface, StratoSort provides enterprise-grade file management without compromising your privacy.
+**StratoSort** is a production-ready, privacy-focused AI document organization system that intelligently categorizes and organizes your files using local AI processing (Ollama). It features a modern UI, fast content analysis, semantic folder matching, and safe, undoable batch operations.
 
-## ✅ Feature status
+## ✅ Capabilities
 
-- **Available now**
-  - **Document analysis**: PDFs, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX with Ollama-backed extraction and sensible fallbacks
-  - **Image analysis**: PNG/JPG/JPEG/GIF/BMP/WEBP/TIFF/SVG via vision models; basic OCR support
-  - **Smart folders**: add/edit/delete, directory creation/validation, folder structure scan, semantic matching (embeddings/LLM fallback)
-  - **Batch organize**: conflict-safe moves with progress events and unique-name handling
-  - **Undo/Redo**: action history with confirmation for destructive operations and a history modal
-  - **Analysis history**: record, search, statistics, and JSON export
-  - **Settings**: Ollama host and model selection persisted to user data
-  - **File selection**: select files or scan directories (recursively) for supported types
+- **AI analysis**
+  - Documents: PDF, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX; automatic fallbacks on parsing errors
+  - Images: PNG/JPG/JPEG/GIF/BMP/WEBP/TIFF/SVG with vision models; optional OCR
+  - Smart categorization with embeddings-based refinement to match your configured folders
+- **Safe organization**
+  - Batch organize with conflict-safe moves, EXDEV handling, and unique name resolution
+  - Live progress updates and ETA; operations are undoable/redone via history
+- **Persistence & history**
+  - Analysis history with search, statistics, export
+  - Crash-resilient processing state; resumes incomplete batches after restart
+- **Customization**
+  - Settings for Ollama host and model selection (text/vision/embeddings); user-configurable models
+  - Smart folders CRUD, structure scan, and semantic matching
+- **Keyboard shortcuts**
+  - Organize phase: Undo (Ctrl/Cmd+Z), Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)
+- Disabled in this build: Audio analysis/transcription (models/UI endpoints exist but are disabled)
 
-- **Disabled in this build**
-  - **Audio analysis/transcription**: modules exist, but UI and IPC are disabled. References are commented in `src/preload/preload.js`, `src/renderer/App.js`, and `src/main/simple-main.js`.
-
-- **Planned / in progress**
-  - In-app semantic search UI leveraging stored analysis and embeddings
-  - Expanded accessibility and theming options
-  - Optional video analysis
-
-### 🔑 Key Benefits
+### 🔑 Benefits
 
 - **🔒 100% Privacy**: All AI processing happens locally using Ollama
-- **🎨 Modern Design**: Beautiful glassmorphism UI with Apple-inspired aesthetics  
+- **🎨 Modern Design**: Beautiful glassmorphism UI with Apple-inspired aesthetics
 - **🧠 Smart Analysis**: Deep content analysis for accurate categorization
 - **⚡ Fast Processing**: Optimized models for quick file analysis
 - **📁 Smart Folders**: Automatic organization into intelligent folder structures
@@ -51,13 +50,15 @@
 ## ✨ Current Features
 
 ### 🎯 Complete 5-Phase Workflow
+
 1. **🚀 Welcome** - Introduction and quick start options
-2. **⚙️ Setup** - Configure smart folders and AI settings  
+2. **⚙️ Setup** - Configure smart folders and AI settings
 3. **🔍 Discover** - File selection, scanning, and automatic AI analysis
 4. **📂 Organize** - Review suggestions and execute file organization
 5. **✅ Complete** - Results summary and workflow completion
 
 ### 🧠 AI-Powered Analysis
+
 - **Content Analysis**: Reads and understands file contents (PDFs, text, documents)
 - **Smart Categorization**: Intelligent folder matching based on content
 - **Metadata Extraction**: Extracts subjects, dates, projects, and purposes
@@ -65,6 +66,7 @@
 - **Multi-Format Support**: PDF, DOC/DOCX, TXT/MD/RTF/HTML, XLSX, PPTX, and common images
 
 ### 🎨 Modern Interface
+
 - **Glassmorphism Design**: Translucent cards with backdrop blur effects
 - **Responsive Layout**: Full-height phases without scrolling
 - **Smooth Animations**: Subtle transitions and micro-interactions
@@ -72,6 +74,7 @@
 - **Dark/Light Themes**: Adaptive color schemes
 
 ### 📁 Smart Folder Management
+
 - **Custom Folders**: Create intelligent organizational structures
 - **Path Integration**: Real file system path management
 - **Bulk Operations**: Organize hundreds of files simultaneously
@@ -83,11 +86,13 @@
 ## 🤖 AI Models & performance
 
 ### Optimized model selection
+
 - **Text analysis**: `llama3.2:latest` (default)
 - **Vision analysis**: `llava:latest` (default)
 - **Audio (optional, currently disabled in UI)**: `dimavz/whisper-tiny:latest`
 
 ### Performance notes
+
 - Real-world speed and accuracy depend on your hardware and chosen models
 - Works offline with local inference via Ollama; without Ollama, AI-driven features are limited
 
@@ -96,15 +101,17 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - **Node.js** 18.0.0 or higher
-- **npm** 8.0.0 or higher  
+- **npm** 8.0.0 or higher
 - **Ollama** (for AI functionality)
 
 ### Installation
 
 1. **Clone & Install**
+
    ```bash
-   git clone https://github.com/yourusername/stratosort.git
+   git clone https://github.com/stratosort/stratosort.git
    cd stratosort
    npm install
    ```
@@ -112,27 +119,31 @@
 ### Windows Installer with Ollama Bootstrap
 
 The Windows installer will:
+
 - Check for Ollama on PATH
 - If missing, download and install Ollama silently
 - Pull base models (llama3.2:latest, llava:latest, mxbai-embed-large)
 - Install StratoSort
 
 Build the installer:
+
 ```bash
 npm run dist:win
 ```
 
 Notes:
+
 - The NSIS include script is at `build/installer.nsh` and is referenced by `electron-builder.json` → `nsis.include`.
 - If you prefer to skip model pulls, remove those lines in `build/installer.nsh`.
 
 ### Setup Ollama
+
 ```bash
 # Install Ollama (https://ollama.ai)
 # Windows
 winget install Ollama.Ollama
 
-# macOS  
+# macOS
 brew install ollama
 
 # Linux
@@ -140,6 +151,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ```
 
 3. **Install Required Models**
+
 ```bash
 ollama pull llama3.2:latest
 ollama pull llava:latest
@@ -148,7 +160,8 @@ ollama pull llava:latest
 ```
 
 4. **Environment Variables**
-Create a `.env` file in the project root. These variables are optional but recommended for clarity:
+   Create a `.env` file in the project root. These variables are optional but recommended for clarity:
+
 ```ini
 # See .env.example for the full list and documentation
 NODE_ENV=development
@@ -160,28 +173,32 @@ OLLAMA_EMBEDDING_MODEL=mxbai-embed-large
 ```
 
 5. **Start StratoSort**
+
 ```bash
 npm run dev
 ```
 
 ---
 
-## 🧠 Using Ollama locally
+## 🧠 Ollama setup (local inference)
 
 ### Windows
 
 - Install:
+
 ```powershell
 winget install Ollama.Ollama
 # or download the Windows installer from https://ollama.ai
 ```
 
 - Start the Ollama server:
+
 ```powershell
 ollama serve
 ```
 
 - Pull required models:
+
 ```powershell
 # Text (documents)
 ollama pull llama3.2:latest
@@ -197,6 +214,7 @@ ollama pull dimavz/whisper-tiny:latest
 ```
 
 - Verify:
+
 ```powershell
 ollama list
 curl http://127.0.0.1:11434/api/tags
@@ -213,22 +231,28 @@ ollama run llama3.2:latest -p "Say hello"
 ### macOS
 
 - Install:
+
 ```bash
 brew install ollama
 # or download the macOS app from https://ollama.ai
 ```
+
 - Start:
+
 ```bash
 ollama serve
 ```
+
 - Pull models and verify (same commands as Windows, adjust shell).
 
 ### Linux
 
 - Install:
+
 ```bash
 curl -fsSL https://ollama.ai/install.sh | sh
 ```
+
 - Start and pull models (same commands as above).
 
 ### Troubleshooting
@@ -242,6 +266,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ## 🏗️ Architecture
 
 ### Modern Tech Stack
+
 - **Frontend**: React 18 + TailwindCSS with glassmorphism design
 - **Backend**: Electron main process with Node.js services
 - **AI Processing**: Ollama integration for local inference
@@ -249,6 +274,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 - **State Management**: React Context with persistent storage
 
 ### File Structure
+
 ```
 stratosort/
 ├── src/
@@ -266,12 +292,52 @@ stratosort/
 └── test/                   # Test suites
 ```
 
+### System diagram
+
+```mermaid
+flowchart TD
+  subgraph Renderer [Renderer (React/Tailwind)]
+    UI[Phases & Components]
+    Undo[Undo/Redo System]
+    Events[operation-progress listener]
+  end
+
+  subgraph Preload [Preload]
+    Bridge[Context bridge: electronAPI]
+  end
+
+  subgraph Main [Main (Electron)]
+    IPC[IPC Handlers]
+    Services[ServiceIntegration (History, Undo, ProcessingState)]
+    Analyze[Analyzers: Document/Image]
+    Embeddings[EmbeddingIndex + FolderMatcher]
+    System[System Analytics]
+  end
+
+  subgraph Ollama [Ollama]
+    Models[Text/Vision/Embeddings]
+  end
+
+  UI --> Bridge
+  Undo --> Bridge
+  Events --> Bridge
+  Bridge --> IPC
+  IPC --> Analyze
+  IPC --> Services
+  IPC --> Embeddings
+  Analyze --> Ollama
+  Embeddings --> Ollama
+  Services --> IPC
+  IPC -->|operation-progress| Bridge
+```
+
 ---
 
 ## 💻 Development
 
 ### Available Commands
-```bash
+
+````bash
 # Development
 npm run dev                # Start development Electron app (dev build)
 npm run start:dev          # Dev build + Electron with logging
@@ -307,7 +373,25 @@ npm run ollama:serve       # Alias to 'ollama serve'
 
 # Linting
 npm run lint               # Code linting
-```
+
+# Pre-commit (local)
+pwsh scripts/precommit.ps1         # run checks (lint/format/typecheck/tests)
+pwsh scripts/precommit.ps1 -Fix    # auto-fix lint/format, then typecheck/tests
+
+---
+
+## 📦 Windows installer
+
+Build locally on Windows (PowerShell):
+```powershell
+pwsh scripts/build-windows.ps1
+````
+
+Artifacts will be in `release/build` (e.g., `.exe`/`.msi`).
+
+CI build: GitHub Actions workflow `Build Windows Installer` (`.github/workflows/release-windows.yml`) builds and uploads installers on tagged releases (vX.Y.Z) or on manual dispatch.
+
+````
 
 ### Development Features
 - **Hot Reload**: Live updates during development
@@ -366,7 +450,7 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
    - Choose between "Organize Files Now" or "Setup Configuration"
    - Optional demo walkthrough (currently hidden for streamlined experience)
 
-2. **⚙️ Setup Phase** 
+2. **⚙️ Setup Phase**
    - Create smart folders with custom names and paths
    - Configure AI models and performance settings
    - Set up naming conventions and organizational rules
@@ -400,11 +484,12 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
   keywords: ["research", "paper", "study", "analysis"],
   semanticTags: ["academic", "scientific", "educational"]
 }
-```
+````
 
 ### AI Model Configuration
+
 - **Text Model**: Controls document content analysis
-- **Vision Model**: Handles images and visual documents  
+- **Vision Model**: Handles images and visual documents
 - **Audio Model (optional/disabled)**: Transcription model if you enable audio features during development
 - **Timeout Settings**: Configurable analysis timeouts
 - **Confidence Thresholds**: Minimum confidence for auto-organization
@@ -414,6 +499,7 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
 ## 🤝 Contributing
 
 ### Development Setup
+
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing-feature`)
 3. Follow the established code patterns and architecture
@@ -421,8 +507,9 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
 5. Submit pull request with detailed description
 
 ### Code Standards
+
 - **Clean Code**: Follow established patterns, no technical debt
-- **Type Safety**: Use proper TypeScript where applicable  
+- **Type Safety**: Use proper TypeScript where applicable
 - **Error Handling**: Comprehensive error boundaries and logging
 - **Performance**: Optimize for speed and memory efficiency
 - **UI/UX**: Maintain glassmorphism design consistency
@@ -434,12 +521,14 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
 **MIT License** - Complete freedom to use, modify, and distribute.
 
 ### Permissions
+
 - ✅ Commercial use
-- ✅ Modification  
+- ✅ Modification
 - ✅ Distribution
 - ✅ Private use
 
 ### Requirements
+
 - 📄 License and copyright notice
 - 📄 Attribution in distributions
 
@@ -448,7 +537,7 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
 ## 🔗 Links & Resources
 
 - **Ollama**: [https://ollama.ai](https://ollama.ai)
-- **Electron**: [https://electronjs.org](https://electronjs.org)  
+- **Electron**: [https://electronjs.org](https://electronjs.org)
 - **React**: [https://reactjs.org](https://reactjs.org)
 - **TailwindCSS**: [https://tailwindcss.com](https://tailwindcss.com)
 
@@ -458,7 +547,7 @@ The workflow runs on pushes to main-like branches and on pull requests. See `.gi
 
 **🌟 StratoSort - Intelligent File Organization**
 
-*Privacy-focused • AI-powered • Production-ready*
+_Privacy-focused • AI-powered • Production-ready_
 
 **Built with modern technologies for the modern workspace**
 

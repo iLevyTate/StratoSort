@@ -18,12 +18,10 @@ class ServiceIntegration {
     await Promise.all([
       this.analysisHistory.initialize(),
       this.undoRedo.initialize(),
-      this.processingState.initialize()
+      this.processingState.initialize(),
     ]);
     this.initialized = true;
   }
 }
 
 module.exports = ServiceIntegration;
-
-

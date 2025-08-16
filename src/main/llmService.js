@@ -1,6 +1,10 @@
 const { logger } = require('../shared/logger');
 const { buildOllamaOptions } = require('./services/PerformanceService');
-const { getOllama: getOllamaClient, getOllamaModel, setOllamaModel } = require('./ollamaUtils');
+const {
+  getOllama: getOllamaClient,
+  getOllamaModel,
+  setOllamaModel,
+} = require('./ollamaUtils');
 
 /**
  * Test if Ollama is available and the model is working
@@ -9,7 +13,11 @@ async function testOllamaConnection() {
   try {
     const ollama = getOllamaClient();
     const model = getOllamaModel();
-    await ollama.generate({ model, prompt: 'Hello', options: { num_predict: 1 } });
+    await ollama.generate({
+      model,
+      prompt: 'Hello',
+      options: { num_predict: 1 },
+    });
     return { success: true, model };
   } catch (error) {
     logger.error('Ollama connection test failed', { error: error.message });
@@ -23,17 +31,20 @@ async function testOllamaConnection() {
  * @returns {string} A text prompt for the LLM.
  */
 function formatPromptForLLM(directoryStructure) {
-  let prompt = "Analyze the following file and folder structure:\n\n";
-  
+  let prompt = 'Analyze the following file and folder structure:\n\n';
+
   // Simplify the structure to avoid overly verbose output
   const simplifiedStructure = simplifyDirectoryStructure(directoryStructure);
   prompt += JSON.stringify(simplifiedStructure, null, 2);
 
-  prompt += "\n\nPlease suggest logical organization patterns to improve this structure. ";
-  prompt += "For each suggestion, explain your reasoning and list concrete actions ";
-  prompt += "(e.g., create new folders, move files/folders, rename items). ";
-  prompt += "Focus on clarity and ease of future navigation. ";
-  prompt += "Return your response as a JSON object with 'suggestions' array containing objects with 'action', 'reasoning', and 'priority' fields.";
+  prompt +=
+    '\n\nPlease suggest logical organization patterns to improve this structure. ';
+  prompt +=
+    'For each suggestion, explain your reasoning and list concrete actions ';
+  prompt += '(e.g., create new folders, move files/folders, rename items). ';
+  prompt += 'Focus on clarity and ease of future navigation. ';
+  prompt +=
+    "Return your response as a JSON object with 'suggestions' array containing objects with 'action', 'reasoning', and 'priority' fields.";
 
   return prompt;
 }
@@ -43,19 +54,23 @@ function formatPromptForLLM(directoryStructure) {
  */
 function simplifyDirectoryStructure(structure, maxDepth = 3, currentDepth = 0) {
   if (currentDepth >= maxDepth) return '[... truncated ...]';
-  
-  return structure.map(item => {
+
+  return structure.map((item) => {
     const simplified = {
       name: item.name,
       type: item.type,
-      size: item.size
+      size: item.size,
     };
-    
+
     if (item.type === 'folder' && item.children && item.children.length > 0) {
-      simplified.children = simplifyDirectoryStructure(item.children, maxDepth, currentDepth + 1);
+      simplified.children = simplifyDirectoryStructure(
+        item.children,
+        maxDepth,
+        currentDepth + 1,
+      );
       simplified.childCount = item.children.length;
     }
-    
+
     return simplified;
   });
 }
@@ -73,7 +88,7 @@ async function getOrganizationSuggestions(directoryStructure) {
     logger.error('Ollama instance or model not configured');
     return {
       error: 'LLM not configured',
-      suggestions: []
+      suggestions: [],
     };
   }
 
@@ -81,11 +96,21 @@ async function getOrganizationSuggestions(directoryStructure) {
 
   try {
     logger.info('Sending organization request to LLM', { model });
-    
+
     const startTime = Date.now();
-    
+
     const perfOptions = await buildOllamaOptions('text');
-    const response = await ollama.generate({ model, prompt, format: 'json', options: { ...perfOptions, temperature: 0.3, num_predict: 1000, stop: ['\n\n', '###'] } });
+    const response = await ollama.generate({
+      model,
+      prompt,
+      format: 'json',
+      options: {
+        ...perfOptions,
+        temperature: 0.3,
+        num_predict: 1000,
+        stop: ['\n\n', '###'],
+      },
+    });
 
     const duration = Date.now() - startTime;
     logger.performance('LLM organization suggestions', duration, { model });
@@ -97,27 +122,35 @@ async function getOrganizationSuggestions(directoryStructure) {
     // Parse the JSON response
     let suggestions;
     try {
-    const parsedResponse = JSON.parse(response.response);
+      const parsedResponse = JSON.parse(response.response);
       suggestions = parsedResponse.suggestions || parsedResponse;
     } catch (parseError) {
-      logger.warn('Failed to parse LLM JSON response, using text parsing', { error: parseError.message });
+      logger.warn('Failed to parse LLM JSON response, using text parsing', {
+        error: parseError.message,
+      });
       suggestions = parseTextResponse(response.response);
     }
 
-    logger.info('LLM organization suggestions received', { 
-      suggestionsCount: Array.isArray(suggestions) ? suggestions.length : 0 
+    logger.info('LLM organization suggestions received', {
+      suggestionsCount: Array.isArray(suggestions) ? suggestions.length : 0,
     });
 
     return {
       suggestions: Array.isArray(suggestions) ? suggestions : [suggestions],
       model: model,
-      processingTime: duration
+      processingTime: duration,
     };
-
   } catch (error) {
-    logger.error('Error getting suggestions from LLM', { error: error.message, model });
-    
-    return { error: error.message || 'Failed to get suggestions from LLM', suggestions: [], fallbackSuggestions: getFallbackSuggestions(directoryStructure) };
+    logger.error('Error getting suggestions from LLM', {
+      error: error.message,
+      model,
+    });
+
+    return {
+      error: error.message || 'Failed to get suggestions from LLM',
+      suggestions: [],
+      fallbackSuggestions: getFallbackSuggestions(directoryStructure),
+    };
   }
 }
 
@@ -127,38 +160,41 @@ async function getOrganizationSuggestions(directoryStructure) {
 function parseTextResponse(responseText) {
   const suggestions = [];
   const lines = responseText.split('\n');
-  
+
   let currentSuggestion = null;
-  
+
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    
+
     // Look for suggestion patterns
-    if (trimmed.toLowerCase().includes('suggestion') || 
-        trimmed.toLowerCase().includes('organize') ||
-        trimmed.toLowerCase().includes('create folder')) {
-      
+    if (
+      trimmed.toLowerCase().includes('suggestion') ||
+      trimmed.toLowerCase().includes('organize') ||
+      trimmed.toLowerCase().includes('create folder')
+    ) {
       if (currentSuggestion) {
         suggestions.push(currentSuggestion);
       }
-      
+
       currentSuggestion = {
         action: trimmed,
         reasoning: '',
-        priority: 'medium'
+        priority: 'medium',
       };
-    } else if (currentSuggestion && 
-               (trimmed.toLowerCase().includes('reason') || 
-                trimmed.toLowerCase().includes('because'))) {
+    } else if (
+      currentSuggestion &&
+      (trimmed.toLowerCase().includes('reason') ||
+        trimmed.toLowerCase().includes('because'))
+    ) {
       currentSuggestion.reasoning = trimmed;
     }
   }
-  
+
   if (currentSuggestion) {
     suggestions.push(currentSuggestion);
   }
-  
+
   return suggestions;
 }
 
@@ -169,27 +205,27 @@ function getFallbackSuggestions(directoryStructure) {
   return [
     {
       action: "Create 'Documents' folder for text files",
-      reasoning: "Group all text-based files for easier access",
-      priority: "high"
+      reasoning: 'Group all text-based files for easier access',
+      priority: 'high',
     },
     {
-      action: "Create 'Media' folder for images and videos", 
-      reasoning: "Separate media files from documents",
-      priority: "medium"
+      action: "Create 'Media' folder for images and videos",
+      reasoning: 'Separate media files from documents',
+      priority: 'medium',
     },
     {
       action: "Create 'Archives' folder for compressed files",
-      reasoning: "Keep archive files organized and separate",
-      priority: "low"
-    }
+      reasoning: 'Keep archive files organized and separate',
+      priority: 'low',
+    },
   ];
 }
 
-module.exports = { 
-  getOrganizationSuggestions, 
+module.exports = {
+  getOrganizationSuggestions,
   formatPromptForLLM,
   getOllama: getOllamaClient,
   getOllamaModel,
   setOllamaModel,
-  testOllamaConnection
-}; 
+  testOllamaConnection,
+};

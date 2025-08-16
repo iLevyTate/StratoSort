@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
+import {
+  PHASES,
+  PHASE_TRANSITIONS,
+  PHASE_METADATA,
+} from '../../shared/constants';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
@@ -10,7 +14,11 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       // Ctrl/Cmd + Z for Undo
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'z' &&
+        !event.shiftKey
+      ) {
         event.preventDefault();
         try {
           window.electronAPI?.undoRedo?.undo?.();
@@ -20,7 +28,11 @@ export function useKeyboardShortcuts() {
       }
 
       // Ctrl/Cmd + Shift + Z for Redo (also support Ctrl+Y on Windows)
-      if ((event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        ((event.key.toLowerCase() === 'z' && event.shiftKey) ||
+          event.key.toLowerCase() === 'y')
+      ) {
         event.preventDefault();
         try {
           window.electronAPI?.undoRedo?.redo?.();
@@ -51,7 +63,11 @@ export function useKeyboardShortcuts() {
             const allowedTransitions = PHASE_TRANSITIONS[currentPhase] || [];
             if (allowedTransitions.includes(previousPhase)) {
               actions.advancePhase(previousPhase);
-              addNotification(`Navigated to ${PHASE_METADATA[previousPhase].title}`, 'info', 2000);
+              addNotification(
+                `Navigated to ${PHASE_METADATA[previousPhase].title}`,
+                'info',
+                2000,
+              );
             }
           }
         }
@@ -65,7 +81,11 @@ export function useKeyboardShortcuts() {
             const allowedTransitions = PHASE_TRANSITIONS[currentPhase] || [];
             if (allowedTransitions.includes(nextPhase)) {
               actions.advancePhase(nextPhase);
-              addNotification(`Navigated to ${PHASE_METADATA[nextPhase].title}`, 'info', 2000);
+              addNotification(
+                `Navigated to ${PHASE_METADATA[nextPhase].title}`,
+                'info',
+                2000,
+              );
             }
           }
         }
@@ -76,5 +96,3 @@ export function useKeyboardShortcuts() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [actions, currentPhase, addNotification, showSettings]);
 }
-
-

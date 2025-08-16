@@ -7,14 +7,10 @@ function AppProviders({ children }) {
   return (
     <NotificationProvider>
       <UndoRedoProvider>
-        <PhaseProvider>
-          {children}
-        </PhaseProvider>
+        <PhaseProvider>{children}</PhaseProvider>
       </UndoRedoProvider>
     </NotificationProvider>
   );
 }
 
 export default AppProviders;
-
-

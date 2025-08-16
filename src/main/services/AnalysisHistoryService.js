@@ -9,20 +9,20 @@ class AnalysisHistoryService {
     this.historyPath = path.join(this.userDataPath, 'analysis-history.json');
     this.indexPath = path.join(this.userDataPath, 'analysis-index.json');
     this.configPath = path.join(this.userDataPath, 'analysis-config.json');
-    
+
     this.analysisHistory = null;
     this.analysisIndex = null;
     this.config = null;
     this.initialized = false;
-    
+
     // Schema version for future migration support
-    this.SCHEMA_VERSION = "1.0.0";
+    this.SCHEMA_VERSION = '1.0.0';
     this.MAX_HISTORY_ENTRIES = 10000; // Configurable limit
   }
 
   async initialize() {
     if (this.initialized) return;
-    
+
     try {
       await this.loadConfig();
       await this.loadHistory();
@@ -57,7 +57,7 @@ class AnalysisHistoryService {
       backupFrequencyDays: 7,
       lastBackup: null,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
   }
 
@@ -65,7 +65,7 @@ class AnalysisHistoryService {
     try {
       const historyData = await fs.readFile(this.historyPath, 'utf8');
       this.analysisHistory = JSON.parse(historyData);
-      
+
       // Validate schema version
       if (this.analysisHistory.schemaVersion !== this.SCHEMA_VERSION) {
         await this.migrateHistory();
@@ -87,8 +87,8 @@ class AnalysisHistoryService {
       metadata: {
         lastCleanup: null,
         totalEntries: 0,
-        averageAnalysisTime: 0
-      }
+        averageAnalysisTime: 0,
+      },
     };
   }
 
@@ -113,21 +113,25 @@ class AnalysisHistoryService {
       categoryIndex: {},
       dateIndex: {},
       sizeIndex: {},
-      lastOptimized: null
+      lastOptimized: null,
     };
   }
 
   async recordAnalysis(fileInfo, analysisResults) {
     await this.initialize();
-    
+
     const timestamp = new Date().toISOString();
-    const fileHash = this.generateFileHash(fileInfo.path, fileInfo.size, fileInfo.lastModified);
-    
+    const fileHash = this.generateFileHash(
+      fileInfo.path,
+      fileInfo.size,
+      fileInfo.lastModified,
+    );
+
     const analysisEntry = {
       id: crypto.randomUUID(),
       fileHash: fileHash,
       timestamp: timestamp,
-      
+
       // File information
       originalPath: fileInfo.path,
       fileName: path.basename(fileInfo.path),
@@ -135,7 +139,7 @@ class AnalysisHistoryService {
       fileSize: fileInfo.size,
       lastModified: fileInfo.lastModified,
       mimeType: fileInfo.mimeType || null,
-      
+
       // Analysis results
       analysis: {
         subject: analysisResults.subject || null,
@@ -148,34 +152,34 @@ class AnalysisHistoryService {
         dates: analysisResults.dates || [],
         amounts: analysisResults.amounts || [],
         language: analysisResults.language || null,
-        sentiment: analysisResults.sentiment || null
+        sentiment: analysisResults.sentiment || null,
       },
-      
+
       // Processing metadata
       processing: {
         model: analysisResults.model || 'unknown',
         processingTimeMs: analysisResults.processingTime || 0,
         version: this.SCHEMA_VERSION,
         errorCount: analysisResults.errorCount || 0,
-        warnings: analysisResults.warnings || []
+        warnings: analysisResults.warnings || [],
       },
-      
+
       // Organization results (if file was moved/renamed)
       organization: {
         suggested: analysisResults.suggestedPath || null,
         actual: analysisResults.actualPath || null,
         renamed: analysisResults.renamed || false,
         newName: analysisResults.newName || null,
-        smartFolder: analysisResults.smartFolder || null
+        smartFolder: analysisResults.smartFolder || null,
       },
-      
+
       // Future expansion fields
       embedding: null, // For RAG functionality
       relations: [], // Related files
       userFeedback: null, // User corrections/ratings
       exportHistory: [], // Export/share history
       accessCount: 0,
-      lastAccessed: timestamp
+      lastAccessed: timestamp,
     };
 
     // Store the entry
@@ -187,39 +191,36 @@ class AnalysisHistoryService {
 
     // Update indexes
     await this.updateIndexes(analysisEntry);
-    
+
     // Save to disk
-    await Promise.all([
-      this.saveHistory(),
-      this.saveIndex()
-    ]);
+    await Promise.all([this.saveHistory(), this.saveIndex()]);
 
     // Cleanup if needed
     await this.performMaintenanceIfNeeded();
-    
+
     return analysisEntry.id;
   }
 
   async updateIndexes(entry) {
     const timestamp = new Date().toISOString();
     this.analysisIndex.updatedAt = timestamp;
-    
+
     // File hash index
     this.analysisIndex.fileHashes[entry.fileHash] = entry.id;
-    
+
     // Path lookup index
     this.analysisIndex.pathLookup[entry.originalPath] = entry.id;
-    
+
     // Tag index
     if (entry.analysis.tags) {
-      entry.analysis.tags.forEach(tag => {
+      entry.analysis.tags.forEach((tag) => {
         if (!this.analysisIndex.tagIndex[tag]) {
           this.analysisIndex.tagIndex[tag] = [];
         }
         this.analysisIndex.tagIndex[tag].push(entry.id);
       });
     }
-    
+
     // Category index
     if (entry.analysis.category) {
       if (!this.analysisIndex.categoryIndex[entry.analysis.category]) {
@@ -227,14 +228,14 @@ class AnalysisHistoryService {
       }
       this.analysisIndex.categoryIndex[entry.analysis.category].push(entry.id);
     }
-    
+
     // Date index (by month)
     const dateKey = entry.timestamp.substring(0, 7); // YYYY-MM
     if (!this.analysisIndex.dateIndex[dateKey]) {
       this.analysisIndex.dateIndex[dateKey] = [];
     }
     this.analysisIndex.dateIndex[dateKey].push(entry.id);
-    
+
     // Size index (by size ranges)
     const sizeRange = this.getSizeRange(entry.fileSize);
     if (!this.analysisIndex.sizeIndex[sizeRange]) {
@@ -253,51 +254,65 @@ class AnalysisHistoryService {
 
   generateFileHash(filePath, size, lastModified) {
     const hashInput = `${filePath}:${size}:${lastModified}`;
-    return crypto.createHash('sha256').update(hashInput).digest('hex').substring(0, 16);
+    return crypto
+      .createHash('sha256')
+      .update(hashInput)
+      .digest('hex')
+      .substring(0, 16);
   }
 
   async searchAnalysis(query) {
     await this.initialize();
-    
+
     const results = [];
     const searchTerms = query.toLowerCase().split(' ');
-    
+
     for (const [id, entry] of Object.entries(this.analysisHistory.entries)) {
       let score = 0;
-      
+
       // Search in file name
       if (entry.fileName.toLowerCase().includes(query.toLowerCase())) {
         score += 10;
       }
-      
+
       // Search in analysis fields
-      if (entry.analysis.subject && entry.analysis.subject.toLowerCase().includes(query.toLowerCase())) {
+      if (
+        entry.analysis.subject &&
+        entry.analysis.subject.toLowerCase().includes(query.toLowerCase())
+      ) {
         score += 8;
       }
-      
-      if (entry.analysis.summary && entry.analysis.summary.toLowerCase().includes(query.toLowerCase())) {
+
+      if (
+        entry.analysis.summary &&
+        entry.analysis.summary.toLowerCase().includes(query.toLowerCase())
+      ) {
         score += 6;
       }
-      
+
       // Search in tags
-      const tagMatches = entry.analysis.tags?.filter(tag => 
-        tag.toLowerCase().includes(query.toLowerCase())
-      ) || [];
+      const tagMatches =
+        entry.analysis.tags?.filter((tag) =>
+          tag.toLowerCase().includes(query.toLowerCase()),
+        ) || [];
       score += tagMatches.length * 4;
-      
+
       // Search in extracted text (if available)
-      if (entry.analysis.extractedText && entry.analysis.extractedText.toLowerCase().includes(query.toLowerCase())) {
+      if (
+        entry.analysis.extractedText &&
+        entry.analysis.extractedText.toLowerCase().includes(query.toLowerCase())
+      ) {
         score += 3;
       }
-      
+
       if (score > 0) {
         results.push({
           ...entry,
-          searchScore: score
+          searchScore: score,
         });
       }
     }
-    
+
     return results.sort((a, b) => b.searchScore - a.searchScore);
   }
 
@@ -310,13 +325,17 @@ class AnalysisHistoryService {
   async getAnalysisByCategory(category) {
     await this.initialize();
     const entryIds = this.analysisIndex.categoryIndex[category] || [];
-    return entryIds.map(id => this.analysisHistory.entries[id]).filter(Boolean);
+    return entryIds
+      .map((id) => this.analysisHistory.entries[id])
+      .filter(Boolean);
   }
 
   async getAnalysisByTag(tag) {
     await this.initialize();
     const entryIds = this.analysisIndex.tagIndex[tag] || [];
-    return entryIds.map(id => this.analysisHistory.entries[id]).filter(Boolean);
+    return entryIds
+      .map((id) => this.analysisHistory.entries[id])
+      .filter(Boolean);
   }
 
   async getRecentAnalysis(limit = 50) {
@@ -329,24 +348,36 @@ class AnalysisHistoryService {
 
   async getStatistics() {
     await this.initialize();
-    
+
     const entries = Object.values(this.analysisHistory.entries);
     const categories = Object.keys(this.analysisIndex.categoryIndex);
     const tags = Object.keys(this.analysisIndex.tagIndex);
-    
+
     return {
       totalFiles: entries.length,
       totalSize: this.analysisHistory.totalSize,
       categoriesCount: categories.length,
       tagsCount: tags.length,
-      averageConfidence: entries.reduce((sum, e) => sum + (e.analysis.confidence || 0), 0) / entries.length,
-      averageProcessingTime: entries.reduce((sum, e) => sum + (e.processing.processingTimeMs || 0), 0) / entries.length,
-      oldestAnalysis: entries.length > 0 ? entries.reduce((oldest, e) => 
-        new Date(e.timestamp) < new Date(oldest.timestamp) ? e : oldest
-      ).timestamp : null,
-      newestAnalysis: entries.length > 0 ? entries.reduce((newest, e) => 
-        new Date(e.timestamp) > new Date(newest.timestamp) ? e : newest
-      ).timestamp : null
+      averageConfidence:
+        entries.reduce((sum, e) => sum + (e.analysis.confidence || 0), 0) /
+        entries.length,
+      averageProcessingTime:
+        entries.reduce(
+          (sum, e) => sum + (e.processing.processingTimeMs || 0),
+          0,
+        ) / entries.length,
+      oldestAnalysis:
+        entries.length > 0
+          ? entries.reduce((oldest, e) =>
+              new Date(e.timestamp) < new Date(oldest.timestamp) ? e : oldest,
+            ).timestamp
+          : null,
+      newestAnalysis:
+        entries.length > 0
+          ? entries.reduce((newest, e) =>
+              new Date(e.timestamp) > new Date(newest.timestamp) ? e : newest,
+            ).timestamp
+          : null,
     };
   }
 
@@ -356,7 +387,7 @@ class AnalysisHistoryService {
     if (entryCount > this.config.maxHistoryEntries) {
       await this.cleanupOldEntries();
     }
-    
+
     // Remove entries older than retention period
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.config.retentionDays);
@@ -365,15 +396,20 @@ class AnalysisHistoryService {
 
   async cleanupOldEntries() {
     const entries = Object.entries(this.analysisHistory.entries);
-    const sortedEntries = entries.sort((a, b) => new Date(a[1].timestamp) - new Date(b[1].timestamp));
-    
-    const toRemove = sortedEntries.slice(0, entries.length - this.config.maxHistoryEntries);
-    
+    const sortedEntries = entries.sort(
+      (a, b) => new Date(a[1].timestamp) - new Date(b[1].timestamp),
+    );
+
+    const toRemove = sortedEntries.slice(
+      0,
+      entries.length - this.config.maxHistoryEntries,
+    );
+
     for (const [id, entry] of toRemove) {
       delete this.analysisHistory.entries[id];
       await this.removeFromIndexes(entry);
     }
-    
+
     this.analysisHistory.metadata.lastCleanup = new Date().toISOString();
     await this.saveHistory();
     await this.saveIndex();
@@ -382,7 +418,7 @@ class AnalysisHistoryService {
   async removeExpiredEntries(cutoffDate) {
     const entries = Object.entries(this.analysisHistory.entries);
     let removedCount = 0;
-    
+
     for (const [id, entry] of entries) {
       if (new Date(entry.timestamp) < cutoffDate) {
         delete this.analysisHistory.entries[id];
@@ -390,7 +426,7 @@ class AnalysisHistoryService {
         removedCount++;
       }
     }
-    
+
     if (removedCount > 0) {
       console.log(`Removed ${removedCount} expired analysis entries`);
       await this.saveHistory();
@@ -402,23 +438,29 @@ class AnalysisHistoryService {
     // Remove from various indexes
     delete this.analysisIndex.fileHashes[entry.fileHash];
     delete this.analysisIndex.pathLookup[entry.originalPath];
-    
+
     // Remove from tag index
     if (entry.analysis.tags) {
-      entry.analysis.tags.forEach(tag => {
+      entry.analysis.tags.forEach((tag) => {
         const tagEntries = this.analysisIndex.tagIndex[tag] || [];
-        this.analysisIndex.tagIndex[tag] = tagEntries.filter(id => id !== entry.id);
+        this.analysisIndex.tagIndex[tag] = tagEntries.filter(
+          (id) => id !== entry.id,
+        );
         if (this.analysisIndex.tagIndex[tag].length === 0) {
           delete this.analysisIndex.tagIndex[tag];
         }
       });
     }
-    
+
     // Remove from category index
     if (entry.analysis.category) {
-      const categoryEntries = this.analysisIndex.categoryIndex[entry.analysis.category] || [];
-      this.analysisIndex.categoryIndex[entry.analysis.category] = categoryEntries.filter(id => id !== entry.id);
-      if (this.analysisIndex.categoryIndex[entry.analysis.category].length === 0) {
+      const categoryEntries =
+        this.analysisIndex.categoryIndex[entry.analysis.category] || [];
+      this.analysisIndex.categoryIndex[entry.analysis.category] =
+        categoryEntries.filter((id) => id !== entry.id);
+      if (
+        this.analysisIndex.categoryIndex[entry.analysis.category].length === 0
+      ) {
         delete this.analysisIndex.categoryIndex[entry.analysis.category];
       }
     }
@@ -433,13 +475,13 @@ class AnalysisHistoryService {
     this.config = this.getDefaultConfig();
     this.analysisHistory = this.createEmptyHistory();
     this.analysisIndex = this.createEmptyIndex();
-    
+
     await Promise.all([
       this.saveConfig(),
       this.saveHistory(),
-      this.saveIndex()
+      this.saveIndex(),
     ]);
-    
+
     this.initialized = true;
   }
 
@@ -450,13 +492,19 @@ class AnalysisHistoryService {
 
   async saveHistory() {
     this.analysisHistory.updatedAt = new Date().toISOString();
-    await fs.writeFile(this.historyPath, JSON.stringify(this.analysisHistory, null, 2));
+    await fs.writeFile(
+      this.historyPath,
+      JSON.stringify(this.analysisHistory, null, 2),
+    );
   }
 
   async saveIndex() {
     this.analysisIndex.updatedAt = new Date().toISOString();
-    await fs.writeFile(this.indexPath, JSON.stringify(this.analysisIndex, null, 2));
+    await fs.writeFile(
+      this.indexPath,
+      JSON.stringify(this.analysisIndex, null, 2),
+    );
   }
 }
 
-module.exports = AnalysisHistoryService; 
+module.exports = AnalysisHistoryService;

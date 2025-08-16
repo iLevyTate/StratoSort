@@ -18,7 +18,11 @@ function App() {
         <AppShell header={<NavigationBar />}>
           <PhaseRenderer />
           <TooltipManager />
-          <FirstRunWizard onComplete={() => { /* no-op: hidden after connect ok */ }} />
+          <FirstRunWizard
+            onComplete={() => {
+              /* no-op: hidden after connect ok */
+            }}
+          />
         </AppShell>
       </AppProviders>
     </ErrorBoundary>
@@ -26,5 +30,3 @@ function App() {
 }
 
 export default App;
-
-

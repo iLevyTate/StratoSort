@@ -1,49 +1,75 @@
 const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
-const { getOllamaVisionModel, loadOllamaConfig, getOllamaClient } = require('../ollamaUtils');
-const { AI_DEFAULTS, SUPPORTED_IMAGE_EXTENSIONS } = require('../../shared/constants');
+const {
+  getOllamaVisionModel,
+  loadOllamaConfig,
+  getOllamaClient,
+} = require('../ollamaUtils');
+const {
+  AI_DEFAULTS,
+  SUPPORTED_IMAGE_EXTENSIONS,
+} = require('../../shared/constants');
 const { normalizeAnalysisResult } = require('./utils');
-const { getIntelligentCategory: getIntelligentImageCategory, getIntelligentKeywords: getIntelligentImageKeywords, safeSuggestedName } = require('./fallbackUtils');
+const {
+  getIntelligentCategory: getIntelligentImageCategory,
+  getIntelligentKeywords: getIntelligentImageKeywords,
+  safeSuggestedName,
+} = require('./fallbackUtils');
 const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 
 // App configuration for image analysis - Optimized for speed
-const AppConfig = { ai: { imageAnalysis: {
-  defaultModel: AI_DEFAULTS.IMAGE.MODEL,
-  defaultHost: AI_DEFAULTS.IMAGE.HOST,
-  timeout: 120000,
-  temperature: AI_DEFAULTS.IMAGE.TEMPERATURE,
-  maxTokens: AI_DEFAULTS.IMAGE.MAX_TOKENS,
-} } };
+const AppConfig = {
+  ai: {
+    imageAnalysis: {
+      defaultModel: AI_DEFAULTS.IMAGE.MODEL,
+      defaultHost: AI_DEFAULTS.IMAGE.HOST,
+      timeout: 120000,
+      temperature: AI_DEFAULTS.IMAGE.TEMPERATURE,
+      maxTokens: AI_DEFAULTS.IMAGE.MAX_TOKENS,
+    },
+  },
+};
 
 // Initialize Ollama client
 // Use shared client from ollamaUtils
 
-async function analyzeImageWithOllama(imageBase64, originalFileName, smartFolders = []) {
+async function analyzeImageWithOllama(
+  imageBase64,
+  originalFileName,
+  smartFolders = [],
+) {
   try {
     const { logger } = require('../../shared/logger');
-    logger.info(`Analyzing image content with Ollama`, { model: AppConfig.ai.imageAnalysis.defaultModel });
-    
+    logger.info(`Analyzing image content with Ollama`, {
+      model: AppConfig.ai.imageAnalysis.defaultModel,
+    });
+
     // Build folder categories string for the prompt (include descriptions)
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       const validFolders = smartFolders
-        .filter(f => f && typeof f.name === 'string' && f.name.trim().length > 0)
+        .filter(
+          (f) => f && typeof f.name === 'string' && f.name.trim().length > 0,
+        )
         .slice(0, 10)
-        .map(f => ({
+        .map((f) => ({
           name: f.name.trim().slice(0, 50),
-          description: (f.description || '').trim().slice(0, 140)
+          description: (f.description || '').trim().slice(0, 140),
         }));
       if (validFolders.length > 0) {
         const folderListDetailed = validFolders
-          .map((f, i) => `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`)
+          .map(
+            (f, i) =>
+              `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`,
+          )
           .join('\n');
-        
+
         folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the IMAGE CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
       }
     }
-    
+
     const prompt = `You are an expert image analyzer for an automated file organization system. Analyze this image named "${originalFileName}" and extract structured information.
 
 Your response should be a JSON object with the following fields:
@@ -63,7 +89,10 @@ If you cannot determine a field, omit it from the JSON. Do not make up informati
 Analyze this image:`;
 
     const cfg = await loadOllamaConfig();
-    const modelToUse = getOllamaVisionModel() || cfg.selectedVisionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const modelToUse =
+      getOllamaVisionModel() ||
+      cfg.selectedVisionModel ||
+      AppConfig.ai.imageAnalysis.defaultModel;
     const client = await getOllamaClient();
     const response = await client.generate({
       model: modelToUse,
@@ -79,23 +108,33 @@ Analyze this image:`;
     if (response.response) {
       try {
         const parsedJson = JSON.parse(response.response);
-        
+
         // Validate and structure the date
         if (parsedJson.date) {
           try {
-            parsedJson.date = new Date(parsedJson.date).toISOString().split('T')[0];
+            parsedJson.date = new Date(parsedJson.date)
+              .toISOString()
+              .split('T')[0];
           } catch (e) {
             delete parsedJson.date;
             logger.warn('Ollama returned an invalid date for image, omitting.');
           }
         }
-        
+
         // Ensure array fields are initialized if undefined
-        const finalKeywords = Array.isArray(parsedJson.keywords) ? parsedJson.keywords : [];
-        const finalColors = Array.isArray(parsedJson.colors) ? parsedJson.colors : [];
-        
+        const finalKeywords = Array.isArray(parsedJson.keywords)
+          ? parsedJson.keywords
+          : [];
+        const finalColors = Array.isArray(parsedJson.colors)
+          ? parsedJson.colors
+          : [];
+
         // Ensure confidence is a reasonable number
-        if (!parsedJson.confidence || parsedJson.confidence < 60 || parsedJson.confidence > 100) {
+        if (
+          !parsedJson.confidence ||
+          parsedJson.confidence < 60 ||
+          parsedJson.confidence > 100
+        ) {
           parsedJson.confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
         }
 
@@ -106,45 +145,50 @@ Analyze this image:`;
           has_text: Boolean(parsedJson.has_text),
         };
       } catch (e) {
-        logger.error('Error parsing Ollama JSON response for image', { error: e.message });
-        return { 
-          error: 'Failed to parse image analysis from Ollama.', 
+        logger.error('Error parsing Ollama JSON response for image', {
+          error: e.message,
+        });
+        return {
+          error: 'Failed to parse image analysis from Ollama.',
           keywords: [],
-          confidence: 65
+          confidence: 65,
         };
       }
     }
-    
-    return { 
-      error: 'No content in Ollama response for image', 
+
+    return {
+      error: 'No content in Ollama response for image',
       keywords: [],
-      confidence: 60
+      confidence: 60,
     };
   } catch (error) {
     const { logger } = require('../../shared/logger');
-    logger.error('Error calling Ollama API for image', { error: error.message });
-    
+    logger.error('Error calling Ollama API for image', {
+      error: error.message,
+    });
+
     // Specific handling for zero-length image error
     if (error.message.includes('zero length image')) {
-      return { 
-        error: 'Image is empty or corrupted - cannot analyze zero-length image', 
+      return {
+        error: 'Image is empty or corrupted - cannot analyze zero-length image',
         keywords: [],
-        confidence: 0
+        confidence: 0,
       };
     }
     // Guidance for vision model input failures
     if (error.message.includes('unable to make llava embedding')) {
       return {
-        error: 'Unsupported image format or dimensions for vision model. Convert to PNG/JPG and keep under ~2048px on the longest side.',
+        error:
+          'Unsupported image format or dimensions for vision model. Convert to PNG/JPG and keep under ~2048px on the longest side.',
         keywords: [],
-        confidence: 0
+        confidence: 0,
       };
     }
-    
-    return { 
-      error: `Ollama API error for image: ${error.message}`, 
+
+    return {
+      error: `Ollama API error for image: ${error.message}`,
       keywords: [],
-      confidence: 60
+      confidence: 60,
     };
   }
 }
@@ -163,7 +207,9 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       category: 'unsupported',
       keywords: [],
       confidence: 0,
-      suggestedName: fileName.replace(fileExtension, '').replace(/[^a-zA-Z0-9_-]/g, '_')
+      suggestedName: fileName
+        .replace(fileExtension, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_'),
     };
   }
 
@@ -176,20 +222,27 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         error: 'Image file is empty (0 bytes)',
         category: 'error',
         keywords: [],
-        confidence: 0
+        confidence: 0,
       };
     }
-    
+
     logger.debug(`Image file size`, { bytes: stats.size });
 
     // Read and encode image as base64
     let imageBuffer = await fs.readFile(filePath);
-    
+
     // Preprocess image for vision model compatibility
     // - Convert unsupported formats (svg, tiff, bmp, gif, webp) to PNG
     // - Downscale very large images to avoid model failures
     try {
-      const needsFormatConversion = ['.svg', '.tiff', '.tif', '.bmp', '.gif', '.webp'].includes(fileExtension);
+      const needsFormatConversion = [
+        '.svg',
+        '.tiff',
+        '.tif',
+        '.bmp',
+        '.gif',
+        '.webp',
+      ].includes(fileExtension);
       let transformer = null;
 
       let meta = null;
@@ -198,14 +251,18 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       } catch {}
 
       const maxDimension = 2048;
-      const shouldResize = meta && (Number(meta.width) > maxDimension || Number(meta.height) > maxDimension);
+      const shouldResize =
+        meta &&
+        (Number(meta.width) > maxDimension ||
+          Number(meta.height) > maxDimension);
 
       if (needsFormatConversion || shouldResize) {
         transformer = sharp(imageBuffer);
         if (shouldResize) {
           const resizeOptions = { fit: 'inside', withoutEnlargement: true };
           if (meta && meta.width && meta.height) {
-            if (meta.width >= meta.height) resizeOptions.width = maxDimension; else resizeOptions.height = maxDimension;
+            if (meta.width >= meta.height) resizeOptions.width = maxDimension;
+            else resizeOptions.height = maxDimension;
           } else {
             resizeOptions.width = maxDimension;
           }
@@ -214,9 +271,12 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         imageBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
       }
     } catch (preErr) {
-      logger.error(`Failed to pre-process image for analysis`, { path: filePath, error: preErr.message });
+      logger.error(`Failed to pre-process image for analysis`, {
+        path: filePath,
+        error: preErr.message,
+      });
     }
-    
+
     // Validate buffer is not empty
     if (imageBuffer.length === 0) {
       logger.error(`Image buffer is empty after reading`, { path: filePath });
@@ -224,13 +284,13 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         error: 'Image buffer is empty after reading',
         category: 'error',
         keywords: [],
-        confidence: 0
+        confidence: 0,
       };
     }
-    
+
     logger.debug(`Image buffer size`, { bytes: imageBuffer.length });
     const imageBase64 = imageBuffer.toString('base64');
-    
+
     // Validate base64 encoding
     if (!imageBase64 || imageBase64.length === 0) {
       logger.error(`Image base64 encoding failed`, { path: filePath });
@@ -238,25 +298,40 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         error: 'Image base64 encoding failed',
         category: 'error',
         keywords: [],
-        confidence: 0
+        confidence: 0,
       };
     }
-    
+
     logger.debug(`Base64 length`, { chars: imageBase64.length });
 
     // Analyze with Ollama
-    const analysis = await analyzeImageWithOllama(imageBase64, fileName, smartFolders);
+    const analysis = await analyzeImageWithOllama(
+      imageBase64,
+      fileName,
+      smartFolders,
+    );
 
     // Semantic folder refinement using embeddings based on image JSON fields
     try {
       const embeddingIndex = new EmbeddingIndexService();
       const folderMatcher = new FolderMatchingService(embeddingIndex);
       if (smartFolders && smartFolders.length > 0) {
-        await Promise.all(smartFolders.map(f => folderMatcher.upsertFolderEmbedding(f)));
+        await Promise.all(
+          smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
+        );
       }
       const fileId = `image:${filePath}`;
-      const summary = [analysis.project, analysis.purpose, (analysis.keywords || []).join(' '), analysis.content_type || ''].filter(Boolean).join('\n');
-      await folderMatcher.upsertFileEmbedding(fileId, summary, { path: filePath });
+      const summary = [
+        analysis.project,
+        analysis.purpose,
+        (analysis.keywords || []).join(' '),
+        analysis.content_type || '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      await folderMatcher.upsertFileEmbedding(fileId, summary, {
+        path: filePath,
+      });
       const candidates = await folderMatcher.matchFileToFolders(fileId, 5);
       if (Array.isArray(candidates) && candidates.length > 0) {
         const top = candidates[0];
@@ -266,24 +341,34 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         analysis.folderMatchCandidates = candidates;
       }
     } catch {}
-    
+
     if (analysis && !analysis.error) {
       return normalizeAnalysisResult(
         {
           ...analysis,
           content_type: analysis.content_type || 'unknown',
-          suggestedName: analysis.suggestedName || safeSuggestedName(fileName, fileExtension)
+          suggestedName:
+            analysis.suggestedName ||
+            safeSuggestedName(fileName, fileExtension),
         },
-        { category: 'image', keywords: [] }
+        { category: 'image', keywords: [] },
       );
     }
-    
+
     // Fallback analysis if Ollama fails
-    const intelligentCategory = getIntelligentImageCategory(fileName, fileExtension);
-    const intelligentKeywords = getIntelligentImageKeywords(fileName, fileExtension);
-    
+    const intelligentCategory = getIntelligentImageCategory(
+      fileName,
+      fileExtension,
+    );
+    const intelligentKeywords = getIntelligentImageKeywords(
+      fileName,
+      fileExtension,
+    );
+
     return {
-      keywords: Array.isArray(analysis.keywords) ? analysis.keywords : intelligentKeywords,
+      keywords: Array.isArray(analysis.keywords)
+        ? analysis.keywords
+        : intelligentKeywords,
       purpose: 'Image analyzed with fallback method.',
       project: fileName.replace(fileExtension, ''),
       date: new Date().toISOString().split('T')[0],
@@ -291,7 +376,6 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       confidence: 60,
       error: analysis?.error || 'Ollama image analysis failed.',
     };
-
   } catch (error) {
     console.error(`Error processing image ${filePath}:`, error.message);
     return {
@@ -299,7 +383,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       category: 'error',
       project: fileName,
       keywords: [],
-      confidence: 50
+      confidence: 50,
     };
   }
 }
@@ -313,7 +397,10 @@ async function extractTextFromImage(filePath) {
     const prompt = `Extract all readable text from this image. Return only the text content, maintaining the original structure and formatting as much as possible. If no text is found, return "NO_TEXT_FOUND".`;
 
     const cfg2 = await loadOllamaConfig();
-    const modelToUse2 = getOllamaVisionModel() || cfg2.selectedVisionModel || AppConfig.ai.imageAnalysis.defaultModel;
+    const modelToUse2 =
+      getOllamaVisionModel() ||
+      cfg2.selectedVisionModel ||
+      AppConfig.ai.imageAnalysis.defaultModel;
     const client2 = await getOllamaClient();
     const response = await client2.generate({
       model: modelToUse2,
@@ -325,10 +412,10 @@ async function extractTextFromImage(filePath) {
       },
     });
 
-    if (response.response && response.response.trim() !== "NO_TEXT_FOUND") {
+    if (response.response && response.response.trim() !== 'NO_TEXT_FOUND') {
       return response.response.trim();
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error extracting text from image:', error.message);
@@ -340,5 +427,5 @@ async function extractTextFromImage(filePath) {
 
 module.exports = {
   analyzeImageFile,
-  extractTextFromImage
-}; 
+  extractTextFromImage,
+};

@@ -20,14 +20,17 @@ class ErrorHandler {
     try {
       // Create logs directory
       await fs.mkdir(this.logPath, { recursive: true });
-      
+
       // Set up log file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      this.currentLogFile = path.join(this.logPath, `stratosort-${timestamp}.log`);
-      
+      this.currentLogFile = path.join(
+        this.logPath,
+        `stratosort-${timestamp}.log`,
+      );
+
       // Set up global error handlers
       this.setupGlobalHandlers();
-      
+
       this.isInitialized = true;
       await this.log('info', 'ErrorHandler initialized successfully');
     } catch (error) {
@@ -62,12 +65,12 @@ class ErrorHandler {
   async handleError(error, context = {}) {
     const errorInfo = this.parseError(error);
     const severity = this.determineSeverity(errorInfo.type);
-    
+
     // Log the error
     await this.log(severity, errorInfo.message, {
       ...errorInfo,
       context,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     // Handle based on severity
@@ -97,12 +100,12 @@ class ErrorHandler {
       type: ERROR_TYPES.UNKNOWN,
       message: 'An unexpected error occurred',
       details: {},
-      stack: error?.stack
+      stack: error?.stack,
     };
 
     if (error instanceof Error) {
       errorInfo.message = error.message;
-      
+
       // Determine error type
       if (error.code === 'ENOENT') {
         errorInfo.type = ERROR_TYPES.FILE_NOT_FOUND;
@@ -110,10 +113,16 @@ class ErrorHandler {
       } else if (error.code === 'EACCES' || error.code === 'EPERM') {
         errorInfo.type = ERROR_TYPES.PERMISSION_DENIED;
         errorInfo.message = 'Permission denied';
-      } else if (error.message.includes('network') || error.code === 'ENOTFOUND') {
+      } else if (
+        error.message.includes('network') ||
+        error.code === 'ENOTFOUND'
+      ) {
         errorInfo.type = ERROR_TYPES.NETWORK_ERROR;
         errorInfo.message = 'Network connection error';
-      } else if (error.message.includes('AI') || error.message.includes('Ollama')) {
+      } else if (
+        error.message.includes('AI') ||
+        error.message.includes('Ollama')
+      ) {
         errorInfo.type = ERROR_TYPES.AI_UNAVAILABLE;
         errorInfo.message = 'AI service is unavailable';
       }
@@ -146,11 +155,11 @@ class ErrorHandler {
    */
   async handleCriticalError(message, error) {
     console.error('CRITICAL ERROR:', message, error);
-    
+
     // Log to file
     await this.log('critical', message, {
       error: error?.toString(),
-      stack: error?.stack
+      stack: error?.stack,
     });
 
     // Show error dialog
@@ -160,7 +169,7 @@ class ErrorHandler {
       message: 'Stratosort encountered a critical error',
       detail: `${message}\n\nWould you like to restart the application?`,
       buttons: ['Restart', 'Quit'],
-      defaultId: 0
+      defaultId: 0,
     });
 
     if (response.response === 0) {
@@ -174,13 +183,13 @@ class ErrorHandler {
    */
   async notifyUser(message, type = 'error') {
     const mainWindow = BrowserWindow.getFocusedWindow();
-    
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       // Send to renderer process
       mainWindow.webContents.send('app:error', {
         message,
         type,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } else {
       // Fallback to dialog
@@ -188,7 +197,7 @@ class ErrorHandler {
         type,
         title: type.charAt(0).toUpperCase() + type.slice(1),
         message,
-        buttons: ['OK']
+        buttons: ['OK'],
       });
     }
   }
@@ -206,7 +215,7 @@ class ErrorHandler {
       timestamp: new Date().toISOString(),
       level: level.toUpperCase(),
       message,
-      data
+      data,
     };
 
     try {
@@ -226,15 +235,17 @@ class ErrorHandler {
       const lines = logContent.trim().split('\n');
       const errors = lines
         .slice(-count)
-        .map(line => {
+        .map((line) => {
           try {
             return JSON.parse(line);
           } catch {
             return null;
           }
         })
-        .filter(entry => entry && ['ERROR', 'CRITICAL'].includes(entry.level));
-      
+        .filter(
+          (entry) => entry && ['ERROR', 'CRITICAL'].includes(entry.level),
+        );
+
       return errors;
     } catch (error) {
       console.error('Failed to read error log:', error);
@@ -255,7 +266,7 @@ class ErrorHandler {
         if (file.startsWith('stratosort-') && file.endsWith('.log')) {
           const filePath = path.join(this.logPath, file);
           const stats = await fs.stat(filePath);
-          
+
           if (stats.mtime < cutoffDate) {
             await fs.unlink(filePath);
             await this.log('info', `Cleaned up old log file: ${file}`);
@@ -269,4 +280,4 @@ class ErrorHandler {
 }
 
 // Export singleton instance
-module.exports = new ErrorHandler(); 
+module.exports = new ErrorHandler();

@@ -17,18 +17,26 @@ function PhaseRenderer() {
 
   const renderCurrentPhase = () => {
     switch (currentPhase) {
-      case PHASES.WELCOME: return <WelcomePhase />;
-      case PHASES.SETUP: return <SetupPhase />;
-      case PHASES.DISCOVER: return <DiscoverPhase />;
-      case PHASES.ORGANIZE: return <OrganizePhase />;
-      case PHASES.COMPLETE: return <CompletePhase />;
-      default: return <WelcomePhase />;
+      case PHASES.WELCOME:
+        return <WelcomePhase />;
+      case PHASES.SETUP:
+        return <SetupPhase />;
+      case PHASES.DISCOVER:
+        return <DiscoverPhase />;
+      case PHASES.ORGANIZE:
+        return <OrganizePhase />;
+      case PHASES.COMPLETE:
+        return <CompletePhase />;
+      default:
+        return <WelcomePhase />;
     }
   };
 
   return (
     <>
-      <Suspense fallback={<div className="p-13 text-system-gray-500">Loading…</div>}>
+      <Suspense
+        fallback={<div className="p-13 text-system-gray-500">Loading…</div>}
+      >
         {renderCurrentPhase()}
       </Suspense>
       {showSettings && <SettingsPanel />}
@@ -37,6 +45,3 @@ function PhaseRenderer() {
 }
 
 export default PhaseRenderer;
-
-
-

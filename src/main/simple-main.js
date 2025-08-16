@@ -1,4 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  Menu,
+  Tray,
+  nativeImage,
+} = require('electron');
 const { autoUpdater } = require('electron-updater');
 // const { performance } = require('perf_hooks'); // no longer used
 const isDev = process.env.NODE_ENV === 'development';
@@ -48,7 +57,10 @@ let serviceIntegration;
 let settingsService;
 
 // Custom folders helpers
-const { loadCustomFolders, saveCustomFolders } = require('./core/customFolders');
+const {
+  loadCustomFolders,
+  saveCustomFolders,
+} = require('./core/customFolders');
 
 // System monitoring and analytics
 const systemAnalytics = require('./core/systemAnalytics');
@@ -170,22 +182,30 @@ if (!gotTheLock) {
   if (!isDev) {
     // Production GPU optimizations
     app.commandLine.appendSwitch('enable-gpu-rasterization');
-    app.commandLine.appendSwitch('enable-gpu-memory-buffer-compositor-resources');
+    app.commandLine.appendSwitch(
+      'enable-gpu-memory-buffer-compositor-resources',
+    );
     app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
     app.commandLine.appendSwitch('ignore-gpu-blacklist');
     app.commandLine.appendSwitch('disable-software-rasterizer');
-    
+
     // Performance optimizations
     app.commandLine.appendSwitch('enable-zero-copy');
     app.commandLine.appendSwitch('enable-hardware-overlays');
-    app.commandLine.appendSwitch('enable-features', 'Vulkan,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoder,VaapiVideoEncoder');
-    
+    app.commandLine.appendSwitch(
+      'enable-features',
+      'Vulkan,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoder,VaapiVideoEncoder',
+    );
+
     logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
   } else {
     // Even in dev, prefer GPU acceleration where possible
     app.commandLine.appendSwitch('enable-gpu-rasterization');
     app.commandLine.appendSwitch('enable-zero-copy');
-    app.commandLine.appendSwitch('enable-features', 'Vulkan,CanvasOopRasterization,UseSkiaRenderer');
+    app.commandLine.appendSwitch(
+      'enable-features',
+      'Vulkan,CanvasOopRasterization,UseSkiaRenderer',
+    );
     logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
   }
 
@@ -194,46 +214,66 @@ if (!gotTheLock) {
     try {
       // Load custom folders
       customFolders = await loadCustomFolders();
-      logger.info('[STARTUP] Loaded custom folders:', customFolders.length, 'folders');
-      
+      logger.info(
+        '[STARTUP] Loaded custom folders:',
+        customFolders.length,
+        'folders',
+      );
+
       // Initialize service integration
       serviceIntegration = new ServiceIntegration();
       await serviceIntegration.initialize();
       logger.info('[MAIN] Service integration initialized successfully');
       // Initialize settings service
       settingsService = new SettingsService();
-      
+
       // Resume any incomplete organize batches (best-effort)
       try {
-        const incompleteBatches = serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() || [];
+        const incompleteBatches =
+          serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() ||
+          [];
         if (incompleteBatches.length > 0) {
-          logger.warn(`[RESUME] Found ${incompleteBatches.length} incomplete organize batch(es). They will resume when a new organize request starts.`);
+          logger.warn(
+            `[RESUME] Found ${incompleteBatches.length} incomplete organize batch(es). They will resume when a new organize request starts.`,
+          );
         }
       } catch (resumeErr) {
-        logger.warn('[RESUME] Failed to check incomplete batches:', resumeErr.message);
+        logger.warn(
+          '[RESUME] Failed to check incomplete batches:',
+          resumeErr.message,
+        );
       }
-      
+
       // Verify AI models on startup
       const ModelVerifier = require('./services/ModelVerifier');
       const modelVerifier = new ModelVerifier();
       const modelStatus = await modelVerifier.verifyEssentialModels();
-      
+
       if (!modelStatus.success) {
-        logger.warn('[STARTUP] Missing AI models detected:', modelStatus.missingModels);
+        logger.warn(
+          '[STARTUP] Missing AI models detected:',
+          modelStatus.missingModels,
+        );
         logger.info('[STARTUP] Install missing models:');
-        modelStatus.installationCommands.forEach(cmd => logger.info('  ', cmd));
+        modelStatus.installationCommands.forEach((cmd) =>
+          logger.info('  ', cmd),
+        );
       } else {
         logger.info('[STARTUP] ✅ All essential AI models verified and ready');
         if (modelStatus.hasWhisper) {
-          logger.info('[STARTUP] ✅ Whisper model available for audio analysis');
+          logger.info(
+            '[STARTUP] ✅ Whisper model available for audio analysis',
+          );
         }
       }
-      
+
       // Register IPC groups now that services and state are ready
       const getMainWindow = () => mainWindow;
       const getServiceIntegration = () => serviceIntegration;
       const getCustomFolders = () => customFolders;
-      const setCustomFolders = (folders) => { customFolders = folders; };
+      const setCustomFolders = (folders) => {
+        customFolders = folders;
+      };
 
       // Grouped IPC registration (single entry)
       registerAllIpc({
@@ -277,14 +317,22 @@ if (!gotTheLock) {
       try {
         const args = process.argv.slice(1);
         if (args.includes('--open-documents')) {
-          try { const docs = app.getPath('documents'); shell.openPath(docs); } catch {}
+          try {
+            const docs = app.getPath('documents');
+            shell.openPath(docs);
+          } catch {}
         }
         if (args.includes('--analyze-folder')) {
           // Bring window to front and trigger select directory
           const win = BrowserWindow.getAllWindows()[0];
           if (win) {
             win.focus();
-            try { win.webContents.send('operation-progress', { type: 'hint', message: 'Use Select Directory to analyze a folder' }); } catch {}
+            try {
+              win.webContents.send('operation-progress', {
+                type: 'hint',
+                message: 'Use Select Directory to analyze a folder',
+              });
+            } catch {}
           }
         }
       } catch {}
@@ -302,7 +350,7 @@ if (!gotTheLock) {
                   program: process.execPath,
                   args: '--analyze-folder',
                   iconPath: process.execPath,
-                  iconIndex: 0
+                  iconIndex: 0,
                 },
                 {
                   type: 'task',
@@ -310,27 +358,42 @@ if (!gotTheLock) {
                   program: process.execPath,
                   args: '--open-documents',
                   iconPath: process.execPath,
-                  iconIndex: 0
-                }
-              ]
-            }
+                  iconIndex: 0,
+                },
+              ],
+            },
           ]);
         }
       } catch {}
       // Fire-and-forget resume of incomplete batches shortly after window is ready
-      setTimeout(() => { resumeIncompleteBatches(); }, 500);
-      
+      setTimeout(() => {
+        try {
+          const getMainWindow = () => mainWindow;
+          resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
+        } catch (e) {
+          logger.warn(
+            '[RESUME] Failed to schedule resume of incomplete batches:',
+            e?.message,
+          );
+        }
+      }, 500);
+
       // Load Ollama config and apply any saved selections
       const cfg = await loadOllamaConfig();
       if (cfg.selectedTextModel) await setOllamaModel(cfg.selectedTextModel);
-      if (cfg.selectedVisionModel) await setOllamaVisionModel(cfg.selectedVisionModel);
-      if (cfg.selectedEmbeddingModel) await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
+      if (cfg.selectedVisionModel)
+        await setOllamaVisionModel(cfg.selectedVisionModel);
+      if (cfg.selectedEmbeddingModel)
+        await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
       logger.info('[STARTUP] Ollama configuration loaded');
-      
+
       // Install React DevTools in development (opt-in to avoid noisy warnings)
       try {
         if (isDev && process.env.REACT_DEVTOOLS === 'true') {
-          const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+          const {
+            default: installExtension,
+            REACT_DEVELOPER_TOOLS,
+          } = require('electron-devtools-installer');
           await installExtension(REACT_DEVELOPER_TOOLS).catch(() => {});
         }
       } catch {}
@@ -339,14 +402,23 @@ if (!gotTheLock) {
       try {
         if (!isDev) {
           autoUpdater.autoDownload = true;
-          autoUpdater.on('error', (err) => logger.error('[UPDATER] Error:', err));
-          autoUpdater.on('update-available', () => logger.info('[UPDATER] Update available'));
-          autoUpdater.on('update-not-available', () => logger.info('[UPDATER] No updates available'));
-          autoUpdater.on('update-downloaded', () => logger.info('[UPDATER] Update downloaded'));
-          autoUpdater.checkForUpdatesAndNotify().catch((e) => logger.error('[UPDATER] check failed', e));
+          autoUpdater.on('error', (err) =>
+            logger.error('[UPDATER] Error:', err),
+          );
+          autoUpdater.on('update-available', () =>
+            logger.info('[UPDATER] Update available'),
+          );
+          autoUpdater.on('update-not-available', () =>
+            logger.info('[UPDATER] No updates available'),
+          );
+          autoUpdater.on('update-downloaded', () =>
+            logger.info('[UPDATER] Update downloaded'),
+          );
+          autoUpdater
+            .checkForUpdatesAndNotify()
+            .catch((e) => logger.error('[UPDATER] check failed', e));
         }
       } catch {}
-
     } catch (error) {
       logger.error('[STARTUP] Failed to initialize:', error);
       createWindow();
@@ -355,7 +427,9 @@ if (!gotTheLock) {
 }
 
 // ===== APP LIFECYCLE =====
-logger.info('[STARTUP] Organizer AI App - Main Process Started with Full AI Features');
+logger.info(
+  '[STARTUP] Organizer AI App - Main Process Started with Full AI Features',
+);
 logger.info('[UI] Modern UI loaded with GPU acceleration');
 
 // App lifecycle
@@ -385,7 +459,10 @@ logger.info('✅ StratoSort main process initialized');
 
 // Add comprehensive error handling (single registration)
 process.on('uncaughtException', (error) => {
-  logger.error('UNCAUGHT EXCEPTION:', { message: error.message, stack: error.stack });
+  logger.error('UNCAUGHT EXCEPTION:', {
+    message: error.message,
+    stack: error.stack,
+  });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -393,7 +470,9 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Keep the process alive for debugging
-logger.debug('[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.');
+logger.debug(
+  '[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.',
+);
 
 // All Analysis History and System metrics handlers are registered via ./ipc/* modules
 
@@ -401,7 +480,7 @@ logger.debug('[DEBUG] Process should stay alive. If you see this and the app clo
 // ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
 //   try {
 //     logger.info(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-//     
+//
 //     // Get current smart folders to pass to analysis
 //     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
 //     const folderCategories = smartFolders.map(f => ({
@@ -409,11 +488,11 @@ logger.debug('[DEBUG] Process should stay alive. If you see this and the app clo
 //       description: f.description || '',
 //       id: f.id
 //     }));
-//     
+//
 //     logger.info(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-//     
+//
 //     const result = await analyzeAudioFile(filePath, folderCategories);
-//     
+//
 //     logger.info(`[IPC-AUDIO-ANALYSIS] Result:`, {
 //       success: !result.error,
 //       category: result.category,
@@ -421,7 +500,7 @@ logger.debug('[DEBUG] Process should stay alive. If you see this and the app clo
 //       confidence: result.confidence,
 //       has_transcription: result.has_transcription
 //     });
-//     
+//
 //     return result;
 //   } catch (error) {
 //     logger.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
@@ -436,14 +515,16 @@ logger.debug('[DEBUG] Process should stay alive. If you see this and the app clo
 //   }
 // });
 
-
 // NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
 
 // ===== TRAY INTEGRATION =====
 let tray = null;
 function createSystemTray() {
   try {
-    const iconPath = require('path').join(__dirname, '../../assets/icons/icons/win/icon.ico');
+    const iconPath = require('path').join(
+      __dirname,
+      '../../assets/icons/icons/win/icon.ico',
+    );
     const trayIcon = nativeImage.createFromPath(iconPath);
     tray = new Tray(trayIcon);
     tray.setToolTip('StratoSort');
@@ -453,30 +534,41 @@ function createSystemTray() {
         click: () => {
           const win = BrowserWindow.getAllWindows()[0] || createWindow();
           if (win && win.isMinimized()) win.restore();
-          if (win) { win.show(); win.focus(); }
-        }
+          if (win) {
+            win.show();
+            win.focus();
+          }
+        },
       },
       {
         label: 'Analyze Folder…',
         click: async () => {
           const win = BrowserWindow.getAllWindows()[0] || createWindow();
           if (win && win.isMinimized()) win.restore();
-          if (win) { win.show(); win.focus(); }
+          if (win) {
+            win.show();
+            win.focus();
+          }
           try {
-            const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'dontAddToRecent'] });
+            const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+              properties: ['openDirectory', 'dontAddToRecent'],
+            });
             if (!canceled && filePaths && filePaths[0]) {
-              win.webContents.send('operation-progress', { type: 'hint', message: `Selected folder: ${filePaths[0]}` });
+              win.webContents.send('operation-progress', {
+                type: 'hint',
+                message: `Selected folder: ${filePaths[0]}`,
+              });
             }
           } catch {}
-        }
+        },
       },
       { type: 'separator' },
       {
         label: 'Quit',
         click: () => {
           app.quit();
-        }
-      }
+        },
+      },
     ]);
     tray.setContextMenu(contextMenu);
   } catch (e) {

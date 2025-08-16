@@ -12,12 +12,19 @@ let cachedCapabilities = null;
 async function detectNvidiaGpu() {
   return new Promise((resolve) => {
     try {
-      const proc = spawn(process.platform === 'win32' ? 'nvidia-smi.exe' : 'nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits']);
+      const proc = spawn(
+        process.platform === 'win32' ? 'nvidia-smi.exe' : 'nvidia-smi',
+        ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'],
+      );
 
       let stdout = '';
       let stderr = '';
-      proc.stdout.on('data', (d) => { stdout += d.toString(); });
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      proc.stdout.on('data', (d) => {
+        stdout += d.toString();
+      });
+      proc.stderr.on('data', (d) => {
+        stderr += d.toString();
+      });
       proc.on('error', () => resolve({ hasNvidiaGpu: false }));
       proc.on('close', (code) => {
         if (code === 0 && stdout.trim()) {
@@ -25,7 +32,11 @@ async function detectNvidiaGpu() {
           const first = lines[0] || '';
           const [name, mem] = first.split(',').map((s) => s && s.trim());
           const gpuMemoryMB = Number(mem) || null;
-          resolve({ hasNvidiaGpu: true, gpuName: name || 'NVIDIA GPU', gpuMemoryMB });
+          resolve({
+            hasNvidiaGpu: true,
+            gpuName: name || 'NVIDIA GPU',
+            gpuMemoryMB,
+          });
         } else {
           resolve({ hasNvidiaGpu: false });
         }
@@ -98,5 +109,3 @@ module.exports = {
   detectSystemCapabilities,
   buildOllamaOptions,
 };
-
-

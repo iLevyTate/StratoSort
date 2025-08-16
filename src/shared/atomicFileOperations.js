@@ -1,6 +1,6 @@
 /**
  * Atomic File Operations System
- * 
+ *
  * Provides transactional file operations with rollback capabilities
  * to prevent data loss during file organization. Addresses the safety
  * concerns identified in the architectural analysis.
@@ -27,13 +27,19 @@ class AtomicFileOperations {
     if (this.backupDirectory) return this.backupDirectory;
 
     const tempDir = require('os').tmpdir();
-    this.backupDirectory = path.join(tempDir, 'stratosort-backups', Date.now().toString());
-    
+    this.backupDirectory = path.join(
+      tempDir,
+      'stratosort-backups',
+      Date.now().toString(),
+    );
+
     try {
       await fs.mkdir(this.backupDirectory, { recursive: true });
       return this.backupDirectory;
     } catch (error) {
-      throw new Error(`Failed to initialize backup directory: ${error.message}`);
+      throw new Error(
+        `Failed to initialize backup directory: ${error.message}`,
+      );
     }
   }
 
@@ -49,10 +55,13 @@ class AtomicFileOperations {
    */
   async createBackup(filePath, transactionId) {
     await this.initializeBackupDirectory();
-    
+
     const filename = path.basename(filePath);
-    const backupPath = path.join(this.backupDirectory, `${transactionId}_${filename}`);
-    
+    const backupPath = path.join(
+      this.backupDirectory,
+      `${transactionId}_${filename}`,
+    );
+
     try {
       await fs.copyFile(filePath, backupPath);
       return backupPath;
@@ -71,11 +80,11 @@ class AtomicFileOperations {
       operations: [],
       backups: [],
       startTime: Date.now(),
-      status: 'active'
+      status: 'active',
     };
 
     this.activeTransactions.set(transactionId, transaction);
-    
+
     return transactionId;
   }
 
@@ -95,7 +104,7 @@ class AtomicFileOperations {
     transaction.operations.push({
       ...operation,
       id: crypto.randomBytes(8).toString('hex'),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -155,7 +164,7 @@ class AtomicFileOperations {
   async atomicMove(source, destination) {
     // Ensure destination directory exists
     await fs.mkdir(path.dirname(destination), { recursive: true });
-    
+
     // Check if destination exists and handle conflicts
     if (await this.fileExists(destination)) {
       const uniqueDestination = await this.generateUniqueFilename(destination);
@@ -171,7 +180,7 @@ class AtomicFileOperations {
    */
   async atomicCopy(source, destination) {
     await fs.mkdir(path.dirname(destination), { recursive: true });
-    
+
     if (await this.fileExists(destination)) {
       const uniqueDestination = await this.generateUniqueFilename(destination);
       destination = uniqueDestination;
@@ -186,9 +195,9 @@ class AtomicFileOperations {
    */
   async atomicCreate(filePath, data) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    
+
     const tempFile = `${filePath}.tmp.${Date.now()}`;
-    
+
     try {
       await fs.writeFile(tempFile, data);
       await fs.rename(tempFile, filePath);
@@ -211,19 +220,21 @@ class AtomicFileOperations {
     const dir = path.dirname(originalPath);
     const ext = path.extname(originalPath);
     const name = path.basename(originalPath, ext);
-    
+
     let counter = 1;
     let uniquePath = originalPath;
-    
+
     while (await this.fileExists(uniquePath)) {
       uniquePath = path.join(dir, `${name}_${counter}${ext}`);
       counter++;
-      
+
       if (counter > 1000) {
-        throw new Error('Unable to generate unique filename after 1000 attempts');
+        throw new Error(
+          'Unable to generate unique filename after 1000 attempts',
+        );
       }
     }
-    
+
     return uniquePath;
   }
 
@@ -266,11 +277,14 @@ class AtomicFileOperations {
       const operationPromise = (async () => {
         for (const operation of transaction.operations) {
           try {
-            const result = await this.executeOperation(transactionId, operation);
+            const result = await this.executeOperation(
+              transactionId,
+              operation,
+            );
             results.push({
               operation: operation.id,
               success: true,
-              result
+              result,
             });
           } catch (error) {
             failedOperation = operation;
@@ -283,32 +297,31 @@ class AtomicFileOperations {
 
       transaction.status = 'committed';
       // Transaction committed successfully
-      
+
       // Clean up old backups after successful commit (optional)
       setTimeout(() => this.cleanupBackups(transactionId), 60000); // 1 minute delay
-      
-      return { success: true, results };
 
+      return { success: true, results };
     } catch (error) {
       // Transaction failed, will be rolled back
-      
+
       // Attempt to rollback
       try {
         await this.rollbackTransaction(transactionId);
-        return { 
-          success: false, 
-          error: error.message, 
+        return {
+          success: false,
+          error: error.message,
           failedOperation: failedOperation?.id,
-          rollbackSuccessful: true 
+          rollbackSuccessful: true,
         };
       } catch (rollbackError) {
         // Rollback failed - this is a critical error but we can't do much about it
-        return { 
-          success: false, 
-          error: error.message, 
+        return {
+          success: false,
+          error: error.message,
           failedOperation: failedOperation?.id,
           rollbackSuccessful: false,
-          rollbackError: rollbackError.message 
+          rollbackError: rollbackError.message,
         };
       }
     }
@@ -331,13 +344,13 @@ class AtomicFileOperations {
     // Restore files from backups in reverse order
     for (let i = transaction.backups.length - 1; i >= 0; i--) {
       const { source, backup } = transaction.backups[i];
-      
+
       try {
         // Check if backup exists
         if (await this.fileExists(backup)) {
           // Ensure source directory exists
           await fs.mkdir(path.dirname(source), { recursive: true });
-          
+
           // Restore the file
           await fs.copyFile(backup, source);
           // File restored from backup
@@ -350,7 +363,9 @@ class AtomicFileOperations {
     transaction.status = 'rolled_back';
 
     if (rollbackErrors.length > 0) {
-      throw new Error(`Rollback completed with errors: ${JSON.stringify(rollbackErrors)}`);
+      throw new Error(
+        `Rollback completed with errors: ${JSON.stringify(rollbackErrors)}`,
+      );
     }
 
     // Transaction rolled back successfully
@@ -389,7 +404,7 @@ class AtomicFileOperations {
       status: transaction.status,
       operationCount: transaction.operations.length,
       backupCount: transaction.backups.length,
-      duration: Date.now() - transaction.startTime
+      duration: Date.now() - transaction.startTime,
     };
   }
 
@@ -397,15 +412,16 @@ class AtomicFileOperations {
    * List all active transactions
    */
   getActiveTransactions() {
-    return Array.from(this.activeTransactions.keys()).map(id => 
-      this.getTransactionStatus(id)
+    return Array.from(this.activeTransactions.keys()).map((id) =>
+      this.getTransactionStatus(id),
     );
   }
 
   /**
    * Force cleanup of stale transactions
    */
-  async cleanupStaleTransactions(maxAge = 3600000) { // 1 hour
+  async cleanupStaleTransactions(maxAge = 3600000) {
+    // 1 hour
     const now = Date.now();
     const staleTransactions = [];
 
@@ -433,11 +449,11 @@ const atomicFileOps = new AtomicFileOperations();
 module.exports = {
   AtomicFileOperations,
   atomicFileOps,
-  
+
   // Convenience functions
   async organizeFilesAtomically(operations) {
     const transactionId = await atomicFileOps.beginTransaction();
-    
+
     try {
       // Convert operations to atomic operations
       for (const op of operations) {
@@ -445,7 +461,7 @@ module.exports = {
           type: 'move',
           source: op.originalPath,
           destination: op.targetPath,
-          metadata: op.analysisData
+          metadata: op.analysisData,
         });
       }
 
@@ -458,17 +474,17 @@ module.exports = {
 
   async backupAndReplace(filePath, newContent) {
     const transactionId = await atomicFileOps.beginTransaction();
-    
+
     try {
       atomicFileOps.addOperation(transactionId, {
         type: 'create',
         destination: filePath,
-        data: newContent
+        data: newContent,
       });
 
       return await atomicFileOps.commitTransaction(transactionId);
     } catch (error) {
       throw error;
     }
-  }
-}; 
+  },
+};

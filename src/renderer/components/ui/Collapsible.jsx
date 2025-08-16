@@ -7,7 +7,7 @@ export default function Collapsible({
   defaultOpen = true,
   className = '',
   contentClassName = '',
-  persistKey
+  persistKey,
 }) {
   const contentId = useId();
   const storageKey = persistKey ? `collapsible:${persistKey}` : null;
@@ -23,10 +23,12 @@ export default function Collapsible({
   const [isOpen, setIsOpen] = useState(initialOpen);
 
   const toggle = () => {
-    setIsOpen(prev => {
+    setIsOpen((prev) => {
       const next = !prev;
       if (storageKey && typeof window !== 'undefined') {
-        try { window.localStorage.setItem(storageKey, String(next)); } catch {}
+        try {
+          window.localStorage.setItem(storageKey, String(next));
+        } catch {}
       }
       return next;
     });
@@ -50,7 +52,9 @@ export default function Collapsible({
   }, [storageKey]);
 
   return (
-    <section className={`bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 hover:shadow-md hover:border-border-medium transition-all duration-200 backdrop-blur-sm mb-21 ${className}`}>
+    <section
+      className={`bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 hover:shadow-md hover:border-border-medium transition-all duration-200 backdrop-blur-sm mb-21 ${className}`}
+    >
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -65,7 +69,11 @@ export default function Collapsible({
             fill="currentColor"
             aria-hidden="true"
           >
-            <path fillRule="evenodd" d="M6 6a1 1 0 011.707-.707l5 5a1 1 0 010 1.414l-5 5A1 1 0 016 15.586V6z" clipRule="evenodd" />
+            <path
+              fillRule="evenodd"
+              d="M6 6a1 1 0 011.707-.707l5 5a1 1 0 010 1.414l-5 5A1 1 0 016 15.586V6z"
+              clipRule="evenodd"
+            />
           </svg>
           <h3 className="heading-tertiary m-0">{title}</h3>
         </button>
@@ -76,14 +84,17 @@ export default function Collapsible({
               type="button"
               className="text-xs text-system-gray-500 hover:text-system-gray-700 underline"
               onClick={() => {
-                if (!isOpen) toggle(); else toggle(); // toggle regardless to keep simple; parent manages global actions
+                if (!isOpen) toggle();
+                else toggle(); // toggle regardless to keep simple; parent manages global actions
               }}
               aria-label={isOpen ? 'Collapse section' : 'Expand section'}
             >
               {isOpen ? 'Collapse' : 'Expand'}
             </button>
           ) : null}
-          {actions ? <div className="flex items-center gap-8">{actions}</div> : null}
+          {actions ? (
+            <div className="flex items-center gap-8">{actions}</div>
+          ) : null}
         </div>
       </div>
 
@@ -96,5 +107,3 @@ export default function Collapsible({
     </section>
   );
 }
-
-

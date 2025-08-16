@@ -8,7 +8,7 @@ const LOG_LEVELS = {
   WARN: 1,
   INFO: 2,
   DEBUG: 3,
-  TRACE: 4
+  TRACE: 4,
 };
 
 const LOG_LEVEL_NAMES = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
@@ -47,13 +47,13 @@ class Logger {
     const timestamp = new Date().toISOString();
     const levelName = LOG_LEVEL_NAMES[level] || 'UNKNOWN';
     const contextStr = this.context ? ` [${this.context}]` : '';
-    
+
     let formattedMessage = `${timestamp} ${levelName}${contextStr}: ${message}`;
-    
+
     if (data && Object.keys(data).length > 0) {
       formattedMessage += `\n  Data: ${JSON.stringify(data, null, 2)}`;
     }
-    
+
     return formattedMessage;
   }
 
@@ -69,14 +69,14 @@ class Logger {
 
   log(level, message, data = {}) {
     if (level > this.level) return;
-    
+
     const formattedMessage = this.formatMessage(level, message, data);
-    
+
     if (this.enableConsole) {
       const consoleMethod = this.getConsoleMethod(level);
       consoleMethod(formattedMessage);
     }
-    
+
     if (this.enableFile) {
       this.writeToFile(formattedMessage);
     }
@@ -122,11 +122,11 @@ class Logger {
   }
 
   aiAnalysis(filePath, model, duration, confidence) {
-    this.info('AI Analysis completed', { 
-      filePath, 
-      model, 
-      duration: `${duration}ms`, 
-      confidence: `${confidence}%` 
+    this.info('AI Analysis completed', {
+      filePath,
+      model,
+      duration: `${duration}ms`,
+      confidence: `${confidence}%`,
     });
   }
 
@@ -135,9 +135,9 @@ class Logger {
   }
 
   performance(operation, duration, metadata = {}) {
-    this.debug(`Performance: ${operation}`, { 
-      duration: `${duration}ms`, 
-      ...metadata 
+    this.debug(`Performance: ${operation}`, {
+      duration: `${duration}ms`,
+      ...metadata,
     });
   }
 }
@@ -157,5 +157,5 @@ module.exports = {
   Logger,
   logger,
   LOG_LEVELS,
-  LOG_LEVEL_NAMES
-}; 
+  LOG_LEVEL_NAMES,
+};

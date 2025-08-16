@@ -15,7 +15,7 @@ async function analyzeAudioFile(filePath) {
         keywords: [],
         confidence: 0,
         has_transcription: false,
-        suggestedName: path.basename(filePath, ext)
+        suggestedName: path.basename(filePath, ext),
       };
     }
     // Not implemented path: return graceful response
@@ -25,7 +25,7 @@ async function analyzeAudioFile(filePath) {
       keywords: [],
       confidence: 0,
       has_transcription: false,
-      suggestedName: path.basename(filePath, ext)
+      suggestedName: path.basename(filePath, ext),
     };
   } catch (error) {
     return {
@@ -34,11 +34,9 @@ async function analyzeAudioFile(filePath) {
       keywords: [],
       confidence: 0,
       has_transcription: false,
-      suggestedName: path.basename(filePath)
+      suggestedName: path.basename(filePath),
     };
   }
 }
 
 module.exports = { analyzeAudioFile };
-
-

@@ -11,7 +11,10 @@ const DEFAULT_IGNORE_PATTERNS = [
   // Add more common patterns if needed
 ];
 
-async function scanDirectory(dirPath, ignorePatterns = DEFAULT_IGNORE_PATTERNS) {
+async function scanDirectory(
+  dirPath,
+  ignorePatterns = DEFAULT_IGNORE_PATTERNS,
+) {
   const items = [];
   try {
     const dirents = await fs.readdir(dirPath, { withFileTypes: true });
@@ -21,12 +24,15 @@ async function scanDirectory(dirPath, ignorePatterns = DEFAULT_IGNORE_PATTERNS) 
       const itemPath = path.join(dirPath, itemName);
 
       // Check against ignore patterns
-      if (ignorePatterns.some(pattern => {
-        if (pattern.startsWith('*.')) { // Basic wildcard for extensions
-          return itemName.endsWith(pattern.substring(1));
-        }
-        return itemName === pattern;
-      })) {
+      if (
+        ignorePatterns.some((pattern) => {
+          if (pattern.startsWith('*.')) {
+            // Basic wildcard for extensions
+            return itemName.endsWith(pattern.substring(1));
+          }
+          return itemName === pattern;
+        })
+      ) {
         continue;
       }
 
@@ -49,12 +55,20 @@ async function scanDirectory(dirPath, ignorePatterns = DEFAULT_IGNORE_PATTERNS) 
     // Optionally, rethrow or return a specific error structure
     if (error.code === 'EACCES' || error.code === 'EPERM') {
       // Handle permission errors gracefully, e.g., by skipping the directory
-      return [{ name: path.basename(dirPath), path: dirPath, type: 'folder', error: 'Permission Denied', children: [] }];
+      return [
+        {
+          name: path.basename(dirPath),
+          path: dirPath,
+          type: 'folder',
+          error: 'Permission Denied',
+          children: [],
+        },
+      ];
     }
     // For other errors, you might want to propagate them
-    throw error; 
+    throw error;
   }
   return items;
 }
 
-module.exports = { scanDirectory, DEFAULT_IGNORE_PATTERNS }; 
+module.exports = { scanDirectory, DEFAULT_IGNORE_PATTERNS };

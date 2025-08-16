@@ -23,7 +23,7 @@ const systemAnalytics = {
     this.errors.push({
       timestamp: Date.now(),
       message: error.message || error.toString(),
-      stack: error.stack
+      stack: error.stack,
     });
     if (this.errors.length > 100) {
       this.errors = this.errors.slice(-100);
@@ -32,7 +32,10 @@ const systemAnalytics = {
 
   async collectMetrics() {
     const uptime = Date.now() - this.startTime;
-    const avgProcessingTime = this.processedFiles > 0 ? this.totalProcessingTime / this.processedFiles : 0;
+    const avgProcessingTime =
+      this.processedFiles > 0
+        ? this.totalProcessingTime / this.processedFiles
+        : 0;
 
     const metrics = {
       uptime,
@@ -40,9 +43,12 @@ const systemAnalytics = {
       successfulOperations: this.successfulOperations,
       failedOperations: this.failedOperations,
       avgProcessingTime: Math.round(avgProcessingTime),
-      errorRate: this.processedFiles > 0 ? (this.failedOperations / this.processedFiles) * 100 : 0,
+      errorRate:
+        this.processedFiles > 0
+          ? (this.failedOperations / this.processedFiles) * 100
+          : 0,
       recentErrors: this.errors.slice(-10),
-      ollamaHealth: this.ollamaHealth
+      ollamaHealth: this.ollamaHealth,
     };
 
     try {
@@ -50,7 +56,7 @@ const systemAnalytics = {
       metrics.memory = {
         used: Math.round(memUsage.heapUsed / 1024 / 1024),
         total: Math.round(memUsage.heapTotal / 1024 / 1024),
-        rss: Math.round(memUsage.rss / 1024 / 1024)
+        rss: Math.round(memUsage.rss / 1024 / 1024),
       };
     } catch (error) {
       logger.warn('Could not collect memory metrics:', error.message);
@@ -60,15 +66,15 @@ const systemAnalytics = {
   },
 
   getFailureRate() {
-    return this.processedFiles > 0 ? (this.failedOperations / this.processedFiles) * 100 : 0;
+    return this.processedFiles > 0
+      ? (this.failedOperations / this.processedFiles) * 100
+      : 0;
   },
 
   destroy() {
     this.errors = [];
     logger.info('[ANALYTICS] System analytics cleaned up');
-  }
+  },
 };
 
 module.exports = systemAnalytics;
-
-

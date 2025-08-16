@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
-const Toast = ({ 
-  message, 
-  severity = 'info', 
+const Toast = ({
+  message,
+  severity = 'info',
   duration = 3000, // Reduced from 5000ms to 3000ms for less invasiveness
   onClose,
-  show = true 
+  show = true,
 }) => {
   const [isVisible, setIsVisible] = useState(show);
 
@@ -62,7 +62,7 @@ const Toast = ({
   // Comprehensive fallback style that matches the CSS exactly
   const fallbackStyle = {
     transform: isVisible ? 'translateX(0)' : 'translateX(100%)',
-    transition: 'all 300ms ease-in-out'
+    transition: 'all 300ms ease-in-out',
   };
 
   if (!show && !isVisible) return null;
@@ -78,7 +78,10 @@ const Toast = ({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-5">
-          <span className="text-lg md:text-xl flex-shrink-0 opacity-90" aria-hidden="true">
+          <span
+            className="text-lg md:text-xl flex-shrink-0 opacity-90"
+            aria-hidden="true"
+          >
             {getSeverityIcon()}
           </span>
           <div className="flex-1">
@@ -93,8 +96,17 @@ const Toast = ({
           aria-label="Close notification"
           title="Close"
         >
-          <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+          <svg
+            className="w-5 h-5 md:w-6 md:h-6"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
           </svg>
         </button>
       </div>
@@ -105,36 +117,57 @@ const Toast = ({
 // Toast Container for managing multiple toasts
 export const ToastContainer = ({ toasts = [], onRemoveToast, onClearAll }) => {
   const [position, setPosition] = useState(() => {
-    try { return localStorage.getItem('toastPosition') || 'bottom-right'; } catch { return 'bottom-right'; }
+    try {
+      return localStorage.getItem('toastPosition') || 'bottom-right';
+    } catch {
+      return 'bottom-right';
+    }
   });
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem('toastCollapsed') === 'true'; } catch { return false; }
+    try {
+      return localStorage.getItem('toastCollapsed') === 'true';
+    } catch {
+      return false;
+    }
   });
 
   const containerStyle = () => {
     const base = { position: 'fixed', zIndex: 1000 };
     switch (position) {
-      case 'top-right': return { ...base, top: '21px', right: '21px' };
-      case 'top-left': return { ...base, top: '21px', left: '21px' };
-      case 'bottom-left': return { ...base, bottom: '21px', left: '21px' };
-      default: return { ...base, bottom: '21px', right: '21px' };
+      case 'top-right':
+        return { ...base, top: '21px', right: '21px' };
+      case 'top-left':
+        return { ...base, top: '21px', left: '21px' };
+      case 'bottom-left':
+        return { ...base, bottom: '21px', left: '21px' };
+      default:
+        return { ...base, bottom: '21px', right: '21px' };
     }
   };
 
   const updatePosition = (pos) => {
     setPosition(pos);
-    try { localStorage.setItem('toastPosition', pos); } catch {}
+    try {
+      localStorage.setItem('toastPosition', pos);
+    } catch {}
   };
 
   const toggleCollapsed = () => {
-    setCollapsed(prev => {
-      try { localStorage.setItem('toastCollapsed', String(!prev)); } catch {}
+    setCollapsed((prev) => {
+      try {
+        localStorage.setItem('toastCollapsed', String(!prev));
+      } catch {}
       return !prev;
     });
   };
 
   return (
-    <div aria-live="polite" aria-label="Notifications" className="z-40 pointer-events-none" style={containerStyle()}>
+    <div
+      aria-live="polite"
+      aria-label="Notifications"
+      className="z-40 pointer-events-none"
+      style={containerStyle()}
+    >
       {/* Toggle Icon */}
       <div className="pointer-events-auto mb-4 flex items-center justify-end">
         <button
@@ -147,14 +180,32 @@ export const ToastContainer = ({ toasts = [], onRemoveToast, onClearAll }) => {
         >
           {collapsed ? (
             // Bell icon
-            <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <svg
+              className="w-5 h-5 md:w-6 md:h-6"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
               <path d="M12 22a2 2 0 002-2H10a2 2 0 002 2z" />
-              <path fillRule="evenodd" d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9a1 1 0 001 1h16a1 1 0 001-1c0-2-3-2-3-9z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9a1 1 0 001 1h16a1 1 0 001-1c0-2-3-2-3-9z"
+                clipRule="evenodd"
+              />
             </svg>
           ) : (
             // Close icon
-            <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            <svg
+              className="w-5 h-5 md:w-6 md:h-6"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
             </svg>
           )}
           {toasts.length > 0 && (
@@ -167,17 +218,18 @@ export const ToastContainer = ({ toasts = [], onRemoveToast, onClearAll }) => {
 
       {/* Toasts */}
       <div id="toast-panel" aria-hidden={collapsed}>
-        {!collapsed && toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto mb-5">
-            <Toast
-              message={toast.message}
-              severity={toast.severity || toast.type}
-              duration={toast.duration}
-              show={toast.show !== false}
-              onClose={() => onRemoveToast?.(toast.id)}
-            />
-          </div>
-        ))}
+        {!collapsed &&
+          toasts.map((toast) => (
+            <div key={toast.id} className="pointer-events-auto mb-5">
+              <Toast
+                message={toast.message}
+                severity={toast.severity || toast.type}
+                duration={toast.duration}
+                show={toast.show !== false}
+                onClose={() => onRemoveToast?.(toast.id)}
+              />
+            </div>
+          ))}
       </div>
     </div>
   );
@@ -197,23 +249,35 @@ export const useToast = () => {
     return aScore >= bScore ? a : b;
   };
 
-  const addToast = (message, severity = 'info', duration = 3000, groupKey = null) => {
+  const addToast = (
+    message,
+    severity = 'info',
+    duration = 3000,
+    groupKey = null,
+  ) => {
     const id = Date.now() + Math.random();
     const now = Date.now();
 
-    setToasts(prev => {
+    setToasts((prev) => {
       // If grouping, try to merge with an existing toast
       if (groupKey) {
-        const idx = prev.findIndex(t => t.groupKey === groupKey && (now - (t.createdAt || now)) <= GROUP_WINDOW_MS);
+        const idx = prev.findIndex(
+          (t) =>
+            t.groupKey === groupKey &&
+            now - (t.createdAt || now) <= GROUP_WINDOW_MS,
+        );
         if (idx !== -1) {
           const existing = prev[idx];
           const updated = {
             ...existing,
             id: existing.id, // keep id stable for animation
             message,
-            severity: getHighestSeverity(existing.severity || 'info', severity || 'info'),
+            severity: getHighestSeverity(
+              existing.severity || 'info',
+              severity || 'info',
+            ),
             duration: duration ?? existing.duration,
-            createdAt: existing.createdAt || now
+            createdAt: existing.createdAt || now,
           };
           const copy = prev.slice();
           copy[idx] = updated;
@@ -221,7 +285,18 @@ export const useToast = () => {
         }
       }
 
-      const next = [...prev, { id, message, severity, duration, show: true, groupKey: groupKey || null, createdAt: now }];
+      const next = [
+        ...prev,
+        {
+          id,
+          message,
+          severity,
+          duration,
+          show: true,
+          groupKey: groupKey || null,
+          createdAt: now,
+        },
+      ];
       // Cap visible toasts
       if (next.length > MAX_VISIBLE_TOASTS) {
         next.shift();
@@ -233,7 +308,7 @@ export const useToast = () => {
   };
 
   const removeToast = (id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   const clearAllToasts = () => {
@@ -248,11 +323,14 @@ export const useToast = () => {
     // Legacy alias used throughout app
     addNotification: addToast,
     // Convenience methods with shorter defaults for less invasiveness
-    showSuccess: (message, duration = 2500) => addToast(message, 'success', duration),
-    showError: (message, duration = 4000) => addToast(message, 'error', duration), // Errors stay longer
-    showWarning: (message, duration = 3500) => addToast(message, 'warning', duration),
-    showInfo: (message, duration = 2000) => addToast(message, 'info', duration) // Info disappears quickly
+    showSuccess: (message, duration = 2500) =>
+      addToast(message, 'success', duration),
+    showError: (message, duration = 4000) =>
+      addToast(message, 'error', duration), // Errors stay longer
+    showWarning: (message, duration = 3500) =>
+      addToast(message, 'warning', duration),
+    showInfo: (message, duration = 2000) => addToast(message, 'info', duration), // Info disappears quickly
   };
 };
 
-export default Toast; 
+export default Toast;

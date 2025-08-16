@@ -31,7 +31,8 @@ module.exports = {
     '^officeparser$': '<rootDir>/mocks/officeparser.js',
     '^node-tesseract-ocr$': '<rootDir>/mocks/tesseract.js',
     '^sharp$': '<rootDir>/mocks/sharp.js',
-    '^xlsx-populate$': '<rootDir>/mocks/xlsx.js'
+    '^xlsx-populate$': '<rootDir>/mocks/xlsx.js',
+    '^sanitize-html$': '<rootDir>/mocks/sanitize-html.js'
   },
   
   // Global setup for DOM-dependent packages

@@ -45,7 +45,20 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
 
   const exportHistory = async (format) => {
     try {
-      await window.electronAPI.analysisHistory.export(format);
+      const res = await window.electronAPI.analysisHistory.export(format);
+      if (!res || res.success === false)
+        throw new Error(res?.error || 'Export failed');
+      const blob = new Blob([typeof res.data === 'string' ? res.data : JSON.stringify(res.data)], {
+        type: res.mime || (format === 'csv' ? 'text/csv' : 'application/json'),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.filename || `analysis-history.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       addNotification(
         `Analysis history exported as ${format.toUpperCase()}`,
         'success',

@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { useKeyboardShortcuts } from '../hooks';
 import { usePhase } from '../contexts/PhaseContext';
 
-import WelcomePhase from '../phases/WelcomePhase';
-import SetupPhase from '../phases/SetupPhase';
-import DiscoverPhase from '../phases/DiscoverPhase';
-import OrganizePhase from '../phases/OrganizePhase';
-import CompletePhase from '../phases/CompletePhase';
+const WelcomePhase = lazy(() => import('../phases/WelcomePhase'));
+const SetupPhase = lazy(() => import('../phases/SetupPhase'));
+const DiscoverPhase = lazy(() => import('../phases/DiscoverPhase'));
+const OrganizePhase = lazy(() => import('../phases/OrganizePhase'));
+const CompletePhase = lazy(() => import('../phases/CompletePhase'));
 import SettingsPanel from './SettingsPanel';
 
 const { PHASES } = require('../../shared/constants');
@@ -34,7 +34,9 @@ function PhaseRenderer() {
 
   return (
     <>
-      {renderCurrentPhase()}
+      <Suspense fallback={<div className="p-13 text-system-gray-500">Loading…</div>}>
+        {renderCurrentPhase()}
+      </Suspense>
       {showSettings && <SettingsPanel />}
     </>
   );

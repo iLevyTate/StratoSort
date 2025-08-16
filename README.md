@@ -116,33 +116,60 @@
    npm install
    ```
 
-2. **Setup Ollama**
+### Windows Installer with Ollama Bootstrap
 
-   ```bash
-   # Install Ollama (https://ollama.ai)
-   # Windows
-   winget install Ollama.Ollama
+The Windows installer will:
+- Check for Ollama on PATH
+- If missing, download and install Ollama silently
+- Pull base models (llama3.2:latest, llava:latest, mxbai-embed-large)
+- Install StratoSort
 
-   # macOS
-   brew install ollama
+Build the installer:
+```bash
+npm run dist:win
+```
 
-   # Linux
-   curl -fsSL https://ollama.ai/install.sh | sh
-   ```
+Notes:
+- The NSIS include script is at `build/installer.nsh` and is referenced by `electron-builder.json` → `nsis.include`.
+- If you prefer to skip model pulls, remove those lines in `build/installer.nsh`.
+
+### Setup Ollama
+```bash
+# Install Ollama (https://ollama.ai)
+# Windows
+winget install Ollama.Ollama
+
+# macOS  
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+```
 
 3. **Install Required Models**
+```bash
+ollama pull llama3.2:latest
+ollama pull llava:latest
+# Optional (audio; currently disabled in UI)
+# ollama pull dimavz/whisper-tiny:latest
+```
 
-   ```bash
-   ollama pull llama3.2:latest
-   ollama pull llava:latest
-   # Optional (audio; currently disabled in UI)
-   # ollama pull dimavz/whisper-tiny:latest
-   ```
+4. **Environment Variables**
+Create a `.env` file in the project root. These variables are optional but recommended for clarity:
+```ini
+# See .env.example for the full list and documentation
+NODE_ENV=development
+FORCE_DEV_TOOLS=false
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_TEXT_MODEL=llama3.2:latest
+OLLAMA_VISION_MODEL=llava:latest
+OLLAMA_EMBEDDING_MODEL=mxbai-embed-large
+```
 
-4. **Start StratoSort**
-   ```bash
-   npm run dev
-   ```
+5. **Start StratoSort**
+```bash
+npm run dev
+```
 
 ---
 
@@ -311,6 +338,10 @@ npm run start:debug        # Dev build + Electron with inspector
 npm run electron           # Build dev bundle and launch Electron
 npm run build:dev          # Build renderer/main in development mode
 
+# Enhanced startup & checks
+npm start                  # Runs startup verification then launches dev app
+npm run start:check        # Prints environment and Ollama reachability summary
+
 # Build & distribution
 npm run build              # Production build
 npm run package            # Create distributable
@@ -375,6 +406,32 @@ CI build: GitHub Actions workflow `Build Windows Installer` (`.github/workflows/
 - **SmartFoldersLLMService**: verifies folder enhancement and semantic similarity scoring with mocked fetch requests
 
 Run tests locally with `npm test`. Note: audio analysis tests exist for module-level behavior, but audio features are disabled in the current UI build.
+## ⚙️ Environment Variables
+
+You can configure the app via environment variables (create `.env` in the project root). The app also allows changing Ollama host and models through the Settings UI.
+
+- **NODE_ENV**: `development` | `production` (default: `development`)
+- **FORCE_DEV_TOOLS**: `true` to auto-open devtools (default: `false`)
+- **OLLAMA_BASE_URL**: Base URL to your Ollama server (default: `http://127.0.0.1:11434`)
+- **OLLAMA_TEXT_MODEL**: Default text model, e.g., `llama3.2:latest`
+- **OLLAMA_VISION_MODEL**: Default vision model, e.g., `llava:latest`
+- **OLLAMA_EMBEDDING_MODEL**: Default embeddings model, e.g., `mxbai-embed-large`
+
+If creating files is restricted in your environment, replicate the variables from the example above manually.
+
+---
+
+## 🔁 CI/CD
+
+This repository includes a GitHub Actions workflow that:
+
+- Installs dependencies on Ubuntu and Windows
+- Lints the code
+- Runs the full Jest test suite
+- Builds the production renderer bundle
+
+The workflow runs on pushes to main-like branches and on pull requests. See `.github/workflows/ci.yml` for details.
+
 
 ---
 

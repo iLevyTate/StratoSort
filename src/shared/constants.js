@@ -114,6 +114,7 @@ const IPC_CHANNELS = {
   OLLAMA: {
     GET_MODELS: 'get-ollama-models',
     TEST_CONNECTION: 'test-ollama-connection',
+    PULL_MODELS: 'ollama-pull-models',
   },
 
   // Undo/Redo
@@ -140,6 +141,18 @@ const IPC_CHANNELS = {
   SYSTEM: {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
     GET_METRICS: 'get-system-metrics',
+    APPLY_UPDATE: 'apply-update',
+  },
+
+  // Window Controls
+  WINDOW: {
+    MINIMIZE: 'window-minimize',
+    MAXIMIZE: 'window-maximize',
+    UNMAXIMIZE: 'window-unmaximize',
+    TOGGLE_MAXIMIZE: 'window-toggle-maximize',
+    IS_MAXIMIZED: 'window-is-maximized',
+    CLOSE: 'window-close',
+  },
   },
 
   // Menu Actions

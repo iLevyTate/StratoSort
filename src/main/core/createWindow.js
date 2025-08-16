@@ -1,15 +1,27 @@
-const { BrowserWindow, shell } = require('electron');
+const { BrowserWindow, shell, app } = require('electron');
 const path = require('path');
 const { logger } = require('../../shared/logger');
+const windowStateKeeper = require('electron-window-state');
 
 const isDev = process.env.NODE_ENV === 'development';
 
 function createMainWindow() {
   logger.debug('[DEBUG] Creating new window...');
 
+  // Ensure AppUserModelID for Windows integration (notifications, jump list)
+  try { app.setAppUserModelId('com.stratosort.app'); } catch {}
+
+  // Restore previous window position/size
+  const mainWindowState = windowStateKeeper({ defaultWidth: 1200, defaultHeight: 800 });
+
+  const isWindows = process.platform === 'win32';
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    x: mainWindowState.x,
+    y: mainWindowState.y,
+    width: mainWindowState.width,
+    height: mainWindowState.height,
+    // Use native title bar/caption buttons on all platforms for now
+    frame: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -26,13 +38,18 @@ function createMainWindow() {
     },
     icon: path.join(__dirname, '../../../assets/stratosort-logo.png'),
     show: false,
+    // For custom controls on Windows, use frameless window and do NOT enable titleBarOverlay
     titleBarStyle: 'default',
     autoHideMenuBar: !isDev,
   });
 
   logger.debug('[DEBUG] BrowserWindow created');
 
-  if (isDev) {
+  // Manage window state
+  mainWindowState.manage(win);
+
+  const useDevServer = isDev && process.env.USE_DEV_SERVER === 'true';
+  if (useDevServer) {
     win.loadURL('http://localhost:3000').catch((error) => {
       logger.info('Development server not available:', error.message);
       logger.info('Loading from built files instead...');
@@ -60,8 +77,7 @@ function createMainWindow() {
     let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
     try {
       const { getOllamaHost } = require('../ollamaUtils');
-      const configured =
-        typeof getOllamaHost === 'function' ? getOllamaHost() : null;
+      const configured = typeof getOllamaHost === 'function' ? getOllamaHost() : null;
       if (configured && typeof configured === 'string') {
         ollamaHost = configured;
       }
@@ -69,13 +85,14 @@ function createMainWindow() {
     let wsHost = '';
     try {
       const url = new URL(ollamaHost);
-      wsHost =
-        url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+      wsHost = url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
     } catch {
       wsHost = '';
     }
 
-    const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
+    const isProduction = process.env.NODE_ENV === 'production';
+    const styleSrc = isProduction ? "'self'" : "'self' 'unsafe-inline'";
+    const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
 
     callback({
       responseHeaders: {

@@ -1,17 +1,21 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
 
   return {
     mode: argv.mode || 'development',
-    entry: './src/renderer/index.js',
+    entry: ['./src/renderer/polyfills.js', './src/renderer/index.js'],
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'renderer.js',
       clean: true,
+      publicPath: '',
+      globalObject: 'globalThis'
     },
     target: 'electron-renderer',
     module: {
@@ -23,15 +27,22 @@ module.exports = (env, argv) => {
             loader: 'babel-loader',
             options: {
               presets: ['@babel/preset-react'],
-              plugins: ['@babel/plugin-transform-react-jsx'],
-            },
-          },
+              plugins: [
+                '@babel/plugin-transform-react-jsx',
+                ...(process.env.WEBPACK_DEV_SERVER === 'true' ? ['react-refresh/babel'] : []),
+              ]
+            }
+          }
         },
         {
           test: /\.css$/,
-          use: ['style-loader', 'css-loader', 'postcss-loader'],
-        },
-      ],
+          use: [
+            isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
+            'css-loader',
+            'postcss-loader'
+          ]
+        }
+      ]
     },
     resolve: {
       extensions: ['.js', '.jsx'],
@@ -69,8 +80,11 @@ module.exports = (env, argv) => {
       }),
       new webpack.ProvidePlugin({
         process: 'process/browser',
-        Buffer: ['buffer', 'Buffer'],
+        Buffer: ['buffer', 'Buffer']
       }),
+      ...(isProduction
+        ? [new MiniCssExtractPlugin({ filename: 'styles.css' })]
+        : (process.env.WEBPACK_DEV_SERVER === 'true' ? [new ReactRefreshWebpackPlugin({ overlay: false })] : []))
     ],
     // Use secure devtool options
     devtool: isProduction ? false : 'source-map',
@@ -95,7 +109,8 @@ module.exports = (env, argv) => {
     // Optimization
     optimization: {
       minimize: isProduction,
-      splitChunks: false, // Electron doesn't need code splitting
-    },
+      // Keep splitChunks disabled for simplicity in Electron; dynamic imports will still code-split
+      splitChunks: false
+    }
   };
 };

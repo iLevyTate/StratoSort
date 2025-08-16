@@ -1,61 +1,29 @@
 import { useEffect } from 'react';
 import { usePhase } from '../contexts/PhaseContext';
-import { useUndoRedo } from '../components/UndoRedoSystem';
-import { PHASES as SHARED_PHASES } from '../../shared/constants';
 import { useNotification } from '../contexts/NotificationContext';
-import {
-  PHASES,
-  PHASE_TRANSITIONS,
-  PHASE_METADATA,
-} from '../../shared/constants';
+import { PHASES, PHASE_TRANSITIONS, PHASE_METADATA } from '../../shared/constants';
 
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
-  const { undo, redo } = useUndoRedo();
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    const handleKeyDown = async (event) => {
-      // Ctrl/Cmd + Z for Undo (Organize phase only)
-      if (
-        (event.ctrlKey || event.metaKey) &&
-        event.key === 'z' &&
-        !event.shiftKey
-      ) {
+    const handleKeyDown = (event) => {
+      // Ctrl/Cmd + Z for Undo
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
         event.preventDefault();
         try {
-          if (currentPhase === SHARED_PHASES.ORGANIZE) {
-            await undo();
-          } else {
-            addNotification(
-              'Undo is available during Organize phase',
-              'info',
-              1500,
-            );
-          }
+          window.electronAPI?.undoRedo?.undo?.();
         } catch (error) {
           console.error('Undo shortcut failed:', error);
         }
       }
 
-      // Ctrl/Cmd + Shift + Z or Ctrl+Y for Redo (Organize phase only)
-      if (
-        ((event.ctrlKey || event.metaKey) &&
-          event.key === 'z' &&
-          event.shiftKey) ||
-        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y')
-      ) {
+      // Ctrl/Cmd + Shift + Z for Redo (also support Ctrl+Y on Windows)
+      if ((event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) {
         event.preventDefault();
         try {
-          if (currentPhase === SHARED_PHASES.ORGANIZE) {
-            await redo();
-          } else {
-            addNotification(
-              'Redo is available during Organize phase',
-              'info',
-              1500,
-            );
-          }
+          window.electronAPI?.undoRedo?.redo?.();
         } catch (error) {
           console.error('Redo shortcut failed:', error);
         }
@@ -114,5 +82,5 @@ export function useKeyboardShortcuts() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [actions, currentPhase, undo, redo, addNotification, showSettings]);
+  }, [actions, currentPhase, addNotification, showSettings]);
 }

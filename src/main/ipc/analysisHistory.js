@@ -100,23 +100,33 @@ function registerAnalysisHistoryIpc({
     }),
   );
 
-  ipcMain.handle(
-    IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT,
-    withErrorLogging(logger, async (event, format = 'json') => {
-      try {
-        const history =
-          (await getServiceIntegration()?.analysisHistory?.getRecentAnalysis(
-            10000,
-          )) || [];
-        if (format === 'json')
-          return { success: true, data: JSON.stringify(history, null, 2) };
-        return { success: true, data: history };
-      } catch (error) {
-        logger.error('Failed to export analysis history:', error);
-        return { success: false, error: error.message };
+  ipcMain.handle(IPC_CHANNELS.ANALYSIS_HISTORY.EXPORT, withErrorLogging(logger, async (event, format = 'json') => {
+    try {
+      const history = (await getServiceIntegration()?.analysisHistory?.getRecentAnalysis(10000)) || [];
+      if (format === 'json') {
+        return { success: true, data: JSON.stringify(history, null, 2), mime: 'application/json', filename: 'analysis-history.json' };
       }
-    }),
-  );
+      if (format === 'csv') {
+        const headers = ['fileName','originalPath','category','confidence','timestamp'];
+        const lines = [headers.join(',')];
+        for (const entry of history) {
+          const row = [
+            JSON.stringify(entry.fileName || ''),
+            JSON.stringify(entry.originalPath || ''),
+            JSON.stringify(entry.analysis?.category || entry.category || ''),
+            JSON.stringify(String(entry.analysis?.confidence ?? entry.confidence ?? '')),
+            JSON.stringify(entry.timestamp ? new Date(entry.timestamp).toISOString() : '')
+          ];
+          lines.push(row.join(','));
+        }
+        return { success: true, data: lines.join('\n'), mime: 'text/csv', filename: 'analysis-history.csv' };
+      }
+      return { success: true, data: history };
+    } catch (error) {
+      logger.error('Failed to export analysis history:', error);
+      return { success: false, error: error.message };
+    }
+  }));
 }
 
 module.exports = registerAnalysisHistoryIpc;

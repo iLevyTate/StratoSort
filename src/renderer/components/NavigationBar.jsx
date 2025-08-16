@@ -5,6 +5,7 @@ import {
   PHASE_METADATA,
 } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
+import UpdateIndicator from './UpdateIndicator';
 
 function NavigationBar() {
   const { currentPhase, actions } = usePhase();
@@ -39,13 +40,14 @@ function NavigationBar() {
     return filtered.slice(0, 2).join(' ');
   };
 
+  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
   return (
-    <nav className="glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40">
+    <nav className={`glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40`}>
       <div className="container-enhanced">
         <div className="flex items-center justify-between min-h-[56px] gap-8">
-          <div className="flex flex-1 items-center gap-13 min-w-0">
+          <div className={`${' '}flex flex-1 items-center gap-13 min-w-0`}>
             <div className="flex items-center gap-5 shrink-0">
-              <div className="text-21 animate-float">🚀</div>
+              <div className="text-[21px] animate-float">🚀</div>
               <h1 className="text-xl font-bold">
                 <span className="text-gradient">StratoSort</span>
               </h1>
@@ -69,16 +71,13 @@ function NavigationBar() {
                     key={phase}
                     onClick={() => handlePhaseChange(phase)}
                     disabled={!canNavigate}
-                    className={`
-                      w-full h-full flex items-center justify-center gap-5 px-12 py-8 rounded-2xl text-sm font-medium transition-all min-h-[72px]
-                      ${
-                        isActive
-                          ? 'bg-stratosort-blue text-white shadow-sm'
-                          : canNavigate
-                            ? 'text-system-gray-700 hover:text-stratosort-blue hover:bg-system-gray-50'
-                            : 'text-system-gray-400 cursor-not-allowed'
-                      }
-                    `}
+                    className={`${' '}w-full h-full flex items-center justify-center gap-5 px-12 py-8 rounded-2xl text-sm font-medium transition-all min-h-[72px] ${
+                      isActive
+                        ? 'bg-stratosort-blue text-white shadow-sm'
+                        : canNavigate
+                          ? 'text-system-gray-700 hover:text-stratosort-blue hover:bg-system-gray-50'
+                          : 'text-system-gray-400 cursor-not-allowed'
+                    }`}
                     title={metadata.title}
                   >
                     <span className="text-lg" aria-hidden>
@@ -101,7 +100,9 @@ function NavigationBar() {
               })}
             </div>
           </div>
-          <div className="flex items-center gap-10 flex-shrink-0">
+          <div className={`flex items-center gap-10 flex-shrink-0`}>
+            {/* Auto-update banner (icon button triggers update when available) */}
+            <UpdateIndicator />
             <button
               onClick={actions.toggleSettings}
               className="p-6 text-system-gray-600 hover:text-stratosort-blue hover:bg-system-gray-100 rounded-lg transition-colors"

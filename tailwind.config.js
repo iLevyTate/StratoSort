@@ -4,6 +4,14 @@ module.exports = {
     './src/renderer/**/*.{html,js,ts,jsx,tsx}',
     './src/**/*.{html,js,ts,jsx,tsx}',
   ],
+  safelist: [
+    // Status utilities that may be constructed dynamically
+    'status-success', 'status-error', 'status-warning', 'status-info',
+    // Button variants potentially composed dynamically
+    'btn-primary', 'btn-secondary', 'btn-success', 'btn-danger', 'btn-ghost', 'btn-outline', 'btn-subtle', 'btn-ghost-minimal',
+    // Layout helpers
+    'container-enhanced', 'glass-card', 'gradient-bg'
+  ],
   theme: {
     extend: {
       spacing: {

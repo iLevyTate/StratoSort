@@ -17,6 +17,7 @@ function SettingsPanel() {
     embeddingModel: 'mxbai-embed-large',
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
+    backgroundMode: false,
     defaultSmartFolderLocation: 'Documents',
   });
   const [ollamaModelLists, setOllamaModelLists] = useState({
@@ -512,6 +513,26 @@ function SettingsPanel() {
                   className="text-sm text-system-gray-700"
                 >
                   Auto-organize files after analysis
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="backgroundMode"
+                  checked={settings.backgroundMode}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      backgroundMode: e.target.checked,
+                    }))
+                  }
+                  className="mr-8"
+                />
+                <label
+                  htmlFor="backgroundMode"
+                  className="text-sm text-system-gray-700"
+                >
+                  Keep running in background (minimize to tray)
                 </label>
               </div>
             </div>

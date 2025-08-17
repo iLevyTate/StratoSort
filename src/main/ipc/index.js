@@ -36,6 +36,7 @@ function registerAllIpc({
   setOllamaModel,
   setOllamaVisionModel,
   setOllamaEmbeddingModel,
+  onSettingsChange,
 }) {
   registerFilesIpc({
     ipcMain,
@@ -102,6 +103,7 @@ function registerAllIpc({
     setOllamaModel,
     setOllamaVisionModel,
     setOllamaEmbeddingModel,
+    onSettingsChange,
   });
   registerEmbeddingsIpc({
     ipcMain,

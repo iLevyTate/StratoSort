@@ -14,6 +14,7 @@ class SettingsService {
       defaultSmartFolderLocation: 'Documents',
       maxConcurrentAnalysis: 3,
       autoOrganize: false,
+      backgroundMode: false,
       // AI
       ollamaHost: 'http://127.0.0.1:11434',
       textModel: 'llama3.2:latest',

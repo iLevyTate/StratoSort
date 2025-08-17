@@ -48,6 +48,7 @@ const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
 
 // Import OCR library
 const tesseract = require('node-tesseract-ocr');
+const path = require('path');
 
 let mainWindow;
 let customFolders = []; // Initialize customFolders at module level
@@ -55,6 +56,10 @@ let customFolders = []; // Initialize customFolders at module level
 // Initialize service integration
 let serviceIntegration;
 let settingsService;
+let backgroundMode = false;
+let autoOrganize = false;
+let isQuiting = false;
+let tray = null;
 
 // Custom folders helpers
 const {
@@ -77,6 +82,12 @@ function createWindow() {
   mainWindow = createMainWindow();
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+  mainWindow.on('close', (e) => {
+    if (!isQuiting && backgroundMode) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
   });
 }
 
@@ -178,6 +189,10 @@ if (!gotTheLock) {
     }
   });
 
+  app.on('before-quit', () => {
+    isQuiting = true;
+  });
+
   // Production optimizations - ensure GPU acceleration
   if (!isDev) {
     // Production GPU optimizations
@@ -226,6 +241,13 @@ if (!gotTheLock) {
       logger.info('[MAIN] Service integration initialized successfully');
       // Initialize settings service
       settingsService = new SettingsService();
+      try {
+        const loadedSettings = await settingsService.load();
+        backgroundMode = !!loadedSettings.backgroundMode;
+        autoOrganize = !!loadedSettings.autoOrganize;
+      } catch (e) {
+        logger.warn('[SETTINGS] Failed to load settings:', e.message);
+      }
 
       // Resume any incomplete organize batches (best-effort)
       try {
@@ -303,6 +325,13 @@ if (!gotTheLock) {
         setOllamaModel,
         setOllamaVisionModel,
         setOllamaEmbeddingModel,
+        onSettingsChange: (newSettings) => {
+          if (typeof newSettings.backgroundMode === 'boolean')
+            backgroundMode = newSettings.backgroundMode;
+          if (typeof newSettings.autoOrganize === 'boolean')
+            autoOrganize = newSettings.autoOrganize;
+          updateTrayMenu();
+        },
       });
 
       createWindow();
@@ -518,59 +547,77 @@ logger.debug(
 // NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
 
 // ===== TRAY INTEGRATION =====
-let tray = null;
+function updateTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open',
+      click: () => {
+        const win = BrowserWindow.getAllWindows()[0] || createWindow();
+        if (win && win.isMinimized()) win.restore();
+        if (win) {
+          win.show();
+          win.focus();
+        }
+      },
+    },
+    {
+      label: 'Pause Auto-Sort',
+      type: 'checkbox',
+      checked: !autoOrganize,
+      click: async (menuItem) => {
+        autoOrganize = !menuItem.checked;
+        try {
+          const current = await settingsService.load();
+          await settingsService.save({ ...current, autoOrganize });
+        } catch (err) {
+          logger.warn('[TRAY] Failed to toggle auto-sort:', err.message);
+        }
+        updateTrayMenu();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuiting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+function getTrayIcon() {
+  const iconDir = path.join(__dirname, '../../assets/icons/icons');
+  if (process.platform === 'win32') {
+    return path.join(iconDir, 'win', 'icon.ico');
+  }
+  const image = nativeImage.createFromPath(
+    path.join(
+      iconDir,
+      'png',
+      process.platform === 'linux' ? '24x24.png' : '16x16.png',
+    ),
+  );
+  if (process.platform === 'darwin') {
+    image.setTemplateImage(true);
+  }
+  return image;
+}
 function createSystemTray() {
   try {
-    const iconPath = require('path').join(
-      __dirname,
-      '../../assets/icons/icons/win/icon.ico',
-    );
-    const trayIcon = nativeImage.createFromPath(iconPath);
-    tray = new Tray(trayIcon);
+    const icon = getTrayIcon();
+    tray = new Tray(icon);
     tray.setToolTip('StratoSort');
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Open StratoSort',
-        click: () => {
-          const win = BrowserWindow.getAllWindows()[0] || createWindow();
-          if (win && win.isMinimized()) win.restore();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-        },
-      },
-      {
-        label: 'Analyze Folder…',
-        click: async () => {
-          const win = BrowserWindow.getAllWindows()[0] || createWindow();
-          if (win && win.isMinimized()) win.restore();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-          try {
-            const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-              properties: ['openDirectory', 'dontAddToRecent'],
-            });
-            if (!canceled && filePaths && filePaths[0]) {
-              win.webContents.send('operation-progress', {
-                type: 'hint',
-                message: `Selected folder: ${filePaths[0]}`,
-              });
-            }
-          } catch {}
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          app.quit();
-        },
-      },
-    ]);
-    tray.setContextMenu(contextMenu);
+    tray.on('click', () => {
+      const win = BrowserWindow.getAllWindows()[0] || createWindow();
+      if (win && win.isMinimized()) win.restore();
+      if (win) {
+        win.show();
+        win.focus();
+      }
+    });
+    updateTrayMenu();
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[TRAY] initialization failed', e);

@@ -20,6 +20,9 @@ async function scanDirectory(
     const dirents = await fs.readdir(dirPath, { withFileTypes: true });
 
     for (const dirent of dirents) {
+      if (dirent.isSymbolicLink()) {
+        continue;
+      }
       const itemName = dirent.name;
       const itemPath = path.join(dirPath, itemName);
 

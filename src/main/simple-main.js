@@ -57,6 +57,8 @@ let customFolders = []; // Initialize customFolders at module level
 let serviceIntegration;
 let settingsService;
 let downloadWatcher;
+let currentSettings = {};
+let isQuitting = false;
 
 // Custom folders helpers
 const {
@@ -77,6 +79,12 @@ function createWindow() {
     return;
   }
   mainWindow = createMainWindow();
+  mainWindow.on('close', (e) => {
+    if (!isQuitting && currentSettings?.backgroundMode) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -97,6 +105,14 @@ function updateDownloadWatcher(settings) {
     downloadWatcher.stop();
     downloadWatcher = null;
   }
+}
+
+function handleSettingsChanged(settings) {
+  currentSettings = settings || {};
+  updateDownloadWatcher(settings);
+  try {
+    updateTrayMenu();
+  } catch {}
 }
 
 // ===== IPC HANDLERS =====
@@ -323,11 +339,11 @@ if (!gotTheLock) {
         setOllamaModel,
         setOllamaVisionModel,
         setOllamaEmbeddingModel,
-        onSettingsChanged: updateDownloadWatcher,
+        onSettingsChanged: handleSettingsChanged,
       });
 
       createWindow();
-      updateDownloadWatcher(initialSettings);
+      handleSettingsChanged(initialSettings);
       // Create system tray with quick actions
       try {
         createSystemTray();
@@ -455,8 +471,14 @@ logger.info(
 logger.info('[UI] Modern UI loaded with GPU acceleration');
 
 // App lifecycle
+app.on('before-quit', () => {
+  isQuitting = true;
+  try {
+    systemAnalytics.destroy();
+  } catch {}
+});
+
 app.on('window-all-closed', () => {
-  systemAnalytics.destroy();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -466,10 +488,6 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
-});
-
-app.on('before-quit', () => {
-  systemAnalytics.destroy();
 });
 
 // Smart folders add moved to ipc/smartFolders.js
@@ -543,58 +561,69 @@ logger.debug(
 let tray = null;
 function createSystemTray() {
   try {
-    const iconPath = require('path').join(
+    const path = require('path');
+    const iconPath = path.join(
       __dirname,
-      '../../assets/icons/icons/win/icon.ico',
+      process.platform === 'win32'
+        ? '../../assets/icons/icons/win/icon.ico'
+        : process.platform === 'darwin'
+          ? '../../assets/icons/icons/png/24x24.png'
+          : '../../assets/icons/icons/png/16x16.png',
     );
     const trayIcon = nativeImage.createFromPath(iconPath);
+    if (process.platform === 'darwin') {
+      trayIcon.setTemplateImage(true);
+    }
     tray = new Tray(trayIcon);
     tray.setToolTip('StratoSort');
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Open StratoSort',
-        click: () => {
-          const win = BrowserWindow.getAllWindows()[0] || createWindow();
-          if (win && win.isMinimized()) win.restore();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-        },
-      },
-      {
-        label: 'Analyze Folder…',
-        click: async () => {
-          const win = BrowserWindow.getAllWindows()[0] || createWindow();
-          if (win && win.isMinimized()) win.restore();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-          try {
-            const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-              properties: ['openDirectory', 'dontAddToRecent'],
-            });
-            if (!canceled && filePaths && filePaths[0]) {
-              win.webContents.send('operation-progress', {
-                type: 'hint',
-                message: `Selected folder: ${filePaths[0]}`,
-              });
-            }
-          } catch {}
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          app.quit();
-        },
-      },
-    ]);
-    tray.setContextMenu(contextMenu);
+    updateTrayMenu();
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[TRAY] initialization failed', e);
   }
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open StratoSort',
+      click: () => {
+        const win = BrowserWindow.getAllWindows()[0] || createWindow();
+        if (win && win.isMinimized()) win.restore();
+        if (win) {
+          win.show();
+          win.focus();
+        }
+      },
+    },
+    {
+      label: downloadWatcher ? 'Pause Auto-Sort' : 'Resume Auto-Sort',
+      click: async () => {
+        const enable = !downloadWatcher;
+        try {
+          if (settingsService) {
+            const merged = await settingsService.save({
+              autoOrganize: enable,
+            });
+            handleSettingsChanged(merged);
+          } else {
+            handleSettingsChanged({ autoOrganize: enable });
+          }
+        } catch (err) {
+          logger.warn('[TRAY] Failed to toggle auto-sort:', err.message);
+        }
+        updateTrayMenu();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
 }

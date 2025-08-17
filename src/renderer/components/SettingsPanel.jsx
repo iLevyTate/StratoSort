@@ -7,6 +7,7 @@ import Textarea from './ui/Textarea';
 import Select from './ui/Select';
 import Collapsible from './ui/Collapsible';
 import AutoOrganizeSection from './settings/AutoOrganizeSection';
+import BackgroundModeSection from './settings/BackgroundModeSection';
 
 function SettingsPanel() {
   const { actions } = usePhase();
@@ -18,6 +19,7 @@ function SettingsPanel() {
     embeddingModel: 'mxbai-embed-large',
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
+    backgroundMode: false,
     defaultSmartFolderLocation: 'Documents',
   });
   const [ollamaModelLists, setOllamaModelLists] = useState({
@@ -496,6 +498,10 @@ function SettingsPanel() {
                 />
               </div>
               <AutoOrganizeSection
+                settings={settings}
+                setSettings={setSettings}
+              />
+              <BackgroundModeSection
                 settings={settings}
                 setSettings={setSettings}
               />

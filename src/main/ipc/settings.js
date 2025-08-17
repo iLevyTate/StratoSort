@@ -40,6 +40,7 @@ function registerSettingsIpc({
           embeddingModel: z.string().optional(),
           launchOnStartup: z.boolean().optional(),
           autoOrganize: z.boolean().optional(),
+          backgroundMode: z.boolean().optional(),
         })
         .partial()
     : null;

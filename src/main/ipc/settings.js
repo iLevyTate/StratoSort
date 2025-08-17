@@ -61,7 +61,12 @@ function registerSettingsIpc({
                 app.setLoginItemSettings({
                   openAtLogin: merged.launchOnStartup,
                 });
-              } catch {}
+              } catch (error) {
+                logger.warn(
+                  '[SETTINGS] Failed to set login item settings:',
+                  error.message,
+                );
+              }
             }
             logger.info('[SETTINGS] Saved settings');
             return { success: true, settings: merged };
@@ -87,7 +92,12 @@ function registerSettingsIpc({
                 app.setLoginItemSettings({
                   openAtLogin: merged.launchOnStartup,
                 });
-              } catch {}
+              } catch (error) {
+                logger.warn(
+                  '[SETTINGS] Failed to set login item settings:',
+                  error.message,
+                );
+              }
             }
             logger.info('[SETTINGS] Saved settings');
             return { success: true, settings: merged };

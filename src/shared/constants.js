@@ -114,6 +114,7 @@ const IPC_CHANNELS = {
     GET_MODELS: 'get-ollama-models',
     TEST_CONNECTION: 'test-ollama-connection',
     PULL_MODELS: 'ollama-pull-models',
+    DELETE_MODEL: 'ollama-delete-model',
   },
 
   // Undo/Redo

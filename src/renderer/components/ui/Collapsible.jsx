@@ -16,7 +16,10 @@ export default function Collapsible({
       try {
         const saved = window.localStorage.getItem(storageKey);
         if (saved === 'true' || saved === 'false') return saved === 'true';
-      } catch {}
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to load collapsible state', error);
+      }
     }
     return Boolean(defaultOpen);
   })();
@@ -28,7 +31,10 @@ export default function Collapsible({
       if (storageKey && typeof window !== 'undefined') {
         try {
           window.localStorage.setItem(storageKey, String(next));
-        } catch {}
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to persist collapsible state', error);
+        }
       }
       return next;
     });
@@ -45,7 +51,10 @@ export default function Collapsible({
         if (saved === 'true' || saved === 'false') {
           setIsOpen(saved === 'true');
         }
-      } catch {}
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to sync collapsible state', error);
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);

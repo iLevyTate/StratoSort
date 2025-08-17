@@ -458,6 +458,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getModels: () => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.GET_MODELS),
     testConnection: (hostUrl) =>
       secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl),
+    pullModels: (models) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.PULL_MODELS, models),
   },
 
   // Event Listeners (with automatic cleanup)

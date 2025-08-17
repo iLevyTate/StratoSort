@@ -45,7 +45,6 @@ const { IPC_CHANNELS } = require('../shared/constants');
 // Import services
 const { analyzeDocumentFile } = require('./analysis/ollamaDocumentAnalysis');
 const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
-// Audio analysis removed - const { analyzeAudioFile } = require('./analysis/ollamaAudioAnalysis');
 
 // Import OCR library
 const tesseract = require('node-tesseract-ocr');
@@ -112,7 +111,9 @@ function handleSettingsChanged(settings) {
   updateDownloadWatcher(settings);
   try {
     updateTrayMenu();
-  } catch {}
+  } catch (error) {
+    logger.warn('[SETTINGS] Failed to update tray menu:', error);
+  }
 }
 
 // ===== IPC HANDLERS =====

@@ -34,6 +34,7 @@ const {
 // const ModelManager = require('./services/ModelManager'); // not used currently
 const { buildOllamaOptions } = require('./services/PerformanceService');
 const SettingsService = require('./services/SettingsService');
+const DownloadWatcher = require('./services/DownloadWatcher');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -55,6 +56,7 @@ let customFolders = []; // Initialize customFolders at module level
 // Initialize service integration
 let serviceIntegration;
 let settingsService;
+let downloadWatcher;
 
 // Custom folders helpers
 const {
@@ -78,6 +80,23 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function updateDownloadWatcher(settings) {
+  const enabled = settings?.autoOrganize;
+  if (enabled) {
+    if (!downloadWatcher) {
+      downloadWatcher = new DownloadWatcher({
+        analyzeDocumentFile,
+        analyzeImageFile,
+        getCustomFolders: () => customFolders,
+      });
+      downloadWatcher.start();
+    }
+  } else if (downloadWatcher) {
+    downloadWatcher.stop();
+    downloadWatcher = null;
+  }
 }
 
 // ===== IPC HANDLERS =====
@@ -226,6 +245,7 @@ if (!gotTheLock) {
       logger.info('[MAIN] Service integration initialized successfully');
       // Initialize settings service
       settingsService = new SettingsService();
+      const initialSettings = await settingsService.load();
 
       // Resume any incomplete organize batches (best-effort)
       try {
@@ -303,9 +323,11 @@ if (!gotTheLock) {
         setOllamaModel,
         setOllamaVisionModel,
         setOllamaEmbeddingModel,
+        onSettingsChanged: updateDownloadWatcher,
       });
 
       createWindow();
+      updateDownloadWatcher(initialSettings);
       // Create system tray with quick actions
       try {
         createSystemTray();

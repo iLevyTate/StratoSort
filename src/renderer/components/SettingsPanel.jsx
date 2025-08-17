@@ -6,6 +6,7 @@ import Input from './ui/Input';
 import Textarea from './ui/Textarea';
 import Select from './ui/Select';
 import Collapsible from './ui/Collapsible';
+import AutoOrganizeSection from './settings/AutoOrganizeSection';
 
 function SettingsPanel() {
   const { actions } = usePhase();
@@ -494,26 +495,10 @@ function SettingsPanel() {
                   className="w-full"
                 />
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="autoOrganize"
-                  checked={settings.autoOrganize}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      autoOrganize: e.target.checked,
-                    }))
-                  }
-                  className="mr-8"
-                />
-                <label
-                  htmlFor="autoOrganize"
-                  className="text-sm text-system-gray-700"
-                >
-                  Auto-organize files after analysis
-                </label>
-              </div>
+              <AutoOrganizeSection
+                settings={settings}
+                setSettings={setSettings}
+              />
             </div>
           </Collapsible>
 

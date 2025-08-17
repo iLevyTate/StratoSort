@@ -11,6 +11,7 @@ class EmbeddingIndexService {
     this.folderVectors = new Map();
     this.initialized = false;
     this.persistDisabled = false;
+    this.writeQueue = Promise.resolve();
   }
 
   async initialize() {
@@ -46,11 +47,15 @@ class EmbeddingIndexService {
 
   async appendJsonl(filePath, obj) {
     if (this.persistDisabled) return;
-    try {
-      await fs.appendFile(filePath, JSON.stringify(obj) + '\n');
-    } catch {
-      this.persistDisabled = true;
-    }
+    // Queue writes so concurrent appends don't corrupt JSONL entries
+    this.writeQueue = this.writeQueue.then(async () => {
+      try {
+        await fs.appendFile(filePath, JSON.stringify(obj) + '\n');
+      } catch {
+        this.persistDisabled = true;
+      }
+    });
+    return this.writeQueue;
   }
 
   async upsertFolder(folder) {

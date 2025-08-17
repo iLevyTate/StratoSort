@@ -4,10 +4,6 @@
  */
 
 const { Ollama } = require('ollama');
-const {
-  ModelMissingError,
-  OllamaConnectionError,
-} = require('../errors/AnalysisError');
 const { DEFAULT_AI_MODELS } = require('../../shared/constants');
 
 class ModelVerifier {

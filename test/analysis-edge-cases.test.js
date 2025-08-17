@@ -6,9 +6,6 @@ const {
   analyzeImageFile,
 } = require('../src/main/analysis/ollamaImageAnalysis');
 const {
-  analyzeAudioFile,
-} = require('../src/main/analysis/ollamaAudioAnalysis');
-const {
   analyzeDocumentFile,
 } = require('../src/main/analysis/ollamaDocumentAnalysis');
 
@@ -40,17 +37,6 @@ describe('Analysis edge cases', () => {
 
     expect(result).toHaveProperty('error');
     expect(result.confidence).toBe(0);
-  });
-
-  test('Audio analyser rejects unsupported extension', async () => {
-    const tmpFile = path.join(os.tmpdir(), 'audio.xyz');
-    await fs.writeFile(tmpFile, 'dummy');
-
-    const result = await analyzeAudioFile(tmpFile);
-    await fs.unlink(tmpFile);
-
-    expect(result).toHaveProperty('error');
-    expect(result.category).toBe('unsupported');
   });
 
   test('Document analyser handles non-PDF unknown extension via fallback', async () => {

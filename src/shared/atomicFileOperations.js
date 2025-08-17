@@ -171,7 +171,17 @@ class AtomicFileOperations {
       destination = uniqueDestination;
     }
 
-    await fs.rename(source, destination);
+    try {
+      await fs.rename(source, destination);
+    } catch (error) {
+      if (error.code === 'EXDEV') {
+        await fs.copyFile(source, destination);
+        await fs.unlink(source);
+      } else {
+        throw error;
+      }
+    }
+
     return destination;
   }
 

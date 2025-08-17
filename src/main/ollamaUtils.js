@@ -3,6 +3,10 @@ const { Ollama } = require('ollama');
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('../shared/logger');
+
+// Optional: set context for clearer log origins
+logger.setContext('ollama-utils');
 
 // Path for storing Ollama configuration, e.g., selected model
 const getOllamaConfigPath = () => {
@@ -51,9 +55,9 @@ async function setOllamaModel(modelName) {
       // Keep legacy field for backward compatibility
       selectedModel: modelName,
     });
-    console.log(`[OLLAMA] Text model set to: ${modelName} and saved.`);
+    logger.info(`[OLLAMA] Text model set to: ${modelName} and saved.`);
   } catch (error) {
-    console.error(`[OLLAMA] Error saving text model selection:`, error);
+    logger.error('[OLLAMA] Error saving text model selection', { error });
   }
 }
 
@@ -65,9 +69,9 @@ async function setOllamaVisionModel(modelName) {
       ...current,
       selectedVisionModel: modelName,
     });
-    console.log(`[OLLAMA] Vision model set to: ${modelName} and saved.`);
+    logger.info(`[OLLAMA] Vision model set to: ${modelName} and saved.`);
   } catch (error) {
-    console.error(`[OLLAMA] Error saving vision model selection:`, error);
+    logger.error('[OLLAMA] Error saving vision model selection', { error });
   }
 }
 
@@ -79,9 +83,9 @@ async function setOllamaEmbeddingModel(modelName) {
       ...current,
       selectedEmbeddingModel: modelName,
     });
-    console.log(`[OLLAMA] Embedding model set to: ${modelName} and saved.`);
+    logger.info(`[OLLAMA] Embedding model set to: ${modelName} and saved.`);
   } catch (error) {
-    console.error(`[OLLAMA] Error saving embedding model selection:`, error);
+    logger.error('[OLLAMA] Error saving embedding model selection', { error });
   }
 }
 
@@ -97,10 +101,10 @@ async function setOllamaHost(host) {
       ollamaInstance = new Ollama({ host: ollamaHost });
       const current = await loadOllamaConfig();
       await saveOllamaConfig({ ...current, host: ollamaHost });
-      console.log(`[OLLAMA] Host set to: ${ollamaHost}`);
+      logger.info(`[OLLAMA] Host set to: ${ollamaHost}`);
     }
   } catch (error) {
-    console.error('[OLLAMA] Error setting host:', error);
+    logger.error('[OLLAMA] Error setting host', { error });
   }
 }
 
@@ -116,23 +120,22 @@ async function loadOllamaConfig() {
     try {
       config = JSON.parse(data);
     } catch (parseError) {
-      console.error(
-        '[OLLAMA] Invalid JSON in Ollama config, backing up and using defaults:',
-        parseError,
+      logger.error(
+        '[OLLAMA] Invalid JSON in Ollama config, backing up and using defaults',
+        { error: parseError },
       );
       try {
         await fs.rename(filePath, `${filePath}.bak`);
       } catch (renameError) {
-        console.error(
-          '[OLLAMA] Error backing up corrupt Ollama config file:',
-          renameError,
-        );
+        logger.error('[OLLAMA] Error backing up corrupt Ollama config file', {
+          error: renameError,
+        });
       }
     }
   } catch (error) {
     // It's okay if the file doesn't exist on first run
     if (error.code !== 'ENOENT') {
-      console.error('[OLLAMA] Error loading Ollama config:', error);
+      logger.error('[OLLAMA] Error loading Ollama config', { error });
     }
   }
 
@@ -140,24 +143,24 @@ async function loadOllamaConfig() {
     // Support legacy and new keys
     if (config.selectedTextModel || config.selectedModel) {
       selectedTextModel = config.selectedTextModel || config.selectedModel;
-      console.log(`[OLLAMA] Loaded selected text model: ${selectedTextModel}`);
+      logger.info(`[OLLAMA] Loaded selected text model: ${selectedTextModel}`);
     }
     if (config.selectedVisionModel) {
       selectedVisionModel = config.selectedVisionModel;
-      console.log(
+      logger.info(
         `[OLLAMA] Loaded selected vision model: ${selectedVisionModel}`,
       );
     }
     if (config.selectedEmbeddingModel) {
       selectedEmbeddingModel = config.selectedEmbeddingModel;
-      console.log(
+      logger.info(
         `[OLLAMA] Loaded selected embedding model: ${selectedEmbeddingModel}`,
       );
     }
     if (config.host) {
       ollamaHost = config.host;
       ollamaInstance = new Ollama({ host: ollamaHost });
-      console.log(`[OLLAMA] Loaded host: ${ollamaHost}`);
+      logger.info(`[OLLAMA] Loaded host: ${ollamaHost}`);
     }
     return config;
   }
@@ -187,17 +190,16 @@ async function loadOllamaConfig() {
           foundModel = modelsResponse.models[0].name; // Fallback to the first model
         }
         await setOllamaModel(foundModel);
-        console.log(
+        logger.info(
           `[OLLAMA] No saved text model found, defaulted to: ${selectedTextModel}`,
         );
       } else {
-        console.warn('[OLLAMA] No models available from Ollama server.');
+        logger.warn('[OLLAMA] No models available from Ollama server.');
       }
     } catch (listError) {
-      console.error(
-        '[OLLAMA] Error fetching model list during initial load:',
-        listError,
-      );
+      logger.error('[OLLAMA] Error fetching model list during initial load', {
+        error: listError,
+      });
     }
   }
   return { selectedTextModel, selectedVisionModel, host: ollamaHost };
@@ -209,7 +211,7 @@ async function saveOllamaConfig(config) {
     const filePath = getOllamaConfigPath();
     await fs.writeFile(filePath, JSON.stringify(config, null, 2));
   } catch (error) {
-    console.error('[OLLAMA] Error saving Ollama config:', error);
+    logger.error('[OLLAMA] Error saving Ollama config', { error });
     throw error; // Re-throw to indicate save failure
   }
 }

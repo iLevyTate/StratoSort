@@ -104,12 +104,39 @@ async function setOllamaHost(host) {
   }
 }
 
-// Load Ollama configuration (e.g., last selected model)
+// Load Ollama configuration (e.g., last selected model).
+// If the config file contains invalid JSON, it is renamed to "*.bak" and
+// defaults are returned so the app can recover on next launch.
 async function loadOllamaConfig() {
+  const filePath = getOllamaConfigPath();
+  let config = null;
+
   try {
-    const filePath = getOllamaConfigPath();
     const data = await fs.readFile(filePath, 'utf-8');
-    const config = JSON.parse(data);
+    try {
+      config = JSON.parse(data);
+    } catch (parseError) {
+      console.error(
+        '[OLLAMA] Invalid JSON in Ollama config, backing up and using defaults:',
+        parseError,
+      );
+      try {
+        await fs.rename(filePath, `${filePath}.bak`);
+      } catch (renameError) {
+        console.error(
+          '[OLLAMA] Error backing up corrupt Ollama config file:',
+          renameError,
+        );
+      }
+    }
+  } catch (error) {
+    // It's okay if the file doesn't exist on first run
+    if (error.code !== 'ENOENT') {
+      console.error('[OLLAMA] Error loading Ollama config:', error);
+    }
+  }
+
+  if (config) {
     // Support legacy and new keys
     if (config.selectedTextModel || config.selectedModel) {
       selectedTextModel = config.selectedTextModel || config.selectedModel;
@@ -133,51 +160,47 @@ async function loadOllamaConfig() {
       console.log(`[OLLAMA] Loaded host: ${ollamaHost}`);
     }
     return config;
-  } catch (error) {
-    // It's okay if the file doesn't exist on first run
-    if (error.code !== 'ENOENT') {
-      console.error('[OLLAMA] Error loading Ollama config:', error);
-    }
-    // Fallback to a default model or leave as null if no configuration is found
-    // You might want to fetch available models and pick one if ollamaModel is still null
-    // For now, let's assume a default if nothing is loaded.
-    if (!selectedTextModel) {
-      // Try to get the first available model or a known default
-      try {
-        const ollama = getOllama();
-        const modelsResponse = await ollama.list();
-        if (modelsResponse.models && modelsResponse.models.length > 0) {
-          // Prioritize models like 'llama2', 'mistral', or common ones
-          const preferredModels = ['llama3', 'llama2', 'mistral', 'phi'];
-          let foundModel = null;
-          for (const prefModel of preferredModels) {
-            const model = modelsResponse.models.find((m) =>
-              m.name.includes(prefModel),
-            );
-            if (model) {
-              foundModel = model.name;
-              break;
-            }
-          }
-          if (!foundModel) {
-            foundModel = modelsResponse.models[0].name; // Fallback to the first model
-          }
-          await setOllamaModel(foundModel);
-          console.log(
-            `[OLLAMA] No saved text model found, defaulted to: ${selectedTextModel}`,
-          );
-        } else {
-          console.warn('[OLLAMA] No models available from Ollama server.');
-        }
-      } catch (listError) {
-        console.error(
-          '[OLLAMA] Error fetching model list during initial load:',
-          listError,
-        );
-      }
-    }
-    return { selectedTextModel, selectedVisionModel, host: ollamaHost };
   }
+
+  // Fallback to a default model or leave as null if no configuration is found
+  // You might want to fetch available models and pick one if ollamaModel is still null
+  // For now, let's assume a default if nothing is loaded.
+  if (!selectedTextModel) {
+    // Try to get the first available model or a known default
+    try {
+      const ollama = getOllama();
+      const modelsResponse = await ollama.list();
+      if (modelsResponse.models && modelsResponse.models.length > 0) {
+        // Prioritize models like 'llama2', 'mistral', or common ones
+        const preferredModels = ['llama3', 'llama2', 'mistral', 'phi'];
+        let foundModel = null;
+        for (const prefModel of preferredModels) {
+          const model = modelsResponse.models.find((m) =>
+            m.name.includes(prefModel),
+          );
+          if (model) {
+            foundModel = model.name;
+            break;
+          }
+        }
+        if (!foundModel) {
+          foundModel = modelsResponse.models[0].name; // Fallback to the first model
+        }
+        await setOllamaModel(foundModel);
+        console.log(
+          `[OLLAMA] No saved text model found, defaulted to: ${selectedTextModel}`,
+        );
+      } else {
+        console.warn('[OLLAMA] No models available from Ollama server.');
+      }
+    } catch (listError) {
+      console.error(
+        '[OLLAMA] Error fetching model list during initial load:',
+        listError,
+      );
+    }
+  }
+  return { selectedTextModel, selectedVisionModel, host: ollamaHost };
 }
 
 // Save Ollama configuration

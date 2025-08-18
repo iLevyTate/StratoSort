@@ -59,32 +59,9 @@ let downloadWatcher;
 let currentSettings = {};
 let isQuitting = false;
 
-// ===== GPU PREFERENCES (Windows rendering stability) =====
-try {
-  // Try OpenGL backend first as it's more stable on Windows
-  const angleBackend = process.env.ANGLE_BACKEND || 'gl'; // alternatives: 'd3d11', 'd3d9'
-  app.commandLine.appendSwitch('use-angle', angleBackend);
-
-  // Disable problematic GPU features that cause command buffer errors
-  app.commandLine.appendSwitch('disable-gpu-sandbox');
-  app.commandLine.appendSwitch('disable-software-rasterizer');
-
-  // Use GPU but with safer settings
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-
-  // Disable features that commonly cause issues
-  app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
-
-  // Add fallback for WebGL
-  app.commandLine.appendSwitch('use-gl', 'swiftshader');
-
-  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}, WebGL fallback enabled`);
-} catch (e) {
-  try {
-    logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
-  } catch {}
-}
+// GPU preferences configuration
+const { applyGpuPreferences } = require('./core/gpuPreferences');
+applyGpuPreferences(logger);
 
 // Custom folders helpers
 const {

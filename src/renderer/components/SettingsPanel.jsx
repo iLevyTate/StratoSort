@@ -18,6 +18,7 @@ function SettingsPanel() {
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
     defaultSmartFolderLocation: 'Documents',
+    launchOnStartup: false,
   });
   const [ollamaModelLists, setOllamaModelLists] = useState({
     text: [],
@@ -562,6 +563,35 @@ function SettingsPanel() {
                 <p className="text-xs text-system-gray-500 mt-3">
                   Where new smart folders will be created by default
                 </p>
+              </div>
+            </div>
+          </Collapsible>
+
+          <Collapsible
+            title="🖥️ Application"
+            defaultOpen
+            persistKey="settings-app"
+          >
+            <div className="space-y-13">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="launchOnStartup"
+                  checked={!!settings.launchOnStartup}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      launchOnStartup: e.target.checked,
+                    }))
+                  }
+                  className="mr-8"
+                />
+                <label
+                  htmlFor="launchOnStartup"
+                  className="text-sm text-system-gray-700"
+                >
+                  Launch StratoSort on system startup
+                </label>
               </div>
             </div>
           </Collapsible>

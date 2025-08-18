@@ -54,9 +54,9 @@
     "prepare": "husky install",
     "package": "rimraf dist && npm run build && electron-builder build --publish never",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start": "node scripts/verify-setup.js",
+    "start": "npm run start:dev",
     "start:verified": "cross-env NODE_ENV=development electron . --enable-logging",
-    "start:optimized": "node scripts/verify-setup.js",
+    "start:optimized": "node startup-check.js",
     "start:quick": "concurrently \"npm run start:renderer\" \"npm run start:main\"",
     "electron": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
     "start:simple": "electron .",
@@ -174,7 +174,6 @@
     "css-loader": "^7.1.2",
     "css-minimizer-webpack-plugin": "^5.0.1",
     "detect-port": "^1.5.1",
-    "electron": "^26.2.1",
     "electron-builder": "^24.6.4",
     "electron-devtools-installer": "^3.2.0",
     "eslint": "^8.49.0",
@@ -226,71 +225,8 @@
     "webpack": "^5.99.9",
     "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^4.15.1",
     "webpack-merge": "^5.9.0",
     "zod": "^3.23.8"
-  },
-  "build": {
-    "productName": "Stratosort",
-    "appId": "com.stratosort.app",
-    "asar": true,
-    "asarUnpack": "**\\*.{node,dll}",
-    "files": [
-      "src",
-      "assets",
-      "startup-check.js",
-      "package.json"
-    ],
-    "mac": {
-      "icon": "assets/icons/icons/mac/icon.icns",
-      "target": {
-        "target": "default",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
-      },
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "win": {
-      "icon": "assets/icons/icons/win/icon.ico",
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "icon": "assets/icon.png",
-      "target": [
-        "AppImage"
-      ],
-      "category": "Office"
-    },
-    "directories": {
-      "app": "release/app",
-      "buildResources": "assets",
-      "output": "release/build"
-    },
-    "extraResources": [
-      "./assets/**"
-    ]
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

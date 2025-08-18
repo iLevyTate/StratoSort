@@ -306,6 +306,17 @@ if (!gotTheLock) {
       });
 
       createWindow();
+      // Start periodic system metrics broadcast to renderer
+      try {
+        setInterval(async () => {
+          try {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (!win || win.isDestroyed()) return;
+            const metrics = await systemAnalytics.collectMetrics();
+            win.webContents.send('system-metrics', metrics);
+          } catch {}
+        }, 10000);
+      } catch {}
       // Create system tray with quick actions
       try {
         createSystemTray();
@@ -405,15 +416,30 @@ if (!gotTheLock) {
           autoUpdater.on('error', (err) =>
             logger.error('[UPDATER] Error:', err),
           );
-          autoUpdater.on('update-available', () =>
-            logger.info('[UPDATER] Update available'),
-          );
-          autoUpdater.on('update-not-available', () =>
-            logger.info('[UPDATER] No updates available'),
-          );
-          autoUpdater.on('update-downloaded', () =>
-            logger.info('[UPDATER] Update downloaded'),
-          );
+          autoUpdater.on('update-available', () => {
+            logger.info('[UPDATER] Update available');
+            try {
+              const win = BrowserWindow.getAllWindows()[0];
+              if (win && !win.isDestroyed())
+                win.webContents.send('app:update', { status: 'available' });
+            } catch {}
+          });
+          autoUpdater.on('update-not-available', () => {
+            logger.info('[UPDATER] No updates available');
+            try {
+              const win = BrowserWindow.getAllWindows()[0];
+              if (win && !win.isDestroyed())
+                win.webContents.send('app:update', { status: 'none' });
+            } catch {}
+          });
+          autoUpdater.on('update-downloaded', () => {
+            logger.info('[UPDATER] Update downloaded');
+            try {
+              const win = BrowserWindow.getAllWindows()[0];
+              if (win && !win.isDestroyed())
+                win.webContents.send('app:update', { status: 'ready' });
+            } catch {}
+          });
           autoUpdater
             .checkForUpdatesAndNotify()
             .catch((e) => logger.error('[UPDATER] check failed', e));

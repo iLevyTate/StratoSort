@@ -11,7 +11,9 @@ function createMainWindow() {
   // Ensure AppUserModelID for Windows integration (notifications, jump list)
   try {
     app.setAppUserModelId('com.stratosort.app');
-  } catch {}
+  } catch (error) {
+    logger.debug('[WINDOW] Failed to set AppUserModelId:', error.message);
+  }
 
   // Restore previous window position/size
   const mainWindowState = windowStateKeeper({
@@ -87,13 +89,16 @@ function createMainWindow() {
       if (configured && typeof configured === 'string') {
         ollamaHost = configured;
       }
-    } catch {}
+    } catch (error) {
+      logger.debug('[WINDOW] Failed to get Ollama host:', error.message);
+    }
     let wsHost = '';
     try {
       const url = new URL(ollamaHost);
       wsHost =
         url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
-    } catch {
+    } catch (error) {
+      logger.debug('[WINDOW] Failed to parse Ollama host URL:', error.message);
       wsHost = '';
     }
 

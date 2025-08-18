@@ -45,6 +45,8 @@ function NavigationBar() {
   return (
     <nav
       className={`glass-card border-b border-border-light px-13 py-10 sticky top-0 z-40`}
+      role="navigation"
+      aria-label="Main navigation"
     >
       <div className="container-enhanced">
         <div className="flex items-center justify-between min-h-[56px] gap-8">
@@ -55,7 +57,11 @@ function NavigationBar() {
                 <span className="text-gradient">StratoSort</span>
               </h1>
             </div>
-            <div className="flex-1 grid grid-cols-5 gap-8 items-stretch">
+            <div
+              className="flex-1 grid grid-cols-5 gap-8 items-stretch"
+              role="tablist"
+              aria-label="Workflow phases"
+            >
               {phaseOrder.map((phase) => {
                 const isActive = currentPhase === phase;
                 const metadata = PHASE_METADATA[phase];
@@ -74,6 +80,11 @@ function NavigationBar() {
                     key={phase}
                     onClick={() => handlePhaseChange(phase)}
                     disabled={!canNavigate}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`${phase}-panel`}
+                    aria-disabled={!canNavigate}
+                    tabIndex={canNavigate ? 0 : -1}
                     className={`${' '}w-full h-full flex items-center justify-center gap-5 px-12 py-8 rounded-2xl text-sm font-medium transition-all min-h-[72px] ${
                       isActive
                         ? 'bg-stratosort-blue text-white shadow-sm'

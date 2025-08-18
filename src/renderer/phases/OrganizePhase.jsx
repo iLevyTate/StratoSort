@@ -472,13 +472,18 @@ function OrganizePhase() {
       };
 
       // Execute as a single undoable action
-      await executeAction(
+      const result = await executeAction(
         createOrganizeBatchAction(
           `Organize ${operations.length} files`,
           operations,
           stateCallbacks,
         ),
       );
+      // Only advance if at least one file organized successfully
+      const successCount = Array.isArray(result?.results)
+        ? result.results.filter((r) => r.success).length
+        : 0;
+      if (successCount > 0) actions.advancePhase(PHASES.COMPLETE);
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');
     } finally {

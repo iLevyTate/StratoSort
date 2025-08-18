@@ -26,6 +26,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
   'operation-progress',
   'app:error',
+  'app:update',
 ];
 
 // Flatten allowed send channels for validation
@@ -458,6 +459,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getModels: () => secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.GET_MODELS),
     testConnection: (hostUrl) =>
       secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.TEST_CONNECTION, hostUrl),
+    pullModels: (models) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.OLLAMA.PULL_MODELS, models),
   },
 
   // Event Listeners (with automatic cleanup)
@@ -465,6 +468,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onOperationProgress: (callback) =>
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
+    onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
   },
 
   // Settings

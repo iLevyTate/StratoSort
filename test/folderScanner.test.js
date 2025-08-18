@@ -11,16 +11,53 @@ describe('scanDirectory symlink handling', () => {
     const realFile = path.join(tmpDir, 'real.txt');
     await fs.writeFile(realFile, 'content');
 
-    const symlinkPath = path.join(tmpDir, 'link.txt');
-    await fs.symlink(realFile, symlinkPath);
+    let symlinkPath;
+    let symlinkCreated = false;
 
-    const items = await scanDirectory(tmpDir);
+    try {
+      // On Windows, symlink creation might fail due to permissions
+      if (process.platform === 'win32') {
+        // Try to create symlink, but don't fail the test if it doesn't work
+        try {
+          symlinkPath = path.join(tmpDir, 'link.txt');
+          await fs.symlink(realFile, symlinkPath);
+          symlinkCreated = true;
+        } catch (symlinkError) {
+          // If symlink creation fails on Windows, skip the symlink part of the test
+          console.warn(
+            'Symlink creation failed on Windows (requires elevated privileges):',
+            symlinkError.message,
+          );
+        }
+      } else {
+        // On Unix-like systems, symlinks should work
+        symlinkPath = path.join(tmpDir, 'link.txt');
+        await fs.symlink(realFile, symlinkPath);
+        symlinkCreated = true;
+      }
 
-    await fs.rm(tmpDir, { recursive: true, force: true });
+      const items = await scanDirectory(tmpDir);
 
-    const names = items.map((item) => item.name);
-    expect(names).toContain('real.txt');
-    expect(names).not.toContain('link.txt');
-    expect(items).toHaveLength(1);
+      await fs.rm(tmpDir, { recursive: true, force: true });
+
+      const names = items.map((item) => item.name);
+      expect(names).toContain('real.txt');
+
+      if (symlinkCreated) {
+        expect(names).not.toContain('link.txt');
+        expect(items).toHaveLength(1);
+      } else {
+        // If symlink wasn't created, just verify the real file is found
+        expect(items).toHaveLength(1);
+      }
+    } catch (error) {
+      // Clean up on any error
+      try {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   });
 });

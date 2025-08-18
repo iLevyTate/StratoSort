@@ -1,173 +1,108 @@
 import React from 'react';
 
-// Generic skeleton loader
-const Skeleton = ({
-  width = 'w-full',
-  height = 'h-4',
+const LoadingSkeleton = ({
   className = '',
-  rounded = 'rounded',
-  animated = true,
-}) => (
-  <div
-    className={`
-      ${width} ${height} ${rounded} ${className}
-      bg-gradient-to-r from-system-gray-200 via-system-gray-100 to-system-gray-200
-      ${animated ? 'animate-pulse' : ''}
-    `}
-  />
-);
+  variant = 'default',
+  count = 1,
+}) => {
+  const baseClasses =
+    'animate-pulse bg-gradient-to-r from-system-gray-100 to-system-gray-200 rounded';
 
-// File operation skeleton
-export const FileOperationSkeleton = ({ count = 3 }) => (
-  <div className="space-y-13">
-    {Array.from({ length: count }).map((_, index) => (
-      <div
-        key={index}
-        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-13 flex-1">
-            <Skeleton width="w-10" height="h-10" rounded="rounded-lg" />
-            <div className="flex-1 space-y-5">
-              <Skeleton width="w-3/4" height="h-5" />
-              <Skeleton width="w-1/2" height="h-4" />
-            </div>
-          </div>
-          <div className="flex gap-5">
-            <Skeleton width="w-20" height="h-8" rounded="rounded-md" />
-            <Skeleton width="w-20" height="h-8" rounded="rounded-md" />
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-);
+  const variantClasses = {
+    default: 'h-4 w-full',
+    title: 'h-8 w-3/4',
+    text: 'h-3 w-full',
+    card: 'h-32 w-full rounded-lg',
+    avatar: 'h-12 w-12 rounded-full',
+    button: 'h-10 w-24 rounded-lg',
+    input: 'h-10 w-full rounded-lg',
+    file: 'h-16 w-full rounded-lg',
+    folder: 'h-20 w-full rounded-xl',
+  };
 
-// Smart folder skeleton
-export const SmartFolderSkeleton = ({ count = 4 }) => (
-  <div className="space-y-13">
-    {Array.from({ length: count }).map((_, index) => (
-      <div
-        key={index}
-        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-13 flex-1">
-            <Skeleton width="w-8" height="h-8" rounded="rounded-md" />
-            <div className="flex-1 space-y-3">
-              <Skeleton width="w-1/3" height="h-5" />
-              <Skeleton width="w-2/3" height="h-4" />
-            </div>
-          </div>
-          <div className="flex gap-5">
-            <Skeleton width="w-16" height="h-8" rounded="rounded-md" />
-            <Skeleton width="w-16" height="h-8" rounded="rounded-md" />
-            <Skeleton width="w-16" height="h-8" rounded="rounded-md" />
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-);
+  const skeletons = Array.from({ length: count }, (_, i) => (
+    <div
+      key={i}
+      className={`${baseClasses} ${variantClasses[variant] || variantClasses.default} ${className}`}
+      aria-hidden="true"
+      style={{ animationDelay: `${i * 0.1}s` }}
+    />
+  ));
 
-// File analysis skeleton
-export const FileAnalysisSkeleton = ({ count = 5 }) => (
-  <div className="space-y-8">
-    {Array.from({ length: count }).map((_, index) => (
-      <div
-        key={index}
-        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
-      >
-        <div className="flex items-start gap-13">
-          <Skeleton width="w-12" height="h-12" rounded="rounded-lg" />
-          <div className="flex-1 space-y-8">
-            <div className="flex items-center justify-between">
-              <Skeleton width="w-1/2" height="h-5" />
-              <Skeleton width="w-20" height="h-6" rounded="rounded-full" />
-            </div>
-            <div className="space-y-5">
-              <div className="flex items-center gap-8">
-                <Skeleton width="w-16" height="h-4" />
-                <Skeleton width="w-40" height="h-8" rounded="rounded-md" />
-              </div>
-              <div className="flex items-center gap-8">
-                <Skeleton width="w-16" height="h-4" />
-                <Skeleton width="w-32" height="h-8" rounded="rounded-md" />
-              </div>
-            </div>
-            <div className="flex gap-5">
-              <Skeleton width="w-24" height="h-8" rounded="rounded-md" />
-              <Skeleton width="w-20" height="h-8" rounded="rounded-md" />
-              <Skeleton width="w-20" height="h-8" rounded="rounded-md" />
-              <Skeleton width="w-20" height="h-8" rounded="rounded-md" />
-            </div>
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
-// Directory scanning skeleton
-export const DirectoryScanSkeleton = () => (
-  <div className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21 text-center">
-    <div className="space-y-13">
-      <Skeleton
-        width="w-16"
-        height="h-16"
-        rounded="rounded-xl"
-        className="mx-auto"
-      />
-      <div className="space-y-5">
-        <Skeleton width="w-48" height="h-5" className="mx-auto" />
-        <Skeleton width="w-32" height="h-4" className="mx-auto" />
-      </div>
-      <div className="space-y-3">
-        <Skeleton width="w-full" height="h-2" rounded="rounded-full" />
-        <Skeleton width="w-24" height="h-4" className="mx-auto" />
-      </div>
-    </div>
-  </div>
-);
-
-// Settings form skeleton
-export const SettingsFormSkeleton = () => (
-  <div className="space-y-21">
-    {Array.from({ length: 3 }).map((_, sectionIndex) => (
-      <div
-        key={sectionIndex}
-        className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
-      >
-        <div className="space-y-13">
-          <Skeleton width="w-48" height="h-6" />
-          <div className="space-y-8">
-            {Array.from({ length: 2 }).map((_, fieldIndex) => (
-              <div key={fieldIndex} className="space-y-3">
-                <Skeleton width="w-32" height="h-4" />
-                <Skeleton width="w-full" height="h-10" rounded="rounded-md" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
-// Loading overlay for modals
-export const LoadingOverlay = ({ message = 'Loading...', show = true }) => {
-  if (!show) return null;
-
-  return (
-    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
-      <div className="text-center space-y-8">
-        <div className="animate-spin w-8 h-8 border-2 border-stratosort-blue border-t-transparent rounded-full mx-auto"></div>
-        <div className="text-sm text-system-gray-600 font-medium">
-          {message}
-        </div>
-      </div>
-    </div>
+  return count > 1 ? (
+    <div className="space-y-2">{skeletons}</div>
+  ) : (
+    skeletons[0]
   );
 };
 
-export default Skeleton;
+// Composite loading states for common UI patterns
+export const FileListSkeleton = ({ count = 5 }) => (
+  <div className="space-y-3" role="status" aria-label="Loading files">
+    {Array.from({ length: count }, (_, i) => (
+      <div
+        key={i}
+        className="flex items-center gap-3 p-3 bg-white rounded-lg border border-border-light"
+      >
+        <LoadingSkeleton variant="avatar" />
+        <div className="flex-1 space-y-2">
+          <LoadingSkeleton className="w-2/3" />
+          <LoadingSkeleton variant="text" className="w-1/3" />
+        </div>
+        <LoadingSkeleton variant="button" />
+      </div>
+    ))}
+    <span className="sr-only">Loading file list...</span>
+  </div>
+);
+
+export const FolderGridSkeleton = ({ count = 6 }) => (
+  <div
+    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+    role="status"
+    aria-label="Loading folders"
+  >
+    {Array.from({ length: count }, (_, i) => (
+      <div
+        key={i}
+        className="p-4 bg-white rounded-xl border border-border-light"
+      >
+        <LoadingSkeleton variant="folder" />
+        <div className="mt-3 space-y-2">
+          <LoadingSkeleton className="w-3/4" />
+          <LoadingSkeleton variant="text" />
+        </div>
+      </div>
+    ))}
+    <span className="sr-only">Loading folder list...</span>
+  </div>
+);
+
+export const AnalysisProgressSkeleton = () => (
+  <div
+    className="p-6 bg-white rounded-xl border border-border-light shadow-sm"
+    role="status"
+    aria-label="Loading analysis"
+  >
+    <div className="flex items-center justify-between mb-4">
+      <LoadingSkeleton variant="title" className="w-1/3" />
+      <LoadingSkeleton variant="button" />
+    </div>
+    <div className="space-y-3">
+      <LoadingSkeleton className="h-2 w-full rounded-full" />
+      <div className="flex justify-between">
+        <LoadingSkeleton variant="text" className="w-20" />
+        <LoadingSkeleton variant="text" className="w-20" />
+      </div>
+    </div>
+    <div className="mt-4 pt-4 border-t border-border-light">
+      <LoadingSkeleton variant="text" className="w-2/3" />
+    </div>
+    <span className="sr-only">Loading analysis progress...</span>
+  </div>
+);
+
+// Alias for backward compatibility
+export const SmartFolderSkeleton = FolderGridSkeleton;
+
+export default LoadingSkeleton;

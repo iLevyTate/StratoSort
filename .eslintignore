@@ -5,6 +5,7 @@ coverage/
 assets/
 tmpUserData/
 release/build/
+tsconfig.json
 
 release/**
 dist/**

@@ -13,6 +13,34 @@ class UndoRedoService {
     this.initialized = false;
   }
 
+  async ensureParentDirectory(filePath) {
+    const parentDirectory = path.dirname(filePath);
+    await fs.mkdir(parentDirectory, { recursive: true });
+  }
+
+  async safeMove(sourcePath, destinationPath) {
+    await this.ensureParentDirectory(destinationPath);
+    try {
+      await fs.rename(sourcePath, destinationPath);
+      return;
+    } catch (error) {
+      if (error && error.code === 'EXDEV') {
+        // Cross-device move: copy then verify then remove
+        await fs.copyFile(sourcePath, destinationPath);
+        const [sourceStats, destStats] = await Promise.all([
+          fs.stat(sourcePath),
+          fs.stat(destinationPath),
+        ]);
+        if (sourceStats.size !== destStats.size) {
+          throw new Error('File copy verification failed - size mismatch');
+        }
+        await fs.unlink(sourcePath);
+        return;
+      }
+      throw error;
+    }
+  }
+
   async initialize() {
     if (this.initialized) return;
 
@@ -141,12 +169,12 @@ class UndoRedoService {
     switch (action.type) {
       case 'FILE_MOVE':
         // Move file back to original location
-        await fs.rename(action.data.newPath, action.data.originalPath);
+        await this.safeMove(action.data.newPath, action.data.originalPath);
         break;
 
       case 'FILE_RENAME':
         // Rename file back to original name
-        await fs.rename(action.data.newPath, action.data.originalPath);
+        await this.safeMove(action.data.newPath, action.data.originalPath);
         break;
 
       case 'FILE_DELETE':
@@ -155,7 +183,7 @@ class UndoRedoService {
           action.data.backupPath &&
           (await this.fileExists(action.data.backupPath))
         ) {
-          await fs.rename(action.data.backupPath, action.data.originalPath);
+          await this.safeMove(action.data.backupPath, action.data.originalPath);
         } else {
           throw new Error('Cannot restore deleted file - backup not found');
         }
@@ -191,18 +219,18 @@ class UndoRedoService {
     switch (action.type) {
       case 'FILE_MOVE':
         // Move file to new location
-        await fs.rename(action.data.originalPath, action.data.newPath);
+        await this.safeMove(action.data.originalPath, action.data.newPath);
         break;
 
       case 'FILE_RENAME':
         // Rename file to new name
-        await fs.rename(action.data.originalPath, action.data.newPath);
+        await this.safeMove(action.data.originalPath, action.data.newPath);
         break;
 
       case 'FILE_DELETE':
         // Delete file again (move to backup if configured)
         if (action.data.createBackup) {
-          await fs.rename(action.data.originalPath, action.data.backupPath);
+          await this.safeMove(action.data.originalPath, action.data.backupPath);
         } else {
           await fs.unlink(action.data.originalPath);
         }
@@ -229,17 +257,17 @@ class UndoRedoService {
   async reverseFileOperation(operation) {
     switch (operation.type) {
       case 'move':
-        await fs.rename(operation.newPath, operation.originalPath);
+        await this.safeMove(operation.newPath, operation.originalPath);
         break;
       case 'rename':
-        await fs.rename(operation.newPath, operation.originalPath);
+        await this.safeMove(operation.newPath, operation.originalPath);
         break;
       case 'delete':
         if (
           operation.backupPath &&
           (await this.fileExists(operation.backupPath))
         ) {
-          await fs.rename(operation.backupPath, operation.originalPath);
+          await this.safeMove(operation.backupPath, operation.originalPath);
         }
         break;
     }
@@ -248,14 +276,14 @@ class UndoRedoService {
   async executeFileOperation(operation) {
     switch (operation.type) {
       case 'move':
-        await fs.rename(operation.originalPath, operation.newPath);
+        await this.safeMove(operation.originalPath, operation.newPath);
         break;
       case 'rename':
-        await fs.rename(operation.originalPath, operation.newPath);
+        await this.safeMove(operation.originalPath, operation.newPath);
         break;
       case 'delete':
         if (operation.createBackup) {
-          await fs.rename(operation.originalPath, operation.backupPath);
+          await this.safeMove(operation.originalPath, operation.backupPath);
         } else {
           await fs.unlink(operation.originalPath);
         }

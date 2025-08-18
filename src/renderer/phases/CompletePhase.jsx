@@ -62,7 +62,7 @@ function CompletePhase() {
               <div key={index} className="text-sm">
                 <span className="text-system-gray-600">✓</span>{' '}
                 {file.originalName || `File ${index + 1}`} →{' '}
-                {file.newLocation || 'Organized'}
+                {file.path || file.newLocation || 'Organized'}
               </div>
             ))}
             {organizedFiles.length > 5 && (

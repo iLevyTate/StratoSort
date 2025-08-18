@@ -26,6 +26,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'system-metrics',
   'operation-progress',
   'app:error',
+  'app:update',
 ];
 
 // Flatten allowed send channels for validation
@@ -469,6 +470,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onOperationProgress: (callback) =>
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
+    onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
   },
 
   // Settings

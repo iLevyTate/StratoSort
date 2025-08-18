@@ -48,6 +48,7 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "StratoSort",
+    "runAfterFinish": true,
     "include": "build/installer.nsh",
     "allowElevation": true
   },

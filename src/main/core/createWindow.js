@@ -11,7 +11,9 @@ function createMainWindow() {
   // Ensure AppUserModelID for Windows integration (notifications, jump list)
   try {
     app.setAppUserModelId('com.stratosort.app');
-  } catch {}
+  } catch (error) {
+    logger.debug('[WINDOW] Failed to set AppUserModelId:', error.message);
+  }
 
   // Restore previous window position/size
   const mainWindowState = windowStateKeeper({
@@ -20,13 +22,19 @@ function createMainWindow() {
   });
 
   const isWindows = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
   const win = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
     width: mainWindowState.width,
     height: mainWindowState.height,
-    // Use native title bar/caption buttons on all platforms for now
+    minWidth: 800,
+    minHeight: 600,
+    // Use native frame with dark theme
     frame: true,
+    backgroundColor: '#0f0f10', // Dark background while loading
+    darkTheme: true, // Force dark theme on Windows
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -40,12 +48,12 @@ function createMainWindow() {
       devTools: isDev,
       hardwareAcceleration: true,
       enableWebGL: true,
+      safeDialogs: true,
     },
     icon: path.join(__dirname, '../../../assets/stratosort-logo.png'),
     show: false,
-    // For custom controls on Windows, use frameless window and do NOT enable titleBarOverlay
     titleBarStyle: 'default',
-    autoHideMenuBar: !isDev,
+    autoHideMenuBar: false, // Keep menu bar visible
   });
 
   logger.debug('[DEBUG] BrowserWindow created');
@@ -87,24 +95,39 @@ function createMainWindow() {
       if (configured && typeof configured === 'string') {
         ollamaHost = configured;
       }
-    } catch {}
+    } catch (error) {
+      logger.debug('[WINDOW] Failed to get Ollama host:', error.message);
+    }
     let wsHost = '';
     try {
       const url = new URL(ollamaHost);
       wsHost =
         url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
-    } catch {
+    } catch (error) {
+      logger.debug('[WINDOW] Failed to parse Ollama host URL:', error.message);
       wsHost = '';
     }
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const styleSrc = isProduction ? "'self'" : "'self' 'unsafe-inline'";
+    // Material-UI requires 'unsafe-inline' for styles to work
+    // In a more secure setup, we'd use nonces or hashes, but for now we need inline styles
+    const styleSrc = "'self' 'unsafe-inline'";
     const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
 
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [csp],
+        'X-Content-Type-Options': ['nosniff'],
+        'Referrer-Policy': ['no-referrer'],
+        // COOP/COEP can break some integrations; set COOP only
+        'Cross-Origin-Opener-Policy': ['same-origin'],
+        'Cross-Origin-Resource-Policy': ['same-origin'],
+        // Disable sensitive features by default
+        'Permissions-Policy': [
+          [
+            'accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), clipboard-read=(), clipboard-write=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()',
+          ].join(''),
+        ],
       },
     });
   });
@@ -123,6 +146,28 @@ function createMainWindow() {
   win.on('closed', () => {
     // noop; main process holds the reference
   });
+
+  // Block navigation attempts within the app (e.g., dropped links or external redirects)
+  win.webContents.on('will-navigate', (event, url) => {
+    try {
+      // Always prevent in-app navigations; open externally only if explicitly allowed elsewhere
+      event.preventDefault();
+    } catch {}
+  });
+
+  // Disallow embedding arbitrary webviews
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    event.preventDefault();
+  });
+
+  // Deny all permission requests by default (camera, mic, etc.)
+  try {
+    win.webContents.session.setPermissionRequestHandler(
+      (_wc, _permission, callback) => {
+        callback(false);
+      },
+    );
+  } catch {}
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     const allowedDomains = [

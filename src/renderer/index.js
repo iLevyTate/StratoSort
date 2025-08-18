@@ -3,6 +3,30 @@ import { createRoot } from 'react-dom/client';
 import App from './App.js';
 import './tailwind.css';
 
+// Enable smooth scrolling globally
+if (typeof window !== 'undefined') {
+  // Set smooth scroll on document
+  document.documentElement.style.scrollBehavior = 'smooth';
+  document.body.style.scrollBehavior = 'smooth';
+
+  // Add smooth scroll behavior to all internal links
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (link && link.getAttribute('href')?.startsWith('#')) {
+      e.preventDefault();
+      const targetId = link.getAttribute('href').slice(1);
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+      }
+    }
+  });
+}
+
 // Wait for DOM to be ready before initializing React
 function initializeApp() {
   try {

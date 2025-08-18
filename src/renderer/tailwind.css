@@ -26,9 +26,31 @@
     @apply outline-none ring-2 ring-stratosort-blue/50 ring-offset-2 ring-offset-surface-primary;
   }
 
-  /* Smooth scrolling */
+  /* Smooth scrolling - GLOBAL ENHANCED */
   html {
-    scroll-behavior: smooth;
+    scroll-behavior: smooth !important;
+    scroll-padding-top: 80px; /* Account for fixed header */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
+  body {
+    scroll-behavior: smooth !important;
+    overscroll-behavior-y: none; /* Prevent overscroll bounce */
+  }
+
+  * {
+    scroll-behavior: smooth !important;
+  }
+
+  /* Smooth scroll for all scrollable containers */
+  .smooth-scroll,
+  [data-smooth-scroll],
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-scroll {
+    scroll-behavior: smooth !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Better text selection */
@@ -38,6 +60,35 @@
 }
 
 @layer components {
+  /* Premium Gradient Utilities */
+  .gradient-primary {
+    @apply bg-gradient-to-br from-gradient-primary-start to-gradient-primary-end;
+  }
+
+  .gradient-secondary {
+    @apply bg-gradient-to-br from-gradient-secondary-start to-gradient-secondary-end;
+  }
+
+  .gradient-accent {
+    @apply bg-gradient-to-br from-gradient-accent-start to-gradient-accent-end;
+  }
+
+  .gradient-success {
+    @apply bg-gradient-to-br from-gradient-success-start to-gradient-success-end;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-gradient-primary-start to-gradient-primary-end bg-clip-text text-transparent;
+  }
+
+  .gradient-border {
+    position: relative;
+    background:
+      linear-gradient(white, white) padding-box,
+      linear-gradient(135deg, #667eea, #764ba2) border-box;
+    border: 2px solid transparent;
+  }
+
   /* App Regions for custom Windows title bar */
   .app-region-drag {
     -webkit-app-region: drag;
@@ -189,8 +240,29 @@
   }
 
   .btn-primary {
-    @apply btn-base bg-stratosort-blue hover:bg-stratosort-dark-blue text-white shadow-sm hover:shadow-stratosort;
-    @apply focus:ring-stratosort-blue/50;
+    @apply btn-base text-white shadow-sm hover:shadow-stratosort;
+    @apply focus:ring-gradient-primary-start/50;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: left 0.5s;
+  }
+  .btn-primary:hover::before {
+    left: 100%;
   }
 
   .btn-secondary {
@@ -783,6 +855,42 @@ select:focus {
 }
 
 /* ===== ENHANCED ANIMATIONS ===== */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
 @keyframes slide-up {
   from {
     opacity: 0;
@@ -951,16 +1059,6 @@ select:focus {
 
   .btn-primary {
     @apply bg-system-gray-900 text-white border-2 border-system-gray-900;
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-6px);
   }
 }
 

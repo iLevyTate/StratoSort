@@ -59,6 +59,33 @@ let downloadWatcher;
 let currentSettings = {};
 let isQuitting = false;
 
+// ===== GPU PREFERENCES (Windows rendering stability) =====
+try {
+  // Try OpenGL backend first as it's more stable on Windows
+  const angleBackend = process.env.ANGLE_BACKEND || 'gl'; // alternatives: 'd3d11', 'd3d9'
+  app.commandLine.appendSwitch('use-angle', angleBackend);
+
+  // Disable problematic GPU features that cause command buffer errors
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+
+  // Use GPU but with safer settings
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
+  // Disable features that commonly cause issues
+  app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+
+  // Add fallback for WebGL
+  app.commandLine.appendSwitch('use-gl', 'swiftshader');
+
+  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}, WebGL fallback enabled`);
+} catch (e) {
+  try {
+    logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
+  } catch {}
+}
+
 // Custom folders helpers
 const {
   loadCustomFolders,
@@ -70,6 +97,123 @@ const systemAnalytics = require('./core/systemAnalytics');
 
 // Window creation
 const createMainWindow = require('./core/createWindow');
+
+// Create themed application menu
+function createApplicationMenu() {
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Select Files',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'select-files');
+            }
+          },
+        },
+        {
+          label: 'Select Folder',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'select-folder');
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Settings',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'open-settings');
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Exit',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
+          click: () => {
+            app.quit();
+          },
+        },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', role: 'reload' },
+        {
+          label: 'Force Reload',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          role: 'forceReload',
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Fullscreen',
+          accelerator: 'F11',
+          role: 'togglefullscreen',
+        },
+        ...(isDev
+          ? [
+              { type: 'separator' },
+              {
+                label: 'Toggle Developer Tools',
+                accelerator: 'F12',
+                role: 'toggleDevTools',
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { label: 'Minimize', accelerator: 'CmdOrCtrl+M', role: 'minimize' },
+        { label: 'Close', accelerator: 'CmdOrCtrl+W', role: 'close' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About StratoSort',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'show-about');
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Documentation',
+          click: () => {
+            shell.openExternal('https://github.com');
+          },
+        },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 function createWindow() {
   logger.debug('[DEBUG] createWindow() called');
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -342,6 +486,9 @@ if (!gotTheLock) {
         setOllamaEmbeddingModel,
         onSettingsChanged: handleSettingsChanged,
       });
+
+      // Create application menu with theme
+      createApplicationMenu();
 
       createWindow();
       handleSettingsChanged(initialSettings);

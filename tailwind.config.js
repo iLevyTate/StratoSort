@@ -84,6 +84,17 @@ module.exports = {
           success: '#10B981',
           warning: '#F59E0B',
         },
+        // Premium gradient colors
+        gradient: {
+          'primary-start': '#667eea',
+          'primary-end': '#764ba2',
+          'secondary-start': '#f093fb',
+          'secondary-end': '#f5576c',
+          'accent-start': '#4facfe',
+          'accent-end': '#00f2fe',
+          'success-start': '#43e97b',
+          'success-end': '#38f9d7',
+        },
         // Enhanced system colors with better contrast and accessibility
         system: {
           blue: '#2563EB',

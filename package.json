@@ -95,6 +95,9 @@
     "icon": "eib  -i assets/icon.png -o assets"
   },
   "browserslist": [],
+  "overrides": {
+    "@jridgewell/gen-mapping": "^0.3.5"
+  },
   "prettier": {
     "singleQuote": true,
     "overrides": [

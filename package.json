@@ -213,7 +213,7 @@
     "querystring-es3": "^0.2.1",
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
-    "rimraf": "^5.0.1",
+    "rimraf": "^6.0.1",
     "sass": "^1.67.0",
     "sass-loader": "^16.0.5",
     "stream-browserify": "^3.0.0",

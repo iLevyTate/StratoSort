@@ -144,7 +144,7 @@
     "@babel/core": "^7.27.4",
     "@babel/plugin-transform-react-jsx": "^7.27.1",
     "@babel/preset-react": "^7.27.1",
-    "@electron/notarize": "^2.1.0",
+    "@electron/notarize": "^3.0.2",
     "@electron/rebuild": "^3.7.2",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",

@@ -70,6 +70,7 @@
     "start:preload": "webpack --mode=development --config webpack.config.js",
     "start:renderer": "webpack serve --mode=development --config webpack.config.js",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:run": "node run-tests.js",
     "test:full": "node run-tests.js --coverage",
     "test:quick": "node run-tests.js --bail",

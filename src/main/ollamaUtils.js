@@ -1,5 +1,4 @@
 const { Ollama } = require('ollama');
-// const { buildOllamaOptions } = require('./services/PerformanceService');
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');

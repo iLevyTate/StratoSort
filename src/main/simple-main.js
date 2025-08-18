@@ -9,16 +9,11 @@ const {
   nativeImage,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
-// const { performance } = require('perf_hooks'); // no longer used
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
 const { logger } = require('../shared/logger');
-
-// Import error handling system (not needed directly in this file)
-
 const { scanDirectory } = require('./folderScanner');
-// const { getOrganizationSuggestions } = require('./llmService'); // not used currently
 const {
   getOllama,
   getOllamaModel,
@@ -31,7 +26,6 @@ const {
   setOllamaHost,
   loadOllamaConfig,
 } = require('./ollamaUtils');
-// const ModelManager = require('./services/ModelManager'); // not used currently
 const { buildOllamaOptions } = require('./services/PerformanceService');
 const SettingsService = require('./services/SettingsService');
 const DownloadWatcher = require('./services/DownloadWatcher');

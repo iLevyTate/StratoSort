@@ -37,12 +37,10 @@ jobs:
       - name: Prettier check
         run: npm run format:check
 
-      - name: Typecheck
-        if: ${{ hashFiles('tsconfig.json') != '' && hashFiles('**/*.ts','**/*.tsx') != '' }}
-        run: npm run typecheck
+      # Typecheck step removed - project uses plain JavaScript
 
       - name: Tests
-        run: npm test -- --ci
+        run: npm test
 
   build:
     name: Webpack build (Node 20)

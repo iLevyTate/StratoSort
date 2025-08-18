@@ -3,6 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
@@ -114,6 +115,19 @@ module.exports = (env, argv) => {
     // Optimization
     optimization: {
       minimize: isProduction,
+      minimizer: isProduction
+        ? [
+            new TerserPlugin({
+              parallel: true,
+              extractComments: false,
+              terserOptions: {
+                compress: {
+                  drop_console: true,
+                },
+              },
+            }),
+          ]
+        : [],
       splitChunks: {
         chunks: 'async',
         minSize: 20000,

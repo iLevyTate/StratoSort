@@ -5,12 +5,7 @@ coverage/
 assets/
 tmpUserData/
 release/build/
-tsconfig.json
 
-release/**
-dist/**
-coverage/**
 **/*.min.js
 **/*.bundle.js
 **/*.map
-assets/**

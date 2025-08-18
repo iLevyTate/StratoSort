@@ -7,16 +7,9 @@ module.exports = {
   displayName: 'Stratosort Tests',
   testEnvironment: 'node',
   roots: ['<rootDir>'],
-  testMatch: ['**/__tests__/**/*.+(js|ts)', '**/*.(test|spec).+(js|ts)'],
-  transform: {
-    '^.+\\.(ts)$': 'ts-jest',
-    '^.+\\.(js)$': 'babel-jest',
-  },
-  collectCoverageFrom: [
-    '../src/**/*.{js,ts}',
-    '!../src/**/*.d.ts',
-    '!../src/**/node_modules/**',
-  ],
+  testMatch: ['**/__tests__/**/*.+(js)', '**/*.(test|spec).+(js)'],
+  // No transforms needed for plain JS
+  collectCoverageFrom: ['../src/**/*.js', '!../src/**/node_modules/**'],
   coverageDirectory: '../coverage',
   setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
   // Sequential execution keeps Ollama mocks deterministic

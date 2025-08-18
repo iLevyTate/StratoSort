@@ -26,15 +26,7 @@ module.exports = {
     },
     'import/resolver': {
       node: {
-        extensions: ['.js', '.jsx', '.ts', '.tsx'],
-      },
-      alias: {
-        map: [
-          ['@', './electron-react-app/src'],
-          ['@main', './electron-react-app/src/main'],
-          ['@renderer', './electron-react-app/src/renderer'],
-          ['@shared', './electron-react-app/src/shared'],
-        ],
+        extensions: ['.js', '.jsx'],
       },
     },
   },

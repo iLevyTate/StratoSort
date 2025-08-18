@@ -39,7 +39,7 @@ jobs:
       - name: Tests
         env:
           CI: true
-        run: npm test -- --coverage
+        run: npm run test:coverage
 
   windows-smoke:
     runs-on: windows-latest
@@ -61,4 +61,4 @@ jobs:
           CI: true
           NODE_ENV: test
           OLLAMA_BASE_URL: http://127.0.0.1:11434
-        run: npm test -- --coverage
+        run: npm run test:coverage

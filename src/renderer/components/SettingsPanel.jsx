@@ -6,6 +6,8 @@ import Input from './ui/Input';
 import Textarea from './ui/Textarea';
 import Select from './ui/Select';
 import Collapsible from './ui/Collapsible';
+import AutoOrganizeSection from './settings/AutoOrganizeSection';
+import BackgroundModeSection from './settings/BackgroundModeSection';
 
 function SettingsPanel() {
   const { actions } = usePhase();
@@ -17,6 +19,7 @@ function SettingsPanel() {
     embeddingModel: 'mxbai-embed-large',
     maxConcurrentAnalysis: 3,
     autoOrganize: false,
+    backgroundMode: false,
     defaultSmartFolderLocation: 'Documents',
     launchOnStartup: false,
   });
@@ -34,6 +37,10 @@ function SettingsPanel() {
   const [isRebuildingFolders, setIsRebuildingFolders] = useState(false);
   const [isRebuildingFiles, setIsRebuildingFiles] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [newModel, setNewModel] = useState('');
+  const [modelToDelete, setModelToDelete] = useState('');
+  const [isAddingModel, setIsAddingModel] = useState(false);
+  const [isDeletingModel, setIsDeletingModel] = useState(false);
   const didAutoHealthCheckRef = useRef(false);
 
   useEffect(() => {
@@ -109,6 +116,7 @@ function SettingsPanel() {
         embedding: categories.embedding || [],
         all: response?.models || [],
       });
+      setModelToDelete((response?.models || [])[0] || '');
       if (response?.ollamaHealth) setOllamaHealth(response.ollamaHealth);
       if (response?.selected) {
         setSettings((prev) => ({
@@ -162,6 +170,51 @@ function SettingsPanel() {
       }
     } catch (e) {
       addNotification(`Ollama test failed: ${e.message}`, 'error');
+    }
+  };
+
+  const addOllamaModel = async () => {
+    if (!newModel.trim()) return;
+    try {
+      setIsAddingModel(true);
+      const res = await window.electronAPI.ollama.pullModels([newModel.trim()]);
+      const result = res?.results?.[0];
+      if (result?.success) {
+        addNotification(`Added model ${newModel.trim()}`, 'success');
+        setNewModel('');
+        await loadOllamaModels();
+      } else {
+        addNotification(
+          `Failed to add model: ${result?.error || 'Unknown error'}`,
+          'error',
+        );
+      }
+    } catch (e) {
+      addNotification(`Failed to add model: ${e.message}`, 'error');
+    } finally {
+      setIsAddingModel(false);
+    }
+  };
+
+  const deleteOllamaModel = async () => {
+    if (!modelToDelete) return;
+    try {
+      setIsDeletingModel(true);
+      const res = await window.electronAPI.ollama.deleteModel(modelToDelete);
+      if (res?.success) {
+        addNotification(`Deleted model ${modelToDelete}`, 'success');
+        setModelToDelete('');
+        await loadOllamaModels();
+      } else {
+        addNotification(
+          `Failed to delete model: ${res?.error || 'Unknown error'}`,
+          'error',
+        );
+      }
+    } catch (e) {
+      addNotification(`Failed to delete model: ${e.message}`, 'error');
+    } finally {
+      setIsDeletingModel(false);
     }
   };
 
@@ -401,6 +454,61 @@ function SettingsPanel() {
                   </Select>
                 </div>
               </div>
+              <div className="border-t border-system-gray-200 pt-13 mt-13 space-y-13">
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-5">
+                    Add Model
+                  </label>
+                  <div className="flex gap-8">
+                    <Input
+                      type="text"
+                      value={newModel}
+                      onChange={(e) => setNewModel(e.target.value)}
+                      placeholder="model:tag"
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={addOllamaModel}
+                      variant="secondary"
+                      type="button"
+                      disabled={isAddingModel}
+                      title="Pull model"
+                    >
+                      {isAddingModel ? 'Adding…' : 'Add'}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-system-gray-700 mb-5">
+                    Delete Model
+                  </label>
+                  <div className="flex gap-8">
+                    <Select
+                      value={modelToDelete}
+                      onChange={(e) => setModelToDelete(e.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="" disabled>
+                        Select model
+                      </option>
+                      {ollamaModelLists.all.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </Select>
+                    <Button
+                      onClick={deleteOllamaModel}
+                      variant="danger"
+                      type="button"
+                      disabled={isDeletingModel || !modelToDelete}
+                      title="Delete model"
+                    >
+                      {isDeletingModel ? 'Deleting…' : 'Delete'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-13">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-system-gray-700 mb-5">
@@ -495,26 +603,14 @@ function SettingsPanel() {
                   className="w-full"
                 />
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="autoOrganize"
-                  checked={settings.autoOrganize}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      autoOrganize: e.target.checked,
-                    }))
-                  }
-                  className="mr-8"
-                />
-                <label
-                  htmlFor="autoOrganize"
-                  className="text-sm text-system-gray-700"
-                >
-                  Auto-organize files after analysis
-                </label>
-              </div>
+              <AutoOrganizeSection
+                settings={settings}
+                setSettings={setSettings}
+              />
+              <BackgroundModeSection
+                settings={settings}
+                setSettings={setSettings}
+              />
             </div>
           </Collapsible>
 

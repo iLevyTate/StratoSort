@@ -47,7 +47,10 @@ function ProgressIndicator() {
         ),
       );
       window.dispatchEvent(new Event('storage'));
-    } catch {}
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to toggle collapsible sections', error);
+    }
   };
 
   return (

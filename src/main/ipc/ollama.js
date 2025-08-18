@@ -183,6 +183,21 @@ function registerOllamaIpc({
       }
     }),
   );
+
+  // Delete a model
+  ipcMain.handle(
+    IPC_CHANNELS.OLLAMA.DELETE_MODEL,
+    withErrorLogging(logger, async (_event, model) => {
+      try {
+        const ollama = getOllama();
+        await ollama.delete({ model });
+        return { success: true };
+      } catch (error) {
+        logger.error('[IPC] Delete model failed]:', error);
+        return { success: false, error: error.message };
+      }
+    }),
+  );
 }
 
 module.exports = registerOllamaIpc;

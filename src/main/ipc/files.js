@@ -257,21 +257,6 @@ function registerFilesIpc({
         }),
   );
   ipcMain.handle(
-    IPC_CHANNELS.FILES.CREATE_FOLDER,
-    withErrorLogging(logger, async (event, basePath, folderName) => {
-      try {
-        const folderPath = path.join(basePath, folderName);
-        await fs.mkdir(folderPath, { recursive: true });
-        logger.info('[FILE-OPS] Created folder:', folderPath);
-        return { success: true, path: folderPath };
-      } catch (error) {
-        logger.error('[FILE-OPS] Error creating folder:', error);
-        return { success: false, error: error.message };
-      }
-    }),
-  );
-
-  ipcMain.handle(
     IPC_CHANNELS.FILES.CREATE_FOLDER_DIRECT,
     z && stringSchema
       ? withValidation(logger, stringSchema, async (event, fullPath) => {

@@ -83,6 +83,10 @@ class AtomicFileOperations {
       status: 'active',
     };
 
+    if (Array.isArray(operations) && operations.length > 0) {
+      transaction.operations.push(...operations);
+    }
+
     this.activeTransactions.set(transactionId, transaction);
 
     return transactionId;
@@ -171,7 +175,17 @@ class AtomicFileOperations {
       destination = uniqueDestination;
     }
 
-    await fs.rename(source, destination);
+    try {
+      await fs.rename(source, destination);
+    } catch (error) {
+      if (error.code === 'EXDEV') {
+        await fs.copyFile(source, destination);
+        await fs.unlink(source);
+      } else {
+        throw error;
+      }
+    }
+
     return destination;
   }
 
@@ -268,10 +282,12 @@ class AtomicFileOperations {
 
     try {
       // Set timeout for the entire transaction
+      let timeoutId;
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new Error(`Transaction ${transactionId} timed out`));
         }, this.operationTimeout);
+        timeoutId.unref();
       });
 
       const operationPromise = (async () => {
@@ -294,12 +310,17 @@ class AtomicFileOperations {
       })();
 
       await Promise.race([operationPromise, timeoutPromise]);
+      clearTimeout(timeoutId);
 
       transaction.status = 'committed';
       // Transaction committed successfully
 
       // Clean up old backups after successful commit (optional)
-      setTimeout(() => this.cleanupBackups(transactionId), 60000); // 1 minute delay
+      const cleanupTimer = setTimeout(
+        () => this.cleanupBackups(transactionId),
+        60000,
+      ); // 1 minute delay
+      cleanupTimer.unref();
 
       return { success: true, results };
     } catch (error) {

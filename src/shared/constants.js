@@ -64,7 +64,6 @@ const IPC_CHANNELS = {
     SELECT: 'handle-file-selection',
     SELECT_DIRECTORY: 'select-directory',
     GET_DOCUMENTS_PATH: 'get-documents-path',
-    CREATE_FOLDER: 'create-folder',
     CREATE_FOLDER_DIRECT: 'create-folder-direct',
     GET_FILE_STATS: 'get-file-stats',
     GET_FILES_IN_DIRECTORY: 'get-files-in-directory',
@@ -115,6 +114,7 @@ const IPC_CHANNELS = {
     GET_MODELS: 'get-ollama-models',
     TEST_CONNECTION: 'test-ollama-connection',
     PULL_MODELS: 'ollama-pull-models',
+    DELETE_MODEL: 'ollama-delete-model',
   },
 
   // Undo/Redo

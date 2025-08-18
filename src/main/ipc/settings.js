@@ -16,6 +16,7 @@ function registerSettingsIpc({
   setOllamaModel,
   setOllamaVisionModel,
   setOllamaEmbeddingModel,
+  onSettingsChanged,
 }) {
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS.GET,
@@ -38,6 +39,8 @@ function registerSettingsIpc({
           visionModel: z.string().optional(),
           embeddingModel: z.string().optional(),
           launchOnStartup: z.boolean().optional(),
+          autoOrganize: z.boolean().optional(),
+          backgroundMode: z.boolean().optional(),
         })
         .partial()
     : null;
@@ -61,9 +64,17 @@ function registerSettingsIpc({
                 app.setLoginItemSettings({
                   openAtLogin: merged.launchOnStartup,
                 });
-              } catch {}
+              } catch (error) {
+                logger.warn(
+                  '[SETTINGS] Failed to set login item settings:',
+                  error.message,
+                );
+              }
             }
             logger.info('[SETTINGS] Saved settings');
+            try {
+              onSettingsChanged?.(merged);
+            } catch {}
             return { success: true, settings: merged };
           } catch (error) {
             logger.error('Failed to save settings:', error);
@@ -87,9 +98,17 @@ function registerSettingsIpc({
                 app.setLoginItemSettings({
                   openAtLogin: merged.launchOnStartup,
                 });
-              } catch {}
+              } catch (error) {
+                logger.warn(
+                  '[SETTINGS] Failed to set login item settings:',
+                  error.message,
+                );
+              }
             }
             logger.info('[SETTINGS] Saved settings');
+            try {
+              onSettingsChanged?.(merged);
+            } catch {}
             return { success: true, settings: merged };
           } catch (error) {
             logger.error('Failed to save settings:', error);

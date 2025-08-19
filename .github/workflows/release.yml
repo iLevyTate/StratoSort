@@ -28,9 +28,7 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Build and publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build distributables
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             npm run dist:win

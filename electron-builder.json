@@ -8,7 +8,12 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
-    "package.json"
+    "package.json",
+    "!**/*.map",
+    "!test/**",
+    "!coverage/**",
+    "!**/*.test.*",
+    "!**/__tests__/**"
   ],
   "extraMetadata": {
     "main": "src/main/simple-main.js",
@@ -80,7 +85,7 @@
     {
       "from": "assets/",
       "to": "assets/",
-      "filter": ["**/*"]
+      "filter": ["icons/**", "stratosort-logo.png"]
     }
   ]
 }

@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 
 function AnalysisResultsList({
   results = [],
   onFileAction,
   getFileStateDisplay,
 }) {
-  if (!Array.isArray(results) || results.length === 0) return null;
+  const isEmpty = !Array.isArray(results) || results.length === 0;
+  const items = useMemo(
+    () => (Array.isArray(results) ? results : []),
+    [results],
+  );
+  const handleAction = useMemo(() => onFileAction, [onFileAction]);
+  if (isEmpty) return null;
   return (
     <div className="space-y-8 overflow-x-auto">
-      {results.map((file, index) => {
+      {items.map((file, index) => {
         const stateDisplay = getFileStateDisplay(file.path, !!file.analysis);
         return (
-          <div key={index} className="border rounded-lg p-13">
+          <div key={file.path || index} className="border rounded-lg p-13">
             <div className="flex items-start gap-13">
               <div className="text-2xl">📄</div>
               <div className="flex-1 min-w-0">
@@ -42,19 +48,19 @@ function AnalysisResultsList({
             </div>
             <div className="flex items-center gap-8 mt-8">
               <button
-                onClick={() => onFileAction('open', file.path)}
+                onClick={() => handleAction('open', file.path)}
                 className="text-blue-600 hover:underline text-sm"
               >
                 Open
               </button>
               <button
-                onClick={() => onFileAction('reveal', file.path)}
+                onClick={() => handleAction('reveal', file.path)}
                 className="text-blue-600 hover:underline text-sm"
               >
                 Reveal
               </button>
               <button
-                onClick={() => onFileAction('delete', file.path)}
+                onClick={() => handleAction('delete', file.path)}
                 className="text-system-red-600 hover:underline text-sm"
               >
                 Delete
@@ -67,4 +73,4 @@ function AnalysisResultsList({
   );
 }
 
-export default AnalysisResultsList;
+export default memo(AnalysisResultsList);

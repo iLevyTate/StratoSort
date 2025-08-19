@@ -21,21 +21,34 @@ class SettingsService {
       visionModel: 'llava:latest',
       embeddingModel: 'mxbai-embed-large',
     };
+    this._cache = null;
+    this._cacheTimestamp = 0;
+    this._cacheTtlMs = 2_000; // short TTL to avoid repeated disk reads
   }
 
   async load() {
     try {
+      const now = Date.now();
+      if (this._cache && now - this._cacheTimestamp < this._cacheTtlMs) {
+        return this._cache;
+      }
       const raw = await fs.readFile(this.settingsPath, 'utf-8');
       const parsed = JSON.parse(raw);
-      return { ...this.defaults, ...parsed };
+      const merged = { ...this.defaults, ...parsed };
+      this._cache = merged;
+      this._cacheTimestamp = now;
+      return merged;
     } catch (err) {
+      const merged = { ...this.defaults };
+      this._cache = merged;
+      this._cacheTimestamp = Date.now();
       if (err && err.code !== 'ENOENT') {
         console.warn(
           '[SETTINGS] Failed to read settings, using defaults:',
           err.message,
         );
       }
-      return { ...this.defaults };
+      return merged;
     }
   }
 
@@ -49,6 +62,9 @@ class SettingsService {
     if (!result.success) {
       throw new Error(result.error || 'Failed to save settings');
     }
+    // update cache immediately
+    this._cache = merged;
+    this._cacheTimestamp = Date.now();
     return merged;
   }
 }

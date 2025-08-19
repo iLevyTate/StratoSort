@@ -49,21 +49,28 @@ module.exports = (env, argv) => {
     },
     resolve: {
       extensions: ['.js', '.jsx'],
-      fallback: {
-        path: require.resolve('path-browserify'),
-        os: require.resolve('os-browserify/browser'),
-        crypto: require.resolve('crypto-browserify'),
-        buffer: require.resolve('buffer'),
-        process: require.resolve('process/browser'),
-        stream: require.resolve('stream-browserify'),
-        util: require.resolve('util'),
-        url: require.resolve('url'),
-        querystring: require.resolve('querystring-es3'),
-        assert: require.resolve('assert'),
-        fs: false,
-        child_process: false,
-        worker_threads: false,
-      },
+      fallback: isProduction
+        ? {
+            // In prod, drop most Node polyfills for smaller bundle
+            fs: false,
+            child_process: false,
+            worker_threads: false,
+          }
+        : {
+            path: require.resolve('path-browserify'),
+            os: require.resolve('os-browserify/browser'),
+            crypto: require.resolve('crypto-browserify'),
+            buffer: require.resolve('buffer'),
+            process: require.resolve('process/browser'),
+            stream: require.resolve('stream-browserify'),
+            util: require.resolve('util'),
+            url: require.resolve('url'),
+            querystring: require.resolve('querystring-es3'),
+            assert: require.resolve('assert'),
+            fs: false,
+            child_process: false,
+            worker_threads: false,
+          },
     },
     externals: {
       electron: 'require("electron")',
@@ -86,7 +93,12 @@ module.exports = (env, argv) => {
         Buffer: ['buffer', 'Buffer'],
       }),
       ...(isProduction
-        ? [new MiniCssExtractPlugin({ filename: 'styles.css' })]
+        ? [
+            new MiniCssExtractPlugin({ filename: 'styles.css' }),
+            new webpack.IgnorePlugin({
+              resourceRegExp: /moment\/locale/,
+            }),
+          ]
         : process.env.WEBPACK_DEV_SERVER === 'true'
           ? [new ReactRefreshWebpackPlugin({ overlay: false })]
           : []),
@@ -114,6 +126,8 @@ module.exports = (env, argv) => {
     // Optimization
     optimization: {
       minimize: isProduction,
+      moduleIds: 'deterministic',
+      chunkIds: 'deterministic',
       splitChunks: {
         chunks: 'async',
         minSize: 20000,

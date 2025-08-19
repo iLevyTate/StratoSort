@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 
@@ -17,6 +17,18 @@ function ReadyFileItem({
   const analysis = editing?.analysis || file?.analysis;
   const suggestedName = editing?.suggestedName ?? analysis?.suggestedName;
   const category = categoryProp ?? editing?.category ?? analysis?.category;
+  const handleToggle = useCallback(
+    () => onToggleSelected(index),
+    [onToggleSelected, index],
+  );
+  const handleEditName = useCallback(
+    (e) => onEdit(index, 'suggestedName', e.target.value),
+    [onEdit, index],
+  );
+  const handleEditCategory = useCallback(
+    (e) => onEdit(index, 'category', e.target.value),
+    [onEdit, index],
+  );
 
   return (
     <div
@@ -26,7 +38,7 @@ function ReadyFileItem({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => onToggleSelected(index)}
+          onChange={handleToggle}
           className="form-checkbox mt-3"
         />
         <div className="flex-1">
@@ -54,9 +66,7 @@ function ReadyFileItem({
                   <Input
                     type="text"
                     value={suggestedName}
-                    onChange={(e) =>
-                      onEdit(index, 'suggestedName', e.target.value)
-                    }
+                    onChange={handleEditName}
                     className="text-sm"
                   />
                 </div>
@@ -66,7 +76,7 @@ function ReadyFileItem({
                   </label>
                   <Select
                     value={category}
-                    onChange={(e) => onEdit(index, 'category', e.target.value)}
+                    onChange={handleEditCategory}
                     className="text-sm"
                   >
                     {smartFolders.map((folder) => (
@@ -103,4 +113,4 @@ function ReadyFileItem({
   );
 }
 
-export default ReadyFileItem;
+export default memo(ReadyFileItem);

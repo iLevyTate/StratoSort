@@ -13,7 +13,6 @@ build/
 out/
 
 # Development
-.DS_Store
 .env.local
 .env.development.local
 .env.test.local
@@ -78,3 +77,4 @@ docs/.doctrees/
 
 # Project data and local artifacts
 Documents/
+tmpUserData/

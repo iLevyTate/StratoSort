@@ -127,8 +127,10 @@ module.exports = (env, argv) => {
     // Optimization
     optimization: {
       minimize: isProduction,
+
       moduleIds: 'deterministic',
       chunkIds: 'deterministic',
+
       minimizer: isProduction
         ? [
             new TerserPlugin({

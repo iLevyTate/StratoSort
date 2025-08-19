@@ -54,11 +54,11 @@
     "setup:ollama": "node setup-ollama.js",
     "ollama:check": "node setup-ollama.js --check",
     "ollama:models": "ollama pull gemma3:4b",
-    "dist": "npm run build && electron-builder --config electron-builder.json",
-    "dist:win": "npm run build && electron-builder --win --config electron-builder.json",
-    "dist:mac": "npm run build && electron-builder --mac --config electron-builder.json",
-    "dist:linux": "npm run build && electron-builder --linux --config electron-builder.json",
-    "dist:all": "npm run build && electron-builder --mac --win --linux --config electron-builder.json"
+    "dist": "npm run build && electron-builder --publish never --config electron-builder.json",
+    "dist:win": "npm run build && electron-builder --win --publish never --config electron-builder.json",
+    "dist:mac": "npm run build && electron-builder --mac --publish never --config electron-builder.json",
+    "dist:linux": "npm run build && electron-builder --linux --publish never --config electron-builder.json",
+    "dist:all": "npm run build && electron-builder --mac --win --linux --publish never --config electron-builder.json"
   },
   "browserslist": [],
   "overrides": {

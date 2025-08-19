@@ -66,16 +66,4 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Build distributables
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            npm run dist:win
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            npm run dist:mac
-          else
-            npm run dist:linux
-          fi
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Distributables are built in release workflow only to avoid publishing errors

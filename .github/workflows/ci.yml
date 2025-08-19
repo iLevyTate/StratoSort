@@ -1,64 +1,81 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches:
-      - '**'
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
 
 jobs:
-  quality:
-    name: Lint, Typecheck, Test
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [20.x]
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: ESLint
-        run: npm run lint
-
-      - name: Prettier check
-        run: npm run format:check
-
-      - name: TypeScript typecheck
-        run: npm run typecheck
-
-      - name: Tests
-        env:
-          CI: true
-        run: npm run test:coverage
-
-  windows-smoke:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Tests
+      - name: Run linter
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  build:
+    needs: test
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build distributables
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            npm run dist:win
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run dist:mac
+          else
+            npm run dist:linux
+          fi
+        shell: bash
         env:
-          CI: true
-          NODE_ENV: test
-          OLLAMA_BASE_URL: http://127.0.0.1:11434
-        run: npm run test:coverage
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

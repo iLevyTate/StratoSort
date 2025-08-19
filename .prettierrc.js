@@ -27,7 +27,7 @@ module.exports = {
   arrowParens: 'always',
 
   // Line endings
-  endOfLine: 'auto',
+  endOfLine: 'lf',
 
   // HTML whitespace sensitivity
   htmlWhitespaceSensitivity: 'css',

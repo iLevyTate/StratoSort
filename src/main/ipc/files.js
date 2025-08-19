@@ -67,7 +67,12 @@ function registerFilesIpc({
           if (mainWindow.isMinimized()) mainWindow.restore();
           if (!mainWindow.isVisible()) mainWindow.show();
           if (!mainWindow.isFocused()) mainWindow.focus();
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise((resolve) => {
+            const t = setTimeout(resolve, 100);
+            try {
+              t.unref();
+            } catch {}
+          });
         }
         const result = await dialog.showOpenDialog(mainWindow || null, {
           properties: ['openFile', 'multiSelections', 'dontAddToRecent'],

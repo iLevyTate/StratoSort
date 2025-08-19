@@ -77,6 +77,7 @@ function registerAllIpc({
     IPC_CHANNELS,
     logger,
     systemAnalytics,
+    getMainWindow,
     getOllama,
     getOllamaModel,
     getOllamaVisionModel,

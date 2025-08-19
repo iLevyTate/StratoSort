@@ -247,9 +247,15 @@ class ModelManager {
         },
       });
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Model test timeout')), timeout),
-      );
+      const timeoutPromise = new Promise((_, reject) => {
+        const t = setTimeout(
+          () => reject(new Error('Model test timeout')),
+          timeout,
+        );
+        try {
+          t.unref();
+        } catch {}
+      });
 
       await Promise.race([testPromise, timeoutPromise]);
       console.log(`[MODEL-MANAGER] Model ${modelName} is working`);

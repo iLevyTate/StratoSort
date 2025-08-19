@@ -3,6 +3,7 @@ const {
   loadOllamaConfig,
   getOllamaClient,
 } = require('../ollamaUtils');
+const crypto = require('crypto');
 const { AI_DEFAULTS } = require('../../shared/constants');
 
 const AppConfig = {
@@ -20,12 +21,73 @@ const AppConfig = {
 
 // Use shared client from ollamaUtils
 
+// Simple bounded in-memory cache for analysis results to avoid re-calling LLM
+const ANALYSIS_CACHE_MAX_ENTRIES = 200;
+const analysisCache = new Map(); // key -> result
+
+function getCacheKey(textContent, model, smartFolders) {
+  const hasher = crypto.createHash('sha1');
+  hasher.update(textContent);
+  hasher.update('|');
+  hasher.update(String(model || ''));
+  hasher.update('|');
+  try {
+    const foldersKey = Array.isArray(smartFolders)
+      ? smartFolders
+          .map((f) => `${f?.name || ''}:${(f?.description || '').slice(0, 64)}`)
+          .join(',')
+      : '';
+    hasher.update(foldersKey);
+  } catch {}
+  return hasher.digest('hex');
+}
+
+function setCache(key, value) {
+  analysisCache.set(key, value);
+  if (analysisCache.size > ANALYSIS_CACHE_MAX_ENTRIES) {
+    const firstKey = analysisCache.keys().next().value;
+    analysisCache.delete(firstKey);
+  }
+}
+
+function normalizeTextForModel(input, maxLen) {
+  if (!input) return '';
+  let text = String(input);
+  // Remove null bytes and collapse excessive whitespace to reduce tokens
+  text = text.replace(/\u0000/g, '');
+  text = text.replace(/[\t\x0B\f\r]+/g, ' ');
+  text = text.replace(/\s{2,}/g, ' ').trim();
+  if (typeof maxLen === 'number' && maxLen > 0 && text.length > maxLen) {
+    return text.slice(0, maxLen);
+  }
+  return text;
+}
+
 async function analyzeTextWithOllama(
   textContent,
   originalFileName,
   smartFolders = [],
 ) {
   try {
+    const cfg = await loadOllamaConfig();
+    const modelToUse =
+      getOllamaModel() ||
+      cfg.selectedTextModel ||
+      cfg.selectedModel ||
+      AppConfig.ai.textAnalysis.defaultModel;
+
+    // Normalize and truncate text to reduce token count
+    const truncated = normalizeTextForModel(
+      textContent,
+      AppConfig.ai.textAnalysis.maxContentLength,
+    );
+
+    // Fast-path: return cached result if available
+    const cacheKey = getCacheKey(truncated, modelToUse, smartFolders);
+    if (analysisCache.has(cacheKey)) {
+      return analysisCache.get(cacheKey);
+    }
+
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       const validFolders = smartFolders
@@ -69,17 +131,11 @@ CRITICAL REQUIREMENTS:
 3. Do NOT return an empty keywords array
 4. Base ALL fields on the actual document content, not the filename
 
-Document content (${textContent.length} characters):
-${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
+Document content (${truncated.length} characters):
+${truncated}`;
 
-    const cfg = await loadOllamaConfig();
-    const modelToUse =
-      getOllamaModel() ||
-      cfg.selectedTextModel ||
-      cfg.selectedModel ||
-      AppConfig.ai.textAnalysis.defaultModel;
     const client = await getOllamaClient();
-    const response = await client.generate({
+    const generatePromise = client.generate({
       model: modelToUse,
       prompt,
       options: {
@@ -88,6 +144,18 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       },
       format: 'json',
     });
+    const response = await Promise.race([
+      generatePromise,
+      new Promise((_, reject) => {
+        const t = setTimeout(
+          () => reject(new Error('LLM request timed out')),
+          AppConfig.ai.textAnalysis.timeout,
+        );
+        try {
+          t.unref();
+        } catch {}
+      }),
+    ]);
 
     if (response.response) {
       try {
@@ -111,11 +179,13 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
         ) {
           parsedJson.confidence = Math.floor(Math.random() * 30) + 70;
         }
-        return {
+        const result = {
           rawText: textContent.substring(0, 2000),
           ...parsedJson,
           keywords: finalKeywords,
         };
+        setCache(cacheKey, result);
+        return result;
       } catch (e) {
         return {
           error: 'Failed to parse document analysis from Ollama.',

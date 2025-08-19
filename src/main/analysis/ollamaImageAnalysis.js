@@ -18,6 +18,20 @@ const {
 } = require('./fallbackUtils');
 const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
+let embeddingIndexSingleton = null;
+let folderMatcherSingleton = null;
+
+// In-memory cache for image analysis keyed by path|size|mtimeMs
+const imageAnalysisCache = new Map();
+const MAX_IMAGE_CACHE = 300;
+function setImageCache(signature, value) {
+  if (!signature) return;
+  imageAnalysisCache.set(signature, value);
+  if (imageAnalysisCache.size > MAX_IMAGE_CACHE) {
+    const first = imageAnalysisCache.keys().next().value;
+    imageAnalysisCache.delete(first);
+  }
+}
 
 // App configuration for image analysis - Optimized for speed
 const AppConfig = {
@@ -231,6 +245,12 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     // Read and encode image as base64
     let imageBuffer = await fs.readFile(filePath);
 
+    // Cache quick path: signature based on file stats
+    const signature = `${filePath}|${stats.size}|${stats.mtimeMs}`;
+    if (imageAnalysisCache.has(signature)) {
+      return imageAnalysisCache.get(signature);
+    }
+
     // Preprocess image for vision model compatibility
     // - Convert unsupported formats (svg, tiff, bmp, gif, webp) to PNG
     // - Downscale very large images to avoid model failures
@@ -250,7 +270,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         meta = await sharp(imageBuffer).metadata();
       } catch {}
 
-      const maxDimension = 2048;
+      const maxDimension = 1536; // smaller to speed up vision model
       const shouldResize =
         meta &&
         (Number(meta.width) > maxDimension ||
@@ -268,7 +288,8 @@ async function analyzeImageFile(filePath, smartFolders = []) {
           }
           transformer = transformer.resize(resizeOptions);
         }
-        imageBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
+        // Use lower compression level to reduce CPU while keeping size reasonable
+        imageBuffer = await transformer.png({ compressionLevel: 5 }).toBuffer();
       }
     } catch (preErr) {
       logger.error(`Failed to pre-process image for analysis`, {
@@ -313,8 +334,13 @@ async function analyzeImageFile(filePath, smartFolders = []) {
 
     // Semantic folder refinement using embeddings based on image JSON fields
     try {
-      const embeddingIndex = new EmbeddingIndexService();
-      const folderMatcher = new FolderMatchingService(embeddingIndex);
+      // Reuse single service instances to avoid reloading JSONL repeatedly
+      const embeddingIndex =
+        embeddingIndexSingleton ||
+        (embeddingIndexSingleton = new EmbeddingIndexService());
+      const folderMatcher =
+        folderMatcherSingleton ||
+        (folderMatcherSingleton = new FolderMatchingService(embeddingIndex));
       if (smartFolders && smartFolders.length > 0) {
         await Promise.all(
           smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
@@ -343,7 +369,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     } catch {}
 
     if (analysis && !analysis.error) {
-      return normalizeAnalysisResult(
+      const normalized = normalizeAnalysisResult(
         {
           ...analysis,
           content_type: analysis.content_type || 'unknown',
@@ -353,6 +379,10 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         },
         { category: 'image', keywords: [] },
       );
+      try {
+        setImageCache(signature, normalized);
+      } catch {}
+      return normalized;
     }
 
     // Fallback analysis if Ollama fails
@@ -365,7 +395,7 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       fileExtension,
     );
 
-    return {
+    const result = {
       keywords: Array.isArray(analysis.keywords)
         ? analysis.keywords
         : intelligentKeywords,
@@ -376,6 +406,10 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       confidence: 60,
       error: analysis?.error || 'Ollama image analysis failed.',
     };
+    try {
+      setImageCache(signature, result);
+    } catch {}
+    return result;
   } catch (error) {
     console.error(`Error processing image ${filePath}:`, error.message);
     return {

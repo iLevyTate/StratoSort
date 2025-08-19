@@ -35,6 +35,18 @@ const {
 const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 
+// In-memory cache of per-file analysis results (path|size|mtimeMs -> result)
+const fileAnalysisCache = new Map();
+const MAX_FILE_CACHE = 500;
+function setFileCache(signature, value) {
+  if (!signature) return;
+  fileAnalysisCache.set(signature, value);
+  if (fileAnalysisCache.size > MAX_FILE_CACHE) {
+    const firstKey = fileAnalysisCache.keys().next().value;
+    fileAnalysisCache.delete(firstKey);
+  }
+}
+
 // Import error handling system
 const { FileProcessingError } = require('../errors/AnalysisError');
 const ModelVerifier = require('../services/ModelVerifier');
@@ -101,6 +113,18 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
   }
 
   try {
+    // Compute file signature and check cache
+    try {
+      const stats = await fs.stat(filePath);
+      const signature = `${filePath}|${stats.size}|${stats.mtimeMs}`;
+      if (fileAnalysisCache.has(signature)) {
+        return fileAnalysisCache.get(signature);
+      }
+      // Attach to logger for debuggability
+      const { logger } = require('../../shared/logger');
+      logger.debug('[DOC] Cache miss, analyzing', { path: filePath });
+    } catch {}
+
     let extractedText = null;
 
     if (fileExtension === '.pdf') {
@@ -369,7 +393,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
           category: analysis.category,
           keywords: analysis.keywords,
         });
-        return normalizeAnalysisResult(
+        const normalized = normalizeAnalysisResult(
           {
             ...analysis,
             contentLength: extractedText.length,
@@ -377,6 +401,12 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
           },
           { category: 'document', keywords: [], confidence: 0 },
         );
+        try {
+          const stats = await fs.stat(filePath);
+          const signature = `${filePath}|${stats.size}|${stats.mtimeMs}`;
+          setFileCache(signature, normalized);
+        } catch {}
+        return normalized;
       }
 
       logger.warn(
@@ -406,7 +436,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
     logger.error(`[EXTRACTION-FAILED] Could not extract any text content`, {
       fileName,
     });
-    return {
+    const result = {
       error: 'Could not extract text or analyze document.',
       project: fileName,
       category: 'document',
@@ -415,6 +445,12 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       confidence: 50,
       extractionMethod: 'failed',
     };
+    try {
+      const stats = await fs.stat(filePath);
+      const signature = `${filePath}|${stats.size}|${stats.mtimeMs}`;
+      setFileCache(signature, result);
+    } catch {}
+    return result;
   } catch (error) {
     logger.error(`Error processing document`, {
       path: filePath,

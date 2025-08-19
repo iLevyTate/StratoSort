@@ -495,7 +495,7 @@ if (!gotTheLock) {
 
       // Start periodic system metrics broadcast to renderer
       try {
-        setInterval(async () => {
+        const metricsInterval = setInterval(async () => {
           try {
             const win = BrowserWindow.getAllWindows()[0];
             if (!win || win.isDestroyed()) return;
@@ -503,6 +503,9 @@ if (!gotTheLock) {
             win.webContents.send('system-metrics', metrics);
           } catch {}
         }, 10000);
+        try {
+          metricsInterval.unref();
+        } catch {}
       } catch {}
 
       // Create system tray with quick actions
@@ -565,7 +568,7 @@ if (!gotTheLock) {
         }
       } catch {}
       // Fire-and-forget resume of incomplete batches shortly after window is ready
-      setTimeout(() => {
+      const resumeTimeout = setTimeout(() => {
         try {
           const getMainWindow = () => mainWindow;
           resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
@@ -576,6 +579,9 @@ if (!gotTheLock) {
           );
         }
       }, 500);
+      try {
+        resumeTimeout.unref();
+      } catch {}
 
       // Load Ollama config and apply any saved selections
       const cfg = await loadOllamaConfig();

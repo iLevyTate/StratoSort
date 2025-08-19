@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useReducer,
+  useMemo,
 } from 'react';
 import {
   PHASES,
@@ -118,40 +119,48 @@ export function PhaseProvider({ children }) {
     return () => clearTimeout(timeoutId);
   }, [state.currentPhase, state.phaseData]);
 
-  const actions = {
-    advancePhase: useCallback(
-      (targetPhase, data) =>
-        dispatch({ type: 'ADVANCE_PHASE', payload: { targetPhase, data } }),
-      [],
-    ),
-    setPhaseData: useCallback(
-      (key, value) =>
-        dispatch({ type: 'SET_PHASE_DATA', payload: { key, value } }),
-      [],
-    ),
-    setLoading: useCallback(
-      (isLoading) => dispatch({ type: 'SET_LOADING', payload: { isLoading } }),
-      [],
-    ),
-    toggleSettings: useCallback(
-      () => dispatch({ type: 'TOGGLE_SETTINGS' }),
-      [],
-    ),
-    resetWorkflow: useCallback(() => {
-      try {
-        localStorage.removeItem('stratosort_workflow_state');
-      } catch {}
-      dispatch({ type: 'RESET_WORKFLOW' });
-    }, []),
-  };
+  const advancePhase = useCallback(
+    (targetPhase, data) =>
+      dispatch({ type: 'ADVANCE_PHASE', payload: { targetPhase, data } }),
+    [dispatch],
+  );
+  const setPhaseData = useCallback(
+    (key, value) =>
+      dispatch({ type: 'SET_PHASE_DATA', payload: { key, value } }),
+    [dispatch],
+  );
+  const setLoading = useCallback(
+    (isLoading) => dispatch({ type: 'SET_LOADING', payload: { isLoading } }),
+    [dispatch],
+  );
+  const toggleSettings = useCallback(
+    () => dispatch({ type: 'TOGGLE_SETTINGS' }),
+    [dispatch],
+  );
+  const resetWorkflow = useCallback(() => {
+    try {
+      localStorage.removeItem('stratosort_workflow_state');
+    } catch {}
+    dispatch({ type: 'RESET_WORKFLOW' });
+  }, [dispatch]);
+
+  const actions = useMemo(
+    () => ({
+      advancePhase,
+      setPhaseData,
+      setLoading,
+      toggleSettings,
+      resetWorkflow,
+    }),
+    [advancePhase, setPhaseData, setLoading, toggleSettings, resetWorkflow],
+  );
 
   return (
     <PhaseContext.Provider
-      value={{
-        ...state,
-        actions,
-        getCurrentMetadata: () => PHASE_METADATA[state.currentPhase],
-      }}
+      value={useMemo(() => {
+        const getCurrentMetadata = () => PHASE_METADATA[state.currentPhase];
+        return { ...state, actions, getCurrentMetadata };
+      }, [state, actions])}
     >
       {children}
     </PhaseContext.Provider>

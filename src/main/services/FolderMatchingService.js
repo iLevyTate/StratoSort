@@ -1,18 +1,32 @@
 const { getOllamaClient, getOllamaEmbeddingModel } = require('../ollamaUtils');
+const crypto = require('crypto');
 
 class FolderMatchingService {
   constructor(embeddingStore) {
     this.embeddingStore = embeddingStore; // must implement upsertFolder, upsertFile, queryFolders
+    this._embedMemo = new Map(); // sha1(text) -> { vector, model }
+    this._embedMemoMax = 200;
   }
 
   async embedText(text) {
+    const normalized = (text || '').slice(0, 8000);
+    const key = crypto.createHash('sha1').update(normalized).digest('hex');
+    if (this._embedMemo.has(key)) {
+      return this._embedMemo.get(key);
+    }
     const client = await getOllamaClient();
     const model = getOllamaEmbeddingModel() || 'mxbai-embed-large';
     const { embedding } = await client.embeddings({
       model,
-      prompt: text.slice(0, 8000),
+      prompt: normalized,
     });
-    return { vector: embedding, model };
+    const result = { vector: embedding, model };
+    this._embedMemo.set(key, result);
+    if (this._embedMemo.size > this._embedMemoMax) {
+      const first = this._embedMemo.keys().next().value;
+      this._embedMemo.delete(first);
+    }
+    return result;
   }
 
   async upsertFolderEmbedding(folder) {

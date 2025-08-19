@@ -132,9 +132,6 @@ function NavigationBar() {
           className="flex items-center gap-2"
           style={{ WebkitAppRegion: 'no-drag' }}
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gradient-primary-start to-gradient-primary-end flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
           <h1
             className="
             text-lg font-semibold tracking-tight select-none

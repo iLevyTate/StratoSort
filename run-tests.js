@@ -3,6 +3,7 @@
 
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
 try {
   // eslint-disable-next-line global-require
   require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -36,13 +37,49 @@ if (catIndex !== -1) {
   }
 }
 
-const child = spawn(
-  process.platform === 'win32' ? 'npm.cmd' : 'npm',
-  ['test', '--', ...jestArgs],
-  {
-    stdio: 'inherit',
-    env: process.env,
-  },
-);
+function runJestDirect() {
+  try {
+    // Prefer running Jest via Node to avoid Windows .cmd spawn issues
+    let jestJsPath;
+    try {
+      // eslint-disable-next-line global-require
+      jestJsPath = require.resolve('jest/bin/jest.js');
+    } catch (_) {
+      const candidate = path.resolve(
+        __dirname,
+        'node_modules',
+        'jest',
+        'bin',
+        'jest.js',
+      );
+      if (fs.existsSync(candidate)) jestJsPath = candidate;
+    }
+    if (jestJsPath) {
+      const child = spawn(process.execPath, [jestJsPath, ...jestArgs], {
+        stdio: 'inherit',
+        env: process.env,
+      });
+      child.on('close', (code) => process.exit(code ?? 0));
+      child.on('error', () => fallbackRunViaNpm());
+      return;
+    }
+  } catch (_) {}
+  fallbackRunViaNpm();
+}
 
-child.on('close', (code) => process.exit(code ?? 0));
+function fallbackRunViaNpm() {
+  try {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const child = spawn(npmCmd, ['test', '--', ...jestArgs], {
+      stdio: 'inherit',
+      env: process.env,
+      shell: process.platform === 'win32',
+    });
+    child.on('close', (code) => process.exit(code ?? 0));
+    child.on('error', () => process.exit(1));
+  } catch (_) {
+    process.exit(1);
+  }
+}
+
+runJestDirect();

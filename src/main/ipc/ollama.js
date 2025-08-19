@@ -12,6 +12,7 @@ function registerOllamaIpc({
   IPC_CHANNELS,
   logger,
   systemAnalytics,
+  getMainWindow,
   getOllama,
   getOllamaModel,
   getOllamaVisionModel,
@@ -170,7 +171,23 @@ function registerOllamaIpc({
         const results = [];
         for (const model of Array.isArray(models) ? models : []) {
           try {
-            await ollama.pull({ model });
+            // Send progress events if supported by client
+            const win =
+              typeof getMainWindow === 'function' ? getMainWindow() : null;
+            await ollama.pull({
+              model,
+              stream: (progress) => {
+                try {
+                  if (win && !win.isDestroyed()) {
+                    win.webContents.send('operation-progress', {
+                      type: 'ollama-pull',
+                      model,
+                      progress,
+                    });
+                  }
+                } catch {}
+              },
+            });
             results.push({ model, success: true });
           } catch (e) {
             results.push({ model, success: false, error: e.message });

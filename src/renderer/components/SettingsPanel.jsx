@@ -41,6 +41,10 @@ function SettingsPanel() {
   const [modelToDelete, setModelToDelete] = useState('');
   const [isAddingModel, setIsAddingModel] = useState(false);
   const [isDeletingModel, setIsDeletingModel] = useState(false);
+  const [pullProgress, setPullProgress] = useState(null);
+  const progressUnsubRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
+  const [showAllModels, setShowAllModels] = useState(false);
   const didAutoHealthCheckRef = useRef(false);
 
   useEffect(() => {
@@ -111,10 +115,10 @@ function SettingsPanel() {
         embedding: [],
       };
       setOllamaModelLists({
-        text: categories.text || [],
-        vision: categories.vision || [],
-        embedding: categories.embedding || [],
-        all: response?.models || [],
+        text: (categories.text || []).slice().sort(),
+        vision: (categories.vision || []).slice().sort(),
+        embedding: (categories.embedding || []).slice().sort(),
+        all: (response?.models || []).slice().sort(),
       });
       setModelToDelete((response?.models || [])[0] || '');
       if (response?.ollamaHealth) setOllamaHealth(response.ollamaHealth);
@@ -150,6 +154,30 @@ function SettingsPanel() {
     }
   };
 
+  // Auto-save settings on change (debounced), without closing the panel or toasts
+  const autoSaveSettings = async () => {
+    try {
+      await window.electronAPI.settings.save(settings);
+    } catch (error) {
+      console.error('Auto-save settings failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = setTimeout(() => {
+        autoSaveSettings();
+      }, 800);
+    } catch {}
+    return () => {
+      try {
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      } catch {}
+    };
+  }, [settings, settingsLoaded]);
+
   const testOllamaConnection = async () => {
     try {
       const res = await window.electronAPI.ollama.testConnection(
@@ -177,6 +205,19 @@ function SettingsPanel() {
     if (!newModel.trim()) return;
     try {
       setIsAddingModel(true);
+      // subscribe to progress
+      try {
+        if (progressUnsubRef.current) progressUnsubRef.current();
+        progressUnsubRef.current =
+          window.electronAPI.events.onOperationProgress((evt) => {
+            if (
+              evt?.type === 'ollama-pull' &&
+              evt?.model?.includes(newModel.trim())
+            ) {
+              setPullProgress(evt.progress || {});
+            }
+          });
+      } catch {}
       const res = await window.electronAPI.ollama.pullModels([newModel.trim()]);
       const result = res?.results?.[0];
       if (result?.success) {
@@ -193,6 +234,11 @@ function SettingsPanel() {
       addNotification(`Failed to add model: ${e.message}`, 'error');
     } finally {
       setIsAddingModel(false);
+      setTimeout(() => setPullProgress(null), 1500);
+      try {
+        if (progressUnsubRef.current) progressUnsubRef.current();
+        progressUnsubRef.current = null;
+      } catch {}
     }
   };
 
@@ -373,6 +419,23 @@ function SettingsPanel() {
                 >
                   {isRefreshingModels ? 'Refreshing…' : '🔄 Refresh Models'}
                 </Button>
+                <Button
+                  onClick={() => setShowAllModels((v) => !v)}
+                  variant="subtle"
+                  type="button"
+                  title="Toggle raw model list"
+                >
+                  {showAllModels ? 'Hide Models' : 'View All Models'}
+                </Button>
+                {pullProgress && (
+                  <span className="text-xs text-system-gray-600">
+                    Pulling {newModel.trim()}… {pullProgress?.status || ''}
+                    {typeof pullProgress?.completed === 'number' &&
+                    typeof pullProgress?.total === 'number'
+                      ? ` (${Math.floor((pullProgress.completed / Math.max(1, pullProgress.total)) * 100)}%)`
+                      : ''}
+                  </span>
+                )}
                 {ollamaHealth && (
                   <span
                     className={`text-xs ${ollamaHealth.status === 'healthy' ? 'text-green-600' : 'text-red-600'}`}
@@ -383,6 +446,26 @@ function SettingsPanel() {
                   </span>
                 )}
               </div>
+              {showAllModels && (
+                <div className="mt-8 p-8 bg-system-gray-50 rounded border border-system-gray-200 max-h-144 overflow-auto text-xs">
+                  <div className="mb-5 font-medium text-system-gray-700">
+                    All models from Ollama:
+                  </div>
+                  {ollamaModelLists.all.length === 0 ? (
+                    <div className="text-system-gray-500">
+                      No models returned
+                    </div>
+                  ) : (
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {ollamaModelLists.all.map((m) => (
+                        <li key={m} className="font-mono">
+                          {m}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-13">
                 <div>
                   <label className="block text-sm font-medium text-system-gray-700 mb-5">

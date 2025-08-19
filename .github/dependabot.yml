@@ -1,6 +1,17 @@
 version: 2
 updates:
   - package-ecosystem: 'npm'
-    directory: '/' # Location of package.json, adjust if needed
+    directory: '/'
     schedule:
-      interval: 'daily'
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        patterns:
+          - '@babel/*'
+          - '@types/*'
+          - 'eslint*'
+          - 'webpack*'
+        update-types:
+          - 'minor'
+          - 'patch'

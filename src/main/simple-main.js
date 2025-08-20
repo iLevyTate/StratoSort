@@ -48,6 +48,8 @@ const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
 
 // Import OCR library
 const tesseract = require('node-tesseract-ocr');
+const { spawn } = require('child_process');
+const fetch = global.fetch || require('node-fetch');
 
 let mainWindow;
 let customFolders = []; // Initialize customFolders at module level
@@ -58,6 +60,47 @@ let settingsService;
 let downloadWatcher;
 let currentSettings = {};
 let isQuitting = false;
+
+async function ensureOllamaRunning() {
+  if (process.env.CI) return;
+  await loadOllamaConfig();
+  const host = getOllamaHost();
+
+  async function check() {
+    try {
+      const res = await fetch(`${host}/api/tags`);
+      return res && res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  if (await check()) {
+    return;
+  }
+  try {
+    logger.info(`[STARTUP] Ollama not reachable at ${host}, starting server`);
+    const child = spawn('ollama', ['serve'], {
+      detached: true,
+      stdio: 'ignore',
+      shell: process.platform === 'win32',
+    });
+    child.unref();
+  } catch (e) {
+    logger.warn('[STARTUP] Failed to launch ollama serve', e);
+    return;
+  }
+
+  for (let i = 0; i < 10; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 500));
+    if (await check()) {
+      logger.info('[STARTUP] Ollama server started');
+      return;
+    }
+  }
+  logger.warn('[STARTUP] Ollama did not respond after start attempt');
+}
 
 // ===== GPU PREFERENCES (Windows rendering stability) =====
 try {
@@ -392,6 +435,7 @@ if (!gotTheLock) {
   // Initialize services after app is ready
   app.whenReady().then(async () => {
     try {
+      await ensureOllamaRunning();
       // Load custom folders
       customFolders = await loadCustomFolders();
       logger.info(

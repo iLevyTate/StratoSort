@@ -6,135 +6,168 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      platform:
-        description: 'Platform to build'
-        required: true
-        default: 'windows'
-        type: choice
-        options:
-          - windows
-          - macos
-          - linux
-          - all
-
-permissions:
-  contents: write
+      release_draft:
+        description: 'Create as draft release'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
-  # Automatic Windows build on tags
   build-windows:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all'))
     runs-on: windows-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
         run: npm ci
 
-      - name: Generate assets
-        run: npm run generate:assets
-
-      - name: Build renderer
+      - name: Build application
         run: npm run build
 
-      - name: Build and publish Windows installer
+      - name: Build Windows installer
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npx electron-builder --win --publish ${{ github.event_name == 'push' && 'always' || 'never' }} --config electron-builder.json
+          CI: true
+        run: npm run dist:win
 
-      - name: Upload artifacts (for manual runs)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stratosort-windows
+          name: windows-installer
           path: |
-            release/build/*.exe
-            release/build/*.blockmap
-            release/build/latest*.yml
+            release/build/StratoSort-Setup-*.exe
+            release/build/StratoSort-*-win-*.exe
 
-  # Manual macOS build (only on workflow_dispatch)
-  build-macos:
-    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all')
+  build-mac:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
         run: npm ci
 
-      - name: Generate assets
-        run: npm run generate:assets
-
-      - name: Build renderer
+      - name: Build application
         run: npm run build
 
-      - name: Build macOS app
+      - name: Build macOS installer
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npx electron-builder --mac --publish never --config electron-builder.json
+          CI: true
+        run: npm run dist:mac
 
-      - name: Upload artifacts
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stratosort-macos
+          name: macos-installer
           path: |
             release/build/*.dmg
             release/build/*.zip
-            release/build/*.blockmap
-            release/build/latest*.yml
 
-  # Manual Linux build (only on workflow_dispatch)
   build-linux:
-    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
         run: npm ci
 
-      - name: Generate assets
-        run: npm run generate:assets
-
-      - name: Build renderer
+      - name: Build application
         run: npm run build
 
       - name: Build Linux packages
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npx electron-builder --linux --publish never --config electron-builder.json
+          CI: true
+        run: npm run dist:linux
 
-      - name: Upload artifacts
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stratosort-linux
+          name: linux-packages
           path: |
             release/build/*.AppImage
             release/build/*.deb
-            release/build/*.snap
-            release/build/*.blockmap
-            release/build/latest*.yml
+            release/build/*.rpm
+
+  release:
+    needs: [build-windows, build-mac, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: ${{ github.event.inputs.release_draft || false }}
+          generate_release_notes: true
+          files: |
+            release-files/**/*.exe
+            release-files/**/*.dmg
+            release-files/**/*.zip
+            release-files/**/*.AppImage
+            release-files/**/*.deb
+          body: |
+            ## 🎉 StratoSort Release
+
+            ### 📦 Installation
+
+            **Windows**: Download `StratoSort-Setup-*.exe` and run the installer
+            **macOS**: Download `StratoSort-*.dmg` and drag to Applications
+            **Linux**: Download `StratoSort-*.AppImage`, make executable, and run
+
+            ### ✨ Features
+            - 🤖 AI-powered file organization
+            - 🖼️ Image content analysis
+            - 📁 Smart folder suggestions
+            - 🔄 Full undo/redo support
+            - 🔒 100% private - runs locally
+
+            ### 📋 System Requirements
+            - 6GB RAM minimum
+            - 6GB disk space (for AI models)
+            - Windows 10/11, macOS 10.15+, or Linux
+
+            ### 🚀 First Run
+            On first launch, StratoSort will:
+            1. Check for Ollama AI engine
+            2. Guide you through setup if needed
+            3. Download essential AI models (~6GB, one-time)
+
+            See [Quick Start Guide](https://github.com/${{ github.repository }}/blob/main/QUICK_START.md) for detailed instructions.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

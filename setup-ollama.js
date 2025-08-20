@@ -374,9 +374,30 @@ ${chalk.cyan('Linux Installation:')}
 
 // Main setup flow
 async function main() {
-  console.log(chalk.bold.cyan('\n🚀 StratoSort Ollama Setup\n'));
+  // Skip in CI environments
+  if (
+    process.env.CI ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.CONTINUOUS_INTEGRATION
+  ) {
+    console.log('CI environment detected - skipping Ollama setup');
+    process.exit(0);
+  }
 
   const args = process.argv.slice(2);
+
+  // Also skip if --ci-skip flag is passed
+  if (args.includes('--ci-skip')) {
+    if (process.env.CI || process.env.GITHUB_ACTIONS) {
+      console.log('CI environment detected - skipping Ollama setup');
+      process.exit(0);
+    }
+    // If not in CI but --ci-skip was passed, continue normally
+    // This allows the flag to be in package.json without breaking local installs
+  }
+
+  console.log(chalk.bold.cyan('\n🚀 StratoSort Ollama Setup\n'));
+
   const isCheck = args.includes('--check');
   const isAutoInstall = args.includes('--auto');
   const isMinimal = args.includes('--minimal') || process.env.MINIMAL_SETUP;

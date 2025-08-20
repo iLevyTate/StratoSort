@@ -20,6 +20,8 @@ jobs:
           cache: npm
 
       - name: Install dependencies (CI)
+        env:
+          CI: true
         run: npm ci
 
       - name: Build renderer

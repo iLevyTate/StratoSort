@@ -36,6 +36,10 @@
     }
   ],
   "main": "./src/main/simple-main.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "dev": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
     "build": "cross-env NODE_ENV=production webpack --mode=production",
@@ -43,7 +47,7 @@
     "generate:icons": "node scripts/generate-icons.js",
     "generate:nsis": "node scripts/generate-nsis-assets.js",
     "generate:assets": "npm run generate:icons && npm run generate:nsis",
-    "postinstall": "electron-builder install-app-deps && node setup-ollama.js --auto",
+    "postinstall": "electron-builder install-app-deps && node setup-ollama.js --auto --ci-skip",
     "setup:ollama": "node setup-ollama.js --auto",
     "setup:ollama:check": "node setup-ollama.js --check",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx",

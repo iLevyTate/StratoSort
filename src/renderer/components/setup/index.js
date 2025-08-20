@@ -25,6 +25,11 @@ export default function FirstRunWizard({ onComplete }) {
     },
   ];
 
+  const [selectedModels, setSelectedModels] = useState(
+    models.filter((m) => m.defaultChecked).map((m) => m.id),
+  );
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
   useEffect(() => {
     (async () => {
       try {
@@ -38,12 +43,49 @@ export default function FirstRunWizard({ onComplete }) {
 
   const handlePull = async () => {
     try {
+      setStep(1);
       setPulling(true);
-      const selections = Array.from(
-        document.querySelectorAll('input[name="model-pull"]:checked'),
-      ).map((i) => i.value);
-      const res = await window.electronAPI?.ollama?.pullModels?.(selections);
-      setResults(res?.results || []);
+      setProgress({ current: 0, total: selectedModels.length });
+      setResults(selectedModels.map((id) => ({ model: id, status: 'queued' })));
+      for (let i = 0; i < selectedModels.length; i += 1) {
+        const model = selectedModels[i];
+        setProgress({ current: i + 1, total: selectedModels.length });
+        setResults((prev) =>
+          prev.map((r) =>
+            r.model === model ? { ...r, status: 'pulling' } : r,
+          ),
+        );
+        try {
+          const res = await window.electronAPI?.ollama?.pullModels?.([model]);
+          const result = res?.results?.[0];
+          if (result?.success) {
+            setResults((prev) =>
+              prev.map((r) =>
+                r.model === model ? { ...r, status: 'ready' } : r,
+              ),
+            );
+          } else {
+            setResults((prev) =>
+              prev.map((r) =>
+                r.model === model
+                  ? {
+                      ...r,
+                      status: `failed: ${result?.error || 'unknown error'}`,
+                    }
+                  : r,
+              ),
+            );
+          }
+        } catch (error) {
+          setResults((prev) =>
+            prev.map((r) =>
+              r.model === model
+                ? { ...r, status: `failed: ${error.message}` }
+                : r,
+            ),
+          );
+        }
+      }
     } finally {
       setPulling(false);
     }
@@ -71,8 +113,16 @@ export default function FirstRunWizard({ onComplete }) {
                   <input
                     type="checkbox"
                     name="model-pull"
-                    defaultChecked={m.defaultChecked}
                     value={m.id}
+                    checked={selectedModels.includes(m.id)}
+                    onChange={(e) => {
+                      const { checked } = e.target;
+                      setSelectedModels((prev) =>
+                        checked
+                          ? [...prev, m.id]
+                          : prev.filter((id) => id !== m.id),
+                      );
+                    }}
                   />
                   <span>{m.label}</span>
                 </label>
@@ -83,11 +133,8 @@ export default function FirstRunWizard({ onComplete }) {
                 Skip
               </Button>
               <Button
-                onClick={() => {
-                  setStep(1);
-                  handlePull();
-                }}
-                disabled={pulling}
+                onClick={handlePull}
+                disabled={pulling || selectedModels.length === 0}
               >
                 {pulling ? 'Pulling…' : 'Pull models'}
               </Button>
@@ -96,23 +143,30 @@ export default function FirstRunWizard({ onComplete }) {
         )}
         {step === 1 && (
           <div>
-            <h2 className="text-heading-2 mb-8">Pulling models…</h2>
-            {results.length === 0 ? (
-              <p className="text-body">
+            <h2 className="text-heading-2 mb-8">
+              {pulling
+                ? `Pulling models (${progress.current}/${progress.total})`
+                : 'Model setup'}
+            </h2>
+            <div className="space-y-5">
+              {results.map((r) => (
+                <div key={r.model} className="text-sm">
+                  {r.status === 'ready'
+                    ? '✅'
+                    : r.status.startsWith('failed')
+                      ? '⚠️'
+                      : '⏳'}{' '}
+                  {r.model} {r.status === 'ready' ? 'ready' : r.status}
+                </div>
+              ))}
+            </div>
+            {pulling && (
+              <p className="text-body mt-5">
                 This may take a few minutes depending on your connection.
               </p>
-            ) : (
-              <div className="space-y-5">
-                {results.map((r) => (
-                  <div key={r.model} className="text-sm">
-                    {r.success ? '✅' : '⚠️'} {r.model}{' '}
-                    {r.success ? 'ready' : `failed: ${r.error}`}
-                  </div>
-                ))}
-              </div>
             )}
             <div className="flex items-center justify-end gap-8 mt-13">
-              <Button onClick={onComplete} variant="primary">
+              <Button onClick={onComplete} variant="primary" disabled={pulling}>
                 Continue
               </Button>
             </div>

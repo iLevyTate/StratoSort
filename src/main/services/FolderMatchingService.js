@@ -1,71 +1,150 @@
-const { getOllamaClient, getOllamaEmbeddingModel } = require('../ollamaUtils');
+const { getOllama, getOllamaEmbeddingModel } = require('../ollamaUtils');
 const crypto = require('crypto');
+const { logger } = require('../../shared/logger');
 
 class FolderMatchingService {
-  constructor(embeddingStore) {
-    this.embeddingStore = embeddingStore; // must implement upsertFolder, upsertFile, queryFolders
-    this._embedMemo = new Map(); // sha1(text) -> { vector, model }
-    this._embedMemoMax = 200;
+  constructor(chromaDbService) {
+    this.chromaDbService = chromaDbService;
+    this.ollama = null;
+    this.modelName = '';
   }
 
   async embedText(text) {
-    const normalized = (text || '').slice(0, 8000);
-    const key = crypto.createHash('sha1').update(normalized).digest('hex');
-    if (this._embedMemo.has(key)) {
-      return this._embedMemo.get(key);
+    try {
+      const ollama = getOllama();
+      const model = getOllamaEmbeddingModel();
+
+      const response = await ollama.embeddings({
+        model,
+        prompt: text || '',
+      });
+
+      return { vector: response.embedding, model };
+    } catch (error) {
+      logger.error(
+        '[FolderMatchingService] Failed to generate embedding:',
+        error,
+      );
+      // Return a zero vector as fallback
+      return { vector: new Array(1024).fill(0), model: 'fallback' };
     }
-    const client = await getOllamaClient();
-    const model = getOllamaEmbeddingModel() || 'mxbai-embed-large';
-    const { embedding } = await client.embeddings({
-      model,
-      prompt: normalized,
-    });
-    const result = { vector: embedding, model };
-    this._embedMemo.set(key, result);
-    if (this._embedMemo.size > this._embedMemoMax) {
-      const first = this._embedMemo.keys().next().value;
-      this._embedMemo.delete(first);
-    }
-    return result;
+  }
+
+  /**
+   * Generate a unique ID for a folder based on its properties
+   */
+  generateFolderId(folder) {
+    const uniqueString = `${folder.name}|${folder.path || ''}|${folder.description || ''}`;
+    return `folder:${crypto.createHash('md5').update(uniqueString).digest('hex')}`;
   }
 
   async upsertFolderEmbedding(folder) {
-    // Skip if we already have an embedding for this folder and description hasn't changed
-    const existing = this.embeddingStore.folderVectors?.get?.(folder.id);
-    if (
-      existing &&
-      existing.name === folder.name &&
-      (existing.description || '') === (folder.description || '')
-    ) {
-      return existing;
+    try {
+      const folderText = [folder.name, folder.description]
+        .filter(Boolean)
+        .join(' - ');
+
+      const { vector, model } = await this.embedText(folderText);
+      const folderId = folder.id || this.generateFolderId(folder);
+
+      const payload = {
+        id: folderId,
+        name: folder.name,
+        description: folder.description || '',
+        path: folder.path || '',
+        vector,
+        model,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await this.chromaDbService.upsertFolder(payload);
+      logger.debug('[FolderMatchingService] Upserted folder embedding', {
+        id: folderId,
+        name: folder.name,
+      });
+
+      return payload;
+    } catch (error) {
+      logger.error(
+        '[FolderMatchingService] Failed to upsert folder embedding:',
+        error,
+      );
+      throw error;
     }
-    const text = `${folder.name}\n${folder.description || ''}`.trim();
-    const { vector, model } = await this.embedText(text);
-    const payload = {
-      id: folder.id,
-      name: folder.name,
-      description: folder.description || '',
-      vector,
-      model,
-      updatedAt: new Date().toISOString(),
-    };
-    await this.embeddingStore.upsertFolder(payload);
-    return payload;
   }
 
   async upsertFileEmbedding(fileId, contentSummary, fileMeta = {}) {
-    const { vector, model } = await this.embedText(contentSummary || '');
-    await this.embeddingStore.upsertFile({
-      id: fileId,
-      vector,
-      model,
-      meta: fileMeta,
-      updatedAt: new Date().toISOString(),
-    });
+    try {
+      const { vector, model } = await this.embedText(contentSummary || '');
+
+      await this.chromaDbService.upsertFile({
+        id: fileId,
+        vector,
+        model,
+        meta: fileMeta,
+        updatedAt: new Date().toISOString(),
+      });
+
+      logger.debug('[FolderMatchingService] Upserted file embedding', {
+        id: fileId,
+        path: fileMeta.path,
+      });
+    } catch (error) {
+      logger.error(
+        '[FolderMatchingService] Failed to upsert file embedding:',
+        error,
+      );
+      throw error;
+    }
   }
 
   async matchFileToFolders(fileId, topK = 5) {
-    return this.embeddingStore.queryFolders(fileId, topK);
+    try {
+      const results = await this.chromaDbService.queryFolders(fileId, topK);
+      return results;
+    } catch (error) {
+      logger.error(
+        '[FolderMatchingService] Failed to match file to folders:',
+        error,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Find similar files to a given file
+   */
+  async findSimilarFiles(fileId, topK = 10) {
+    try {
+      // Get the file's embedding first
+      const fileResult = await this.chromaDbService.fileCollection.get({
+        ids: [fileId],
+      });
+
+      if (!fileResult.embeddings || fileResult.embeddings.length === 0) {
+        logger.warn(
+          '[FolderMatchingService] File not found for similarity search:',
+          fileId,
+        );
+        return [];
+      }
+
+      const fileEmbedding = fileResult.embeddings[0];
+      return await this.chromaDbService.querySimilarFiles(fileEmbedding, topK);
+    } catch (error) {
+      logger.error(
+        '[FolderMatchingService] Failed to find similar files:',
+        error,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Get database statistics
+   */
+  async getStats() {
+    return await this.chromaDbService.getStats();
   }
 }
 

@@ -107,6 +107,8 @@ const IPC_CHANNELS = {
     REBUILD_FOLDERS: 'embeddings-rebuild-folders',
     REBUILD_FILES: 'embeddings-rebuild-files',
     CLEAR_STORE: 'embeddings-clear-store',
+    GET_STATS: 'embeddings-get-stats',
+    FIND_SIMILAR: 'embeddings-find-similar',
   },
 
   // Ollama

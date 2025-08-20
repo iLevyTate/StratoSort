@@ -1,51 +1,140 @@
-name: Release
+name: Build and Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'windows'
+        type: choice
+        options:
+          - windows
+          - macos
+          - linux
+          - all
+
+permissions:
+  contents: write
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
+  # Automatic Windows build on tags
+  build-windows:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all'))
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 18
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build application
+      - name: Generate assets
+        run: npm run generate:assets
+
+      - name: Build renderer
         run: npm run build
 
-      - name: Build distributables
+      - name: Build and publish Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            npm run dist:win
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            npm run dist:mac
-          else
-            npm run dist:linux
-          fi
-        shell: bash
+          npx electron-builder --win --publish ${{ github.event_name == 'push' && 'always' || 'never' }} --config electron-builder.json
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload artifacts (for manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ runner.os }}-build
+          name: stratosort-windows
           path: |
             release/build/*.exe
+            release/build/*.blockmap
+            release/build/latest*.yml
+
+  # Manual macOS build (only on workflow_dispatch)
+  build-macos:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all')
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate assets
+        run: npm run generate:assets
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Build macOS app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx electron-builder --mac --publish never --config electron-builder.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stratosort-macos
+          path: |
             release/build/*.dmg
+            release/build/*.zip
+            release/build/*.blockmap
+            release/build/latest*.yml
+
+  # Manual Linux build (only on workflow_dispatch)
+  build-linux:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate assets
+        run: npm run generate:assets
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Build Linux packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx electron-builder --linux --publish never --config electron-builder.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stratosort-linux
+          path: |
             release/build/*.AppImage
             release/build/*.deb
-          if-no-files-found: ignore
+            release/build/*.snap
+            release/build/*.blockmap
+            release/build/latest*.yml

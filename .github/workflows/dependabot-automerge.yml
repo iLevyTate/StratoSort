@@ -1,0 +1,58 @@
+name: Dependabot Auto-merge
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: write
+  checks: read
+  statuses: read
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        uses: dependabot/fetch-metadata@v2
+        id: metadata
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Auto-approve - skip this step if you don't have branch protection requiring reviews
+      # Uncomment the following lines and add DEPENDABOT_PAT secret if needed
+      # - name: Auto approve PR
+      #   uses: hmarr/auto-approve-action@v3
+      #   with:
+      #     github-token: ${{ secrets.DEPENDABOT_PAT }}
+
+      # Enable GitHub auto-merge (waits for required checks to pass)
+      - name: Enable auto-merge for Dependabot PRs
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          merge-method: squash
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+
+      # Immediately merge safe updates if no required checks are pending
+      - name: Merge patch and minor updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+          steps.metadata.outputs.dependency-type == 'direct:development'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                merge_method: 'squash'
+              });
+              console.log('Merged PR #' + context.payload.pull_request.number);
+            } catch (error) {
+              console.log('Could not merge immediately, will wait for checks: ' + error.message);
+            }

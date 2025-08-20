@@ -1,17 +1,22 @@
 version: 2
 updates:
-  - package-ecosystem: 'npm'
+  - package-ecosystem: npm
     directory: '/'
     schedule:
-      interval: 'weekly'
-    open-pull-requests-limit: 5
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - automerge
     groups:
-      dev-dependencies:
-        patterns:
-          - '@babel/*'
-          - '@types/*'
-          - 'eslint*'
-          - 'webpack*'
+      minor-and-patch:
         update-types:
-          - 'minor'
-          - 'patch'
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    labels:
+      - ci
+      - automerge

@@ -13,11 +13,15 @@ async function toBmp(
   height,
   background = { r: 255, g: 255, b: 255, alpha: 1 },
 ) {
+  // Since sharp doesn't support BMP directly, we'll create high-quality PNGs
+  // that NSIS can use (NSIS MUI2 accepts PNG files as well)
+  const outputPath = outBmpPath.replace('.bmp', '.png');
   await sharp(srcPngPath)
     .resize(width, height, { fit: 'contain', background })
     .flatten({ background })
-    .toFormat('bmp')
-    .toFile(outBmpPath);
+    .png()
+    .toFile(outputPath);
+  console.log(`  Generated: ${path.basename(outputPath)} (${width}x${height})`);
 }
 
 async function main() {

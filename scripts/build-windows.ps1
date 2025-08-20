@@ -1,5 +1,15 @@
 Write-Host "Building StratoSort Windows installer..." -ForegroundColor Cyan
 
+# Check and setup Ollama (optional but recommended)
+Write-Host "Checking Ollama setup..." -ForegroundColor Yellow
+$ollamaCheck = node setup-ollama.js --check 2>$null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Warning: Ollama is not properly configured. AI features may be limited." -ForegroundColor Yellow
+  Write-Host "Run 'npm run setup:ollama' to configure Ollama for full functionality." -ForegroundColor Yellow
+} else {
+  Write-Host "✓ Ollama is properly configured" -ForegroundColor Green
+}
+
 if (-not (Test-Path "node_modules")) {
   Write-Host "Installing dependencies (npm ci)..." -ForegroundColor Yellow
   npm ci

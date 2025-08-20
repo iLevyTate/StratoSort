@@ -344,25 +344,52 @@ function OrganizePhase() {
         currentFile: '',
       });
 
-      // Build operations for main process
-      const operations = filesToProcess.map((file, i) => {
-        const edits = editingFiles[i] || {};
-        const fileWithEdits = getFileWithEdits(file, i);
-        const currentCategory =
-          edits.category || fileWithEdits.analysis?.category;
-        const smartFolder = findSmartFolderForCategory(currentCategory);
-        const destinationDir = smartFolder
-          ? smartFolder.path || `${defaultLocation}/${smartFolder.name}`
-          : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
-        const newName =
-          edits.suggestedName ||
-          fileWithEdits.analysis?.suggestedName ||
-          file.name;
-        const dest = `${destinationDir}/${newName}`;
-        const normalized =
-          window.electronAPI?.files?.normalizePath?.(dest) || dest;
-        return { type: 'move', source: file.path, destination: normalized };
-      });
+      // Check if auto-organize with suggestions is available
+      const useAutoOrganize = window.electronAPI?.organize?.auto;
+
+      let operations;
+      if (useAutoOrganize) {
+        // Use the new auto-organize service with suggestions
+        const result = await window.electronAPI.organize.auto({
+          files: filesToProcess,
+          smartFolders,
+          options: {
+            defaultLocation,
+            confidenceThreshold: 0.7, // Use medium confidence for manual trigger
+            preserveNames: false,
+          },
+        });
+
+        operations = result.operations || [];
+
+        // Handle files that need review
+        if (result.needsReview && result.needsReview.length > 0) {
+          addNotification({
+            type: 'info',
+            message: `${result.needsReview.length} files need manual review due to low confidence`,
+          });
+        }
+      } else {
+        // Fallback to original logic
+        operations = filesToProcess.map((file, i) => {
+          const edits = editingFiles[i] || {};
+          const fileWithEdits = getFileWithEdits(file, i);
+          const currentCategory =
+            edits.category || fileWithEdits.analysis?.category;
+          const smartFolder = findSmartFolderForCategory(currentCategory);
+          const destinationDir = smartFolder
+            ? smartFolder.path || `${defaultLocation}/${smartFolder.name}`
+            : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
+          const newName =
+            edits.suggestedName ||
+            fileWithEdits.analysis?.suggestedName ||
+            file.name;
+          const dest = `${destinationDir}/${newName}`;
+          const normalized =
+            window.electronAPI?.files?.normalizePath?.(dest) || dest;
+          return { type: 'move', source: file.path, destination: normalized };
+        });
+      }
 
       // Prepare a lightweight preview list for the progress UI
       try {

@@ -17,6 +17,7 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "package.json",
+    "setup-ollama.js",
     "!**/*.map",
     "!test/**",
     "!coverage/**",
@@ -58,14 +59,16 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "createDesktopShortcut": true,
+    "createDesktopShortcut": "always",
     "createStartMenuShortcut": true,
     "shortcutName": "StratoSort",
     "runAfterFinish": true,
     "allowElevation": true,
     "installerIcon": "assets/icons/icons/win/icon.ico",
     "uninstallerIcon": "assets/icons/icons/win/icon.ico",
-    "installerHeaderIcon": "assets/icons/icons/win/icon.ico"
+    "installerHeaderIcon": "assets/icons/icons/win/icon.ico",
+    "include": "build/installer.nsh",
+    "artifactName": "StratoSort-Setup-${version}.exe"
   },
   "mac": {
     "icon": "assets/icons/icons/png/512x512.png",

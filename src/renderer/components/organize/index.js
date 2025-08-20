@@ -3,3 +3,8 @@ export { default as TargetFolderList } from './TargetFolderList';
 export { default as ReadyFileItem } from './ReadyFileItem';
 export { default as BulkOperations } from './BulkOperations';
 export { default as OrganizeProgress } from './OrganizeProgress';
+export { default as OrganizationSuggestions } from './OrganizationSuggestions';
+export { default as BatchOrganizationSuggestions } from './BatchOrganizationSuggestions';
+export { default as OrganizationPreview } from './OrganizationPreview';
+export { default as FolderImprovementSuggestions } from './FolderImprovementSuggestions';
+export { default as SmartOrganizer } from './SmartOrganizer';

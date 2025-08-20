@@ -14,7 +14,7 @@ Privacy-first, local AI document organizer (Electron + React). Analyze documents
 Prereqs:
 
 - Node.js 18+ and npm 8+
-- Optional: Ollama for AI features (app runs without it; AI disabled)
+- Optional: Ollama for AI features (installer can fetch and start it)
 
 Install & run:
 
@@ -27,7 +27,9 @@ npm run dev
 
 Ollama (optional):
 
-- Install from `https://ollama.ai` and start the server: `ollama serve`
+- During installation StratoSort checks for Ollama and offers to install and start it
+- On launch StratoSort verifies the Ollama server is running and attempts to start it if needed
+- You can also install manually from `https://ollama.ai` and start the server: `ollama serve`
 - Pull your preferred text/vision/embedding models
 - In the app: Settings → AI Configuration → set Host and model names
 - Or run: `npm run setup:ollama` to attempt pulling example models

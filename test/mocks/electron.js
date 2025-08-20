@@ -23,5 +23,7 @@ module.exports = {
   },
   app: {
     getPath: jest.fn(() => '/test/path'),
+    on: jest.fn(),
+    quit: jest.fn(),
   },
 };

@@ -21,12 +21,16 @@ describe('Embeddings/Semantic IPC', () => {
         upsertFileEmbedding: jest.fn(async () => {}),
       })),
     );
-    jest.doMock('../src/main/services/EmbeddingIndexService', () =>
-      jest.fn().mockImplementation(() => ({
+    jest.doMock('../src/main/services/ChromaDBService', () => ({
+      getInstance: () => ({
+        initialize: jest.fn(async () => {}),
         resetFolders: jest.fn(async () => {}),
         resetFiles: jest.fn(async () => {}),
-      })),
-    );
+        migrateFromJsonl: jest.fn(async () => 0),
+        cleanup: jest.fn(async () => {}),
+        resetAll: jest.fn(async () => {}),
+      }),
+    }));
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     const electron = require('./mocks/electron');
@@ -66,12 +70,16 @@ describe('Embeddings/Semantic IPC', () => {
         }),
       })),
     );
-    jest.doMock('../src/main/services/EmbeddingIndexService', () =>
-      jest.fn().mockImplementation(() => ({
+    jest.doMock('../src/main/services/ChromaDBService', () => ({
+      getInstance: () => ({
+        initialize: jest.fn(async () => {}),
         resetFolders: jest.fn(async () => {}),
         resetFiles: jest.fn(async () => {}),
-      })),
-    );
+        migrateFromJsonl: jest.fn(async () => 0),
+        cleanup: jest.fn(async () => {}),
+        resetAll: jest.fn(async () => {}),
+      }),
+    }));
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     const mockHistory = {
@@ -110,15 +118,18 @@ describe('Embeddings/Semantic IPC', () => {
   test('CLEAR_STORE calls resetAll successfully', async () => {
     jest.resetModules();
     const logger = { error: jest.fn(), info: jest.fn(), warn: jest.fn() };
-    // Mock EmbeddingIndexService to ensure resetAll is called
+    // Mock ChromaDBService to ensure resetAll is called
     const resetAllCalls = [];
-    jest.doMock('../src/main/services/EmbeddingIndexService', () =>
-      jest.fn().mockImplementation(() => ({
+    jest.doMock('../src/main/services/ChromaDBService', () => ({
+      getInstance: () => ({
+        initialize: jest.fn(async () => {}),
         resetAll: jest.fn(async () => {
           resetAllCalls.push(1);
         }),
-      })),
-    );
+        migrateFromJsonl: jest.fn(async () => 0),
+        cleanup: jest.fn(async () => {}),
+      }),
+    }));
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     registerAllIpc({

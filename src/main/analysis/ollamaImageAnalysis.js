@@ -16,9 +16,9 @@ const {
   getIntelligentKeywords: getIntelligentImageKeywords,
   safeSuggestedName,
 } = require('./fallbackUtils');
-const EmbeddingIndexService = require('../services/EmbeddingIndexService');
+const { getInstance: getChromaDB } = require('../services/ChromaDBService');
 const FolderMatchingService = require('../services/FolderMatchingService');
-let embeddingIndexSingleton = null;
+let chromaDbSingleton = null;
 let folderMatcherSingleton = null;
 
 // In-memory cache for image analysis keyed by path|size|mtimeMs
@@ -334,13 +334,11 @@ async function analyzeImageFile(filePath, smartFolders = []) {
 
     // Semantic folder refinement using embeddings based on image JSON fields
     try {
-      // Reuse single service instances to avoid reloading JSONL repeatedly
-      const embeddingIndex =
-        embeddingIndexSingleton ||
-        (embeddingIndexSingleton = new EmbeddingIndexService());
+      // Reuse single service instances to avoid reloading data repeatedly
+      const chromaDb = chromaDbSingleton || (chromaDbSingleton = getChromaDB());
       const folderMatcher =
         folderMatcherSingleton ||
-        (folderMatcherSingleton = new FolderMatchingService(embeddingIndex));
+        (folderMatcherSingleton = new FolderMatchingService(chromaDb));
       if (smartFolders && smartFolders.length > 0) {
         await Promise.all(
           smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),

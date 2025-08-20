@@ -89,6 +89,7 @@
     "@mui/icons-material": "^7.3.1",
     "@mui/material": "^7.3.1",
     "adm-zip": "^0.5.10",
+    "chromadb": "^1.7.3",
     "dotenv": "^16.5.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",

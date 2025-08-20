@@ -20,6 +20,8 @@ const ALLOWED_CHANNELS = {
   EMBEDDINGS: Object.values(IPC_CHANNELS.EMBEDDINGS),
   SYSTEM: Object.values(IPC_CHANNELS.SYSTEM),
   WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
+  SUGGESTIONS: Object.values(IPC_CHANNELS.SUGGESTIONS || {}),
+  ORGANIZE: Object.values(IPC_CHANNELS.ORGANIZE || {}),
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -402,6 +404,59 @@ contextBridge.exposeInMainWorld('electronAPI', {
     rebuildFiles: () =>
       secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES),
     clearStore: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE),
+  },
+
+  // Organization Suggestions
+  suggestions: {
+    getFileSuggestions: (file, options) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.GET_FILE_SUGGESTIONS, {
+        file,
+        options,
+      }),
+    getBatchSuggestions: (files, options) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.GET_BATCH_SUGGESTIONS, {
+        files,
+        options,
+      }),
+    recordFeedback: (file, suggestion, accepted) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.RECORD_FEEDBACK, {
+        file,
+        suggestion,
+        accepted,
+      }),
+    getStrategies: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.GET_STRATEGIES),
+    applyStrategy: (files, strategyId) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.APPLY_STRATEGY, {
+        files,
+        strategyId,
+      }),
+    getUserPatterns: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.GET_USER_PATTERNS),
+    clearPatterns: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.CLEAR_PATTERNS),
+    analyzeFolderStructure: (files) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.ANALYZE_FOLDER_STRUCTURE, {
+        files,
+      }),
+    suggestNewFolder: (file) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SUGGESTIONS.SUGGEST_NEW_FOLDER, {
+        file,
+      }),
+  },
+
+  // Auto-Organize
+  organize: {
+    auto: (params) => secureIPC.safeInvoke(IPC_CHANNELS.ORGANIZE.AUTO, params),
+    batch: (params) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ORGANIZE.BATCH, params),
+    processNew: (params) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ORGANIZE.PROCESS_NEW, params),
+    getStats: () => secureIPC.safeInvoke(IPC_CHANNELS.ORGANIZE.GET_STATS),
+    updateThresholds: (thresholds) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.ORGANIZE.UPDATE_THRESHOLDS, {
+        thresholds,
+      }),
   },
 
   // Undo/Redo System

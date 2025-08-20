@@ -15,6 +15,10 @@ class SettingsService {
       maxConcurrentAnalysis: 3,
       autoOrganize: false,
       backgroundMode: false,
+      // Organization Confidence Thresholds
+      autoApproveThreshold: 0.8,
+      downloadConfidenceThreshold: 0.9,
+      reviewThreshold: 0.5,
       // AI
       ollamaHost: 'http://127.0.0.1:11434',
       textModel: 'llama3.2:latest',

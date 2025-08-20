@@ -8,6 +8,8 @@ const registerAnalysisIpc = require('./analysis');
 const registerSettingsIpc = require('./settings');
 const registerEmbeddingsIpc = require('./semantic');
 const registerWindowIpc = require('./window');
+const { registerSuggestionsIpc } = require('./suggestions');
+const { registerOrganizeIpc } = require('./organize');
 
 function registerAllIpc({
   ipcMain,
@@ -114,6 +116,32 @@ function registerAllIpc({
     getServiceIntegration,
   });
   registerWindowIpc({ ipcMain, IPC_CHANNELS, logger, getMainWindow });
+
+  // Register suggestions IPC with required services
+  if (getServiceIntegration) {
+    const serviceIntegration = getServiceIntegration();
+    if (
+      serviceIntegration.chromaDbService &&
+      serviceIntegration.folderMatchingService
+    ) {
+      registerSuggestionsIpc({
+        ipcMain,
+        IPC_CHANNELS,
+        chromaDbService: serviceIntegration.chromaDbService,
+        folderMatchingService: serviceIntegration.folderMatchingService,
+        settingsService,
+        getCustomFolders,
+      });
+    }
+
+    // Register organize IPC
+    registerOrganizeIpc({
+      ipcMain,
+      IPC_CHANNELS,
+      getServiceIntegration,
+      getCustomFolders,
+    });
+  }
 }
 
 module.exports = { registerAllIpc };

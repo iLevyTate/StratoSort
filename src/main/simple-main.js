@@ -50,6 +50,8 @@ const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
 const tesseract = require('node-tesseract-ocr');
 const { spawn } = require('child_process');
 const fetch = global.fetch || require('node-fetch');
+const fs = require('fs');
+const path = require('path');
 
 let mainWindow;
 let customFolders = []; // Initialize customFolders at module level
@@ -63,9 +65,58 @@ let isQuitting = false;
 
 async function ensureOllamaRunning() {
   if (process.env.CI) return;
+
   await loadOllamaConfig();
   const host = getOllamaHost();
 
+  // Try to use the enhanced setup script if available
+  try {
+    const setupScript = path.join(__dirname, '../../setup-ollama.js');
+    if (fs.existsSync(setupScript)) {
+      const {
+        isOllamaInstalled,
+        isOllamaRunning,
+        startOllamaServer,
+        getInstalledModels,
+      } = require(setupScript);
+
+      // Check if Ollama is installed
+      if (!isOllamaInstalled()) {
+        logger.warn(
+          '[STARTUP] Ollama is not installed. Please run: npm run setup:ollama',
+        );
+        // Continue anyway, the app can work without Ollama
+        return;
+      }
+
+      // Check if server is running
+      if (!(await isOllamaRunning())) {
+        logger.info('[STARTUP] Starting Ollama server...');
+        const started = await startOllamaServer();
+        if (!started) {
+          logger.warn('[STARTUP] Could not start Ollama server automatically');
+        }
+      }
+
+      // Check if we have any models
+      const models = await getInstalledModels();
+      if (models.length === 0) {
+        logger.warn(
+          '[STARTUP] No Ollama models installed. Run: npm run setup:ollama',
+        );
+      } else {
+        logger.info(`[STARTUP] Found ${models.length} Ollama models`);
+      }
+
+      return;
+    }
+  } catch (e) {
+    logger.debug(
+      '[STARTUP] Enhanced Ollama setup not available, using fallback',
+    );
+  }
+
+  // Fallback to original simple check
   async function check() {
     try {
       const res = await fetch(`${host}/api/tags`);
@@ -78,6 +129,7 @@ async function ensureOllamaRunning() {
   if (await check()) {
     return;
   }
+
   try {
     logger.info(`[STARTUP] Ollama not reachable at ${host}, starting server`);
     const child = spawn('ollama', ['serve'], {
@@ -284,6 +336,8 @@ function updateDownloadWatcher(settings) {
         analyzeDocumentFile,
         analyzeImageFile,
         getCustomFolders: () => customFolders,
+        autoOrganizeService: serviceIntegration?.autoOrganizeService,
+        settingsService: settingsService,
       });
       downloadWatcher.start();
     }
@@ -435,6 +489,75 @@ if (!gotTheLock) {
   // Initialize services after app is ready
   app.whenReady().then(async () => {
     try {
+      // Check for first run (check if we've set up before)
+      const setupMarker = path.join(
+        app.getPath('userData'),
+        'ollama-setup-complete.marker',
+      );
+      const isFirstRun = !fs.existsSync(setupMarker);
+
+      if (isFirstRun) {
+        logger.info('[STARTUP] First run detected - will check Ollama setup');
+
+        // Check if installation marker exists (from installer)
+        const installerMarker = path.join(
+          app.getPath('exe'),
+          '..',
+          'first-run.marker',
+        );
+        if (fs.existsSync(installerMarker)) {
+          try {
+            fs.unlinkSync(installerMarker);
+          } catch (e) {
+            logger.debug(
+              '[STARTUP] Could not remove installer marker:',
+              e.message,
+            );
+          }
+        }
+
+        // Run Ollama setup check
+        const setupScript = path.join(__dirname, '../../setup-ollama.js');
+        if (fs.existsSync(setupScript)) {
+          const {
+            isOllamaInstalled,
+            getInstalledModels,
+            installEssentialModels,
+          } = require(setupScript);
+
+          // Check if Ollama is installed and has models
+          if (isOllamaInstalled()) {
+            const models = await getInstalledModels();
+            if (models.length === 0) {
+              logger.info(
+                '[STARTUP] No AI models found, installing essential models...',
+              );
+              try {
+                await installEssentialModels();
+                logger.info('[STARTUP] AI models installed successfully');
+              } catch (e) {
+                logger.warn(
+                  '[STARTUP] Could not install AI models automatically:',
+                  e.message,
+                );
+              }
+            }
+          } else {
+            logger.warn(
+              '[STARTUP] Ollama not installed - AI features will be limited',
+            );
+            // Could show a dialog here prompting user to install Ollama
+          }
+        }
+
+        // Mark setup as complete
+        try {
+          fs.writeFileSync(setupMarker, new Date().toISOString());
+        } catch (e) {
+          logger.debug('[STARTUP] Could not create setup marker:', e.message);
+        }
+      }
+
       await ensureOllamaRunning();
       // Load custom folders
       customFolders = await loadCustomFolders();

@@ -18,10 +18,18 @@ const IMAGE_EXTENSIONS = new Set([
 ]);
 
 class DownloadWatcher {
-  constructor({ analyzeDocumentFile, analyzeImageFile, getCustomFolders }) {
+  constructor({
+    analyzeDocumentFile,
+    analyzeImageFile,
+    getCustomFolders,
+    autoOrganizeService,
+    settingsService,
+  }) {
     this.analyzeDocumentFile = analyzeDocumentFile;
     this.analyzeImageFile = analyzeImageFile;
     this.getCustomFolders = getCustomFolders;
+    this.autoOrganizeService = autoOrganizeService;
+    this.settingsService = settingsService;
     this.watcher = null;
   }
 
@@ -49,6 +57,50 @@ class DownloadWatcher {
     if (ext === '' || ext.endsWith('crdownload') || ext.endsWith('tmp')) return;
 
     const folders = this.getCustomFolders().filter((f) => f && f.path);
+
+    // Try to use the new auto-organize service if available
+    if (this.autoOrganizeService && this.settingsService) {
+      try {
+        const settings = await this.settingsService.load();
+
+        // Use the new auto-organize service with suggestions
+        const result = await this.autoOrganizeService.processNewFile(
+          filePath,
+          folders,
+          {
+            autoOrganizeEnabled: settings.autoOrganize,
+            confidenceThreshold: settings.downloadConfidenceThreshold || 0.9,
+            defaultLocation: settings.defaultSmartFolderLocation || 'Documents',
+          },
+        );
+
+        if (result && result.destination) {
+          await fs.mkdir(path.dirname(result.destination), { recursive: true });
+          await fs.rename(filePath, result.destination);
+          logger.info(
+            '[DOWNLOAD-WATCHER] Auto-organized with',
+            Math.round(result.confidence * 100) + '% confidence:',
+            filePath,
+            '=>',
+            result.destination,
+          );
+          return;
+        } else {
+          logger.info(
+            '[DOWNLOAD-WATCHER] File not auto-organized (low confidence or disabled)',
+          );
+          return;
+        }
+      } catch (e) {
+        logger.warn(
+          '[DOWNLOAD-WATCHER] Auto-organize service failed, falling back:',
+          e,
+        );
+        // Fall through to original logic
+      }
+    }
+
+    // Fallback to original logic
     const folderCategories = folders.map((f) => ({
       name: f.name,
       description: f.description || '',
@@ -78,7 +130,12 @@ class DownloadWatcher {
         : baseName;
       const destPath = path.join(destFolder.path, newName);
       await fs.rename(filePath, destPath);
-      logger.info('[DOWNLOAD-WATCHER] Moved', filePath, '=>', destPath);
+      logger.info(
+        '[DOWNLOAD-WATCHER] Moved (fallback)',
+        filePath,
+        '=>',
+        destPath,
+      );
     } catch (e) {
       logger.error('[DOWNLOAD-WATCHER] Failed to move file', e);
     }

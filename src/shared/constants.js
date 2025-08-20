@@ -96,6 +96,28 @@ const IPC_CHANNELS = {
     EXTRACT_IMAGE_TEXT: 'extract-text-from-image',
   },
 
+  // Organization Suggestions
+  SUGGESTIONS: {
+    GET_FILE_SUGGESTIONS: 'get-file-suggestions',
+    GET_BATCH_SUGGESTIONS: 'get-batch-suggestions',
+    RECORD_FEEDBACK: 'record-suggestion-feedback',
+    GET_STRATEGIES: 'get-organization-strategies',
+    APPLY_STRATEGY: 'apply-organization-strategy',
+    GET_USER_PATTERNS: 'get-user-patterns',
+    CLEAR_PATTERNS: 'clear-user-patterns',
+    ANALYZE_FOLDER_STRUCTURE: 'analyze-folder-structure',
+    SUGGEST_NEW_FOLDER: 'suggest-new-folder',
+  },
+
+  // Auto-Organize
+  ORGANIZE: {
+    AUTO: 'auto-organize-files',
+    BATCH: 'batch-organize-files',
+    PROCESS_NEW: 'process-new-file',
+    GET_STATS: 'get-organize-stats',
+    UPDATE_THRESHOLDS: 'update-organize-thresholds',
+  },
+
   // Settings
   SETTINGS: {
     GET: 'get-settings',

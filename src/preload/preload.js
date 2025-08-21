@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
+const { categoryMappingService } = require('../shared/categoryMappingService');
 const sanitizeHtml = require('sanitize-html');
 
 console.log('[PRELOAD] Secure preload script loaded');
@@ -547,6 +548,89 @@ contextBridge.exposeInMainWorld('electronAPI', {
         token,
         index: responseIndex,
       }),
+  },
+
+  // Category mapping service for renderer process
+  shared: {
+    categoryMapping: {
+      CategoryMappingService: class {
+        constructor() {
+          this.folderCache = new Map();
+          this.smartFolders = [];
+        }
+
+        updateSmartFolders(smartFolders = []) {
+          this.smartFolders = smartFolders.filter(
+            (f) =>
+              f &&
+              f.name &&
+              typeof f.name === 'string' &&
+              f.name.trim().length > 0,
+          );
+          this.folderCache.clear();
+        }
+
+        findSmartFolderForCategory(category) {
+          if (!category) return null;
+
+          if (this.folderCache.has(category)) {
+            return this.folderCache.get(category);
+          }
+
+          const normalizedCategory = category.toLowerCase().trim();
+
+          // Try exact match first
+          let folder = this.smartFolders.find(
+            (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
+          );
+
+          if (folder) {
+            this.folderCache.set(category, folder);
+            return folder;
+          }
+
+          // Try variants
+          const variants = [
+            normalizedCategory,
+            normalizedCategory.replace(/s$/, ''),
+            normalizedCategory + 's',
+            normalizedCategory.replace(/\s+/g, ''),
+            normalizedCategory.replace(/\s+/g, '-'),
+            normalizedCategory.replace(/\s+/g, '_'),
+          ];
+
+          for (const variant of variants) {
+            folder = this.smartFolders.find((f) => {
+              const folderName = f.name.toLowerCase().trim();
+              return (
+                folderName === variant ||
+                folderName.replace(/\s+/g, '') === variant ||
+                folderName.replace(/\s+/g, '-') === variant ||
+                folderName.replace(/\s+/g, '_') === variant
+              );
+            });
+
+            if (folder) {
+              this.folderCache.set(category, folder);
+              return folder;
+            }
+          }
+
+          this.folderCache.set(category, null);
+          return null;
+        }
+
+        getDestinationPath(category, defaultLocation) {
+          const smartFolder = this.findSmartFolderForCategory(category);
+
+          if (smartFolder) {
+            return smartFolder.path || `${defaultLocation}/${smartFolder.name}`;
+          }
+
+          return `${defaultLocation}/${category || 'Uncategorized'}`;
+        }
+      },
+    },
   },
 });
 

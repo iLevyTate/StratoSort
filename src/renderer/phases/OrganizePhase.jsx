@@ -224,44 +224,68 @@ function OrganizePhase() {
       )
     : [];
 
-  const findSmartFolderForCategory = useMemo(() => {
-    const folderCache = new Map();
-    return (category) => {
-      if (!category) return null;
-      if (folderCache.has(category)) return folderCache.get(category);
-      const normalizedCategory = category.toLowerCase().trim();
-      let folder = smartFolders.find(
-        (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
-      );
-      if (folder) {
-        folderCache.set(category, folder);
-        return folder;
-      }
-      const variants = [
-        normalizedCategory,
-        normalizedCategory.replace(/s$/, ''),
-        normalizedCategory + 's',
-        normalizedCategory.replace(/\s+/g, ''),
-        normalizedCategory.replace(/\s+/g, '-'),
-        normalizedCategory.replace(/\s+/g, '_'),
-      ];
-      for (const v of variants) {
-        folder = smartFolders.find(
-          (f) =>
-            f.name.toLowerCase().trim() === v ||
-            f.name.toLowerCase().replace(/\s+/g, '') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '-') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '_') === v,
+  // Initialize centralized category mapping service
+  const categoryMappingService = useMemo(() => {
+    // Import the service dynamically to avoid issues with renderer process
+    const { CategoryMappingService } =
+      window.electronAPI?.shared?.categoryMapping || {};
+    if (CategoryMappingService) {
+      return new CategoryMappingService();
+    }
+
+    // Fallback to local implementation if service not available
+    return {
+      updateSmartFolders: (folders) => {
+        /* no-op */
+      },
+      findSmartFolderForCategory: (category) => {
+        if (!category) return null;
+        const normalizedCategory = category.toLowerCase().trim();
+        let folder = smartFolders.find(
+          (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
         );
-        if (folder) {
-          folderCache.set(category, folder);
-          return folder;
+        if (folder) return folder;
+
+        const variants = [
+          normalizedCategory,
+          normalizedCategory.replace(/s$/, ''),
+          normalizedCategory + 's',
+          normalizedCategory.replace(/\s+/g, ''),
+          normalizedCategory.replace(/\s+/g, '-'),
+          normalizedCategory.replace(/\s+/g, '_'),
+        ];
+
+        for (const v of variants) {
+          folder = smartFolders.find(
+            (f) =>
+              f.name.toLowerCase().trim() === v ||
+              f.name.toLowerCase().replace(/\s+/g, '') === v ||
+              f.name.toLowerCase().replace(/\s+/g, '-') === v ||
+              f.name.toLowerCase().replace(/\s+/g, '_') === v,
+          );
+          if (folder) return folder;
         }
-      }
-      folderCache.set(category, null);
-      return null;
+        return null;
+      },
+      getDestinationPath: (category, defaultLocation) => {
+        const folder = this.findSmartFolderForCategory(category);
+        return folder
+          ? folder.path || `${defaultLocation}/${folder.name}`
+          : `${defaultLocation}/${category || 'Uncategorized'}`;
+      },
     };
   }, [smartFolders]);
+
+  // Update mapping service when smart folders change
+  useEffect(() => {
+    if (categoryMappingService && smartFolders) {
+      categoryMappingService.updateSmartFolders(smartFolders);
+    }
+  }, [categoryMappingService, smartFolders]);
+
+  // Use centralized mapping service method
+  const findSmartFolderForCategory =
+    categoryMappingService.findSmartFolderForCategory;
 
   const handleEditFile = (fileIndex, field, value) => {
     setEditingFiles((prev) => ({

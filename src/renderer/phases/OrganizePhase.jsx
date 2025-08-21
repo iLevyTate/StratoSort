@@ -224,68 +224,36 @@ function OrganizePhase() {
       )
     : [];
 
-  // Initialize centralized category mapping service
-  const categoryMappingService = useMemo(() => {
-    // Import the service dynamically to avoid issues with renderer process
-    const { CategoryMappingService } =
-      window.electronAPI?.shared?.categoryMapping || {};
-    if (CategoryMappingService) {
-      return new CategoryMappingService();
+  // Helper function to find smart folder for category
+  const findSmartFolderForCategory = (category) => {
+    if (!category) return null;
+    const normalizedCategory = category.toLowerCase().trim();
+    let folder = smartFolders.find(
+      (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
+    );
+    if (folder) return folder;
+
+    const variants = [
+      normalizedCategory,
+      normalizedCategory.replace(/s$/, ''),
+      normalizedCategory + 's',
+      normalizedCategory.replace(/\s+/g, ''),
+      normalizedCategory.replace(/\s+/g, '-'),
+      normalizedCategory.replace(/\s+/g, '_'),
+    ];
+
+    for (const v of variants) {
+      folder = smartFolders.find(
+        (f) =>
+          f.name.toLowerCase().trim() === v ||
+          f.name.toLowerCase().replace(/\s+/g, '') === v ||
+          f.name.toLowerCase().replace(/\s+/g, '-') === v ||
+          f.name.toLowerCase().replace(/\s+/g, '_') === v,
+      );
+      if (folder) return folder;
     }
-
-    // Fallback to local implementation if service not available
-    return {
-      updateSmartFolders: (folders) => {
-        /* no-op */
-      },
-      findSmartFolderForCategory: (category) => {
-        if (!category) return null;
-        const normalizedCategory = category.toLowerCase().trim();
-        let folder = smartFolders.find(
-          (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
-        );
-        if (folder) return folder;
-
-        const variants = [
-          normalizedCategory,
-          normalizedCategory.replace(/s$/, ''),
-          normalizedCategory + 's',
-          normalizedCategory.replace(/\s+/g, ''),
-          normalizedCategory.replace(/\s+/g, '-'),
-          normalizedCategory.replace(/\s+/g, '_'),
-        ];
-
-        for (const v of variants) {
-          folder = smartFolders.find(
-            (f) =>
-              f.name.toLowerCase().trim() === v ||
-              f.name.toLowerCase().replace(/\s+/g, '') === v ||
-              f.name.toLowerCase().replace(/\s+/g, '-') === v ||
-              f.name.toLowerCase().replace(/\s+/g, '_') === v,
-          );
-          if (folder) return folder;
-        }
-        return null;
-      },
-      getDestinationPath: (category, defaultLocation) => {
-        const folder = this.findSmartFolderForCategory(category);
-        return folder
-          ? folder.path || `${defaultLocation}/${folder.name}`
-          : `${defaultLocation}/${category || 'Uncategorized'}`;
-      },
-    };
-  }, [smartFolders]);
-
-  // Update mapping service when smart folders change
-  useEffect(() => {
-    if (categoryMappingService && smartFolders) {
-      categoryMappingService.updateSmartFolders(smartFolders);
-    }
-  }, [categoryMappingService, smartFolders]);
-
-  // Use centralized mapping service method
-  const findSmartFolderForCategory =
-    categoryMappingService.findSmartFolderForCategory;
+    return null;
+  };
 
   const handleEditFile = (fileIndex, field, value) => {
     setEditingFiles((prev) => ({
@@ -440,6 +408,8 @@ function OrganizePhase() {
 
       const sourcePathsSet = new Set(operations.map((op) => op.source));
 
+      let organizeSuccessCount = 0;
+
       const stateCallbacks = {
         onExecute: (result) => {
           try {
@@ -465,6 +435,7 @@ function OrganizePhase() {
                 };
               });
             if (uiResults.length > 0) {
+              organizeSuccessCount = uiResults.length;
               setOrganizedFiles((prev) => [...prev, ...uiResults]);
               markFilesAsProcessed(uiResults.map((r) => r.originalPath));
               actions.setPhaseData('organizedFiles', [
@@ -530,11 +501,13 @@ function OrganizePhase() {
           stateCallbacks,
         ),
       );
-      // Only advance if at least one file organized successfully
-      const successCount = Array.isArray(result?.results)
-        ? result.results.filter((r) => r.success).length
-        : 0;
-      if (successCount > 0) actions.advancePhase(PHASES.COMPLETE);
+
+      // Auto-advance to the next phase after successful organization
+      if (organizeSuccessCount > 0) {
+        setTimeout(() => {
+          actions.advancePhase(PHASES.COMPLETE);
+        }, 1500);
+      }
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');
     } finally {

@@ -32,7 +32,9 @@ const {
   getIntelligentKeywords,
   safeSuggestedName,
 } = require('./fallbackUtils');
-const { getInstance: getChromaDB } = require('../services/ChromaDBService');
+const {
+  getInstance: getEmbeddingIndex,
+} = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 
 // In-memory cache of per-file analysis results (path|size|mtimeMs -> result)
@@ -50,12 +52,15 @@ function setFileCache(signature, value) {
 // Import error handling system
 const { FileProcessingError } = require('../errors/AnalysisError');
 const ModelVerifier = require('../services/ModelVerifier');
+const {
+  categoryMappingService,
+} = require('../../shared/categoryMappingService');
 
 // AppConfig now provided by documentLlm.js
 
 const modelVerifier = new ModelVerifier();
-const chromaDbService = getChromaDB();
-const folderMatcher = new FolderMatchingService(chromaDbService);
+const embeddingService = getEmbeddingIndex();
+const folderMatcher = new FolderMatchingService(embeddingService);
 
 // LLM moved to documentLlm.js
 
@@ -72,19 +77,31 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       console.warn(
         `[ANALYSIS-FALLBACK] Ollama unavailable (${connectionCheck.error}). Using filename-based analysis for ${fileName}.`,
       );
+      // Initialize category mapping service for fallback analysis
+      categoryMappingService.updateSmartFolders(smartFolders);
+
       const intelligentCategory = getIntelligentCategory(
         fileName,
         fileExtension,
         smartFolders,
       );
+
+      // Ensure fallback category matches available smart folders
+      const validCategory =
+        categoryMappingService.findBestCategoryMatch(intelligentCategory);
+
       const intelligentKeywords = getIntelligentKeywords(
         fileName,
         fileExtension,
       );
       return {
-        purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
+        purpose: `${validCategory.charAt(0).toUpperCase() + validCategory.slice(1)} document (fallback)`,
         project: fileName.replace(fileExtension, ''),
-        category: intelligentCategory,
+        category: validCategory,
+        originalCategory:
+          intelligentCategory !== validCategory
+            ? intelligentCategory
+            : undefined,
         date: new Date().toISOString().split('T')[0],
         keywords: intelligentKeywords,
         confidence: 65,
@@ -354,6 +371,21 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         smartFolders,
       );
 
+      // Ensure category mapping consistency with smart folders
+      categoryMappingService.updateSmartFolders(smartFolders);
+
+      // Fix category to match available smart folders
+      if (analysis.category) {
+        const validCategory = categoryMappingService.findBestCategoryMatch(
+          analysis.category,
+          { project: analysis.project, purpose: analysis.purpose },
+        );
+        if (validCategory !== analysis.category) {
+          analysis.originalCategory = analysis.category;
+          analysis.category = validCategory;
+        }
+      }
+
       // Attempt semantic folder refinement
       try {
         // Ensure folder embeddings exist
@@ -379,7 +411,10 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         if (Array.isArray(candidates) && candidates.length > 0) {
           const top = candidates[0];
           if (top.score >= 0.55) {
-            analysis.category = top.name; // refine to closest folder name
+            // Use category mapping service to ensure consistency
+            const refinedCategory =
+              categoryMappingService.findBestCategoryMatch(top.name);
+            analysis.category = refinedCategory;
           }
           analysis.folderMatchCandidates = candidates;
         }

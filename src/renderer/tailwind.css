@@ -574,15 +574,15 @@ select:focus {
 
 /* Enhanced Typography */
 .heading-primary {
-  margin-bottom: theme('spacing.8');
+  margin-bottom: 8px;
   @apply text-3xl font-bold text-system-gray-800 tracking-tight;
 }
 .heading-secondary {
-  margin-bottom: theme('spacing.5');
+  margin-bottom: 5px;
   @apply text-xl font-semibold text-system-gray-700 tracking-tight;
 }
 .heading-tertiary {
-  margin-bottom: theme('spacing.3');
+  margin-bottom: 3px;
   @apply text-lg font-medium text-system-gray-700;
 }
 
@@ -634,18 +634,18 @@ select:focus {
 
 /* Layout Helpers */
 .container-enhanced {
-  padding-left: theme('spacing.21');
-  padding-right: theme('spacing.21');
+  padding-left: 21px;
+  padding-right: 21px;
   @apply max-w-5xl mx-auto;
 }
 .container-centered {
-  padding-left: theme('spacing.21');
-  padding-right: theme('spacing.21');
+  padding-left: 21px;
+  padding-right: 21px;
   @apply max-w-4xl mx-auto;
 }
 .container-narrow {
-  padding-left: theme('spacing.21');
-  padding-right: theme('spacing.21');
+  padding-left: 21px;
+  padding-right: 21px;
   @apply max-w-2xl mx-auto;
 }
 
@@ -654,13 +654,13 @@ select:focus {
 }
 
 .main-content-wrapper {
-  padding-left: theme('spacing.21');
-  padding-right: theme('spacing.21');
+  padding-left: 21px;
+  padding-right: 21px;
   @apply w-full max-w-5xl mx-auto;
 }
 
 .grid-enhanced {
-  gap: theme('spacing.13');
+  gap: 13px;
   @apply grid;
 }
 
@@ -953,17 +953,17 @@ select:focus {
 /* ===== MODERN LAYOUT COMPONENTS ===== */
 .layout-container {
   @apply max-w-7xl mx-auto;
-  padding-left: theme('spacing.21');
-  padding-right: theme('spacing.21');
+  padding-left: 21px;
+  padding-right: 21px;
 }
 
 .layout-section {
-  padding-top: theme('spacing.55');
-  padding-bottom: theme('spacing.55');
+  padding-top: 55px;
+  padding-bottom: 55px;
 }
 
 .layout-grid {
-  gap: theme('spacing.21');
+  gap: 21px;
   @apply grid;
 }
 

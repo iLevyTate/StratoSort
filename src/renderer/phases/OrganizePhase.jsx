@@ -224,44 +224,36 @@ function OrganizePhase() {
       )
     : [];
 
-  const findSmartFolderForCategory = useMemo(() => {
-    const folderCache = new Map();
-    return (category) => {
-      if (!category) return null;
-      if (folderCache.has(category)) return folderCache.get(category);
-      const normalizedCategory = category.toLowerCase().trim();
-      let folder = smartFolders.find(
-        (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
+  // Helper function to find smart folder for category
+  const findSmartFolderForCategory = (category) => {
+    if (!category) return null;
+    const normalizedCategory = category.toLowerCase().trim();
+    let folder = smartFolders.find(
+      (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
+    );
+    if (folder) return folder;
+
+    const variants = [
+      normalizedCategory,
+      normalizedCategory.replace(/s$/, ''),
+      normalizedCategory + 's',
+      normalizedCategory.replace(/\s+/g, ''),
+      normalizedCategory.replace(/\s+/g, '-'),
+      normalizedCategory.replace(/\s+/g, '_'),
+    ];
+
+    for (const v of variants) {
+      folder = smartFolders.find(
+        (f) =>
+          f.name.toLowerCase().trim() === v ||
+          f.name.toLowerCase().replace(/\s+/g, '') === v ||
+          f.name.toLowerCase().replace(/\s+/g, '-') === v ||
+          f.name.toLowerCase().replace(/\s+/g, '_') === v,
       );
-      if (folder) {
-        folderCache.set(category, folder);
-        return folder;
-      }
-      const variants = [
-        normalizedCategory,
-        normalizedCategory.replace(/s$/, ''),
-        normalizedCategory + 's',
-        normalizedCategory.replace(/\s+/g, ''),
-        normalizedCategory.replace(/\s+/g, '-'),
-        normalizedCategory.replace(/\s+/g, '_'),
-      ];
-      for (const v of variants) {
-        folder = smartFolders.find(
-          (f) =>
-            f.name.toLowerCase().trim() === v ||
-            f.name.toLowerCase().replace(/\s+/g, '') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '-') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '_') === v,
-        );
-        if (folder) {
-          folderCache.set(category, folder);
-          return folder;
-        }
-      }
-      folderCache.set(category, null);
-      return null;
-    };
-  }, [smartFolders]);
+      if (folder) return folder;
+    }
+    return null;
+  };
 
   const handleEditFile = (fileIndex, field, value) => {
     setEditingFiles((prev) => ({
@@ -416,6 +408,8 @@ function OrganizePhase() {
 
       const sourcePathsSet = new Set(operations.map((op) => op.source));
 
+      let organizeSuccessCount = 0;
+
       const stateCallbacks = {
         onExecute: (result) => {
           try {
@@ -441,6 +435,7 @@ function OrganizePhase() {
                 };
               });
             if (uiResults.length > 0) {
+              organizeSuccessCount = uiResults.length;
               setOrganizedFiles((prev) => [...prev, ...uiResults]);
               markFilesAsProcessed(uiResults.map((r) => r.originalPath));
               actions.setPhaseData('organizedFiles', [
@@ -506,11 +501,13 @@ function OrganizePhase() {
           stateCallbacks,
         ),
       );
-      // Only advance if at least one file organized successfully
-      const successCount = Array.isArray(result?.results)
-        ? result.results.filter((r) => r.success).length
-        : 0;
-      if (successCount > 0) actions.advancePhase(PHASES.COMPLETE);
+
+      // Auto-advance to the next phase after successful organization
+      if (organizeSuccessCount > 0) {
+        setTimeout(() => {
+          actions.advancePhase(PHASES.COMPLETE);
+        }, 1500);
+      }
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');
     } finally {

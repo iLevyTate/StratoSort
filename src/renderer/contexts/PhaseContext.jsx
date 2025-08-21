@@ -155,6 +155,26 @@ export function PhaseProvider({ children }) {
     [advancePhase, setPhaseData, setLoading, toggleSettings, resetWorkflow],
   );
 
+  // Listen for 'open-settings' event from main process
+  useEffect(() => {
+    const handleOpenSettings = () => {
+      if (!state.showSettings) {
+        toggleSettings();
+      }
+    };
+
+    // Add event listener for main process settings request
+    try {
+      window.electronAPI?.events?.onOpenSettings?.(handleOpenSettings);
+    } catch (error) {
+      console.warn('Failed to register open-settings listener:', error);
+    }
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [state.showSettings, toggleSettings]);
+
   return (
     <PhaseContext.Provider
       value={useMemo(() => {

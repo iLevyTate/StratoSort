@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
+const { categoryMappingService } = require('../shared/categoryMappingService');
 const sanitizeHtml = require('sanitize-html');
 
 console.log('[PRELOAD] Secure preload script loaded');
@@ -22,6 +23,7 @@ const ALLOWED_CHANNELS = {
   WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
   SUGGESTIONS: Object.values(IPC_CHANNELS.SUGGESTIONS || {}),
   ORGANIZE: Object.values(IPC_CHANNELS.ORGANIZE || {}),
+  UI: Object.values(IPC_CHANNELS.UI || {}),
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -29,6 +31,8 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'operation-progress',
   'app:error',
   'app:update',
+  'open-settings',
+  'ui-dialog',
 ];
 
 // Flatten allowed send channels for validation
@@ -526,6 +530,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
     onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
+    onOpenSettings: (callback) => secureIPC.safeOn('open-settings', callback),
+    onUiDialog: (callback) => secureIPC.safeOn('ui-dialog', callback),
   },
 
   // Settings
@@ -533,6 +539,98 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.GET),
     save: (settings) =>
       secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.SAVE, settings),
+  },
+
+  // UI helpers
+  ui: {
+    respondDialog: (token, responseIndex) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.UI.DIALOG_RESPONSE, {
+        token,
+        index: responseIndex,
+      }),
+  },
+
+  // Category mapping service for renderer process
+  shared: {
+    categoryMapping: {
+      CategoryMappingService: class {
+        constructor() {
+          this.folderCache = new Map();
+          this.smartFolders = [];
+        }
+
+        updateSmartFolders(smartFolders = []) {
+          this.smartFolders = smartFolders.filter(
+            (f) =>
+              f &&
+              f.name &&
+              typeof f.name === 'string' &&
+              f.name.trim().length > 0,
+          );
+          this.folderCache.clear();
+        }
+
+        findSmartFolderForCategory(category) {
+          if (!category) return null;
+
+          if (this.folderCache.has(category)) {
+            return this.folderCache.get(category);
+          }
+
+          const normalizedCategory = category.toLowerCase().trim();
+
+          // Try exact match first
+          let folder = this.smartFolders.find(
+            (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
+          );
+
+          if (folder) {
+            this.folderCache.set(category, folder);
+            return folder;
+          }
+
+          // Try variants
+          const variants = [
+            normalizedCategory,
+            normalizedCategory.replace(/s$/, ''),
+            normalizedCategory + 's',
+            normalizedCategory.replace(/\s+/g, ''),
+            normalizedCategory.replace(/\s+/g, '-'),
+            normalizedCategory.replace(/\s+/g, '_'),
+          ];
+
+          for (const variant of variants) {
+            folder = this.smartFolders.find((f) => {
+              const folderName = f.name.toLowerCase().trim();
+              return (
+                folderName === variant ||
+                folderName.replace(/\s+/g, '') === variant ||
+                folderName.replace(/\s+/g, '-') === variant ||
+                folderName.replace(/\s+/g, '_') === variant
+              );
+            });
+
+            if (folder) {
+              this.folderCache.set(category, folder);
+              return folder;
+            }
+          }
+
+          this.folderCache.set(category, null);
+          return null;
+        }
+
+        getDestinationPath(category, defaultLocation) {
+          const smartFolder = this.findSmartFolderForCategory(category);
+
+          if (smartFolder) {
+            return smartFolder.path || `${defaultLocation}/${smartFolder.name}`;
+          }
+
+          return `${defaultLocation}/${category || 'Uncategorized'}`;
+        }
+      },
+    },
   },
 });
 

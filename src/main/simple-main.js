@@ -317,14 +317,37 @@ function createWindow() {
     return;
   }
   mainWindow = createMainWindow();
+
   mainWindow.on('close', (e) => {
     if (!isQuitting && currentSettings?.backgroundMode) {
       e.preventDefault();
       mainWindow.hide();
+
+      // Show notification that app is running in background
+      if (tray) {
+        tray.displayBalloon({
+          iconType: 'info',
+          title: 'StratoSort',
+          content:
+            'StratoSort is now running in the background. Click the tray icon to open or right-click for options.',
+        });
+      }
+
+      logger.info('[BACKGROUND] App minimized to tray');
     }
   });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Handle window restore from minimized state
+  mainWindow.on('restore', () => {
+    logger.info('[BACKGROUND] Window restored from tray');
+  });
+
+  mainWindow.on('show', () => {
+    logger.info('[BACKGROUND] Window shown');
   });
 }
 
@@ -350,16 +373,43 @@ function updateDownloadWatcher(settings) {
 function handleSettingsChanged(settings) {
   currentSettings = settings || {};
   updateDownloadWatcher(settings);
+
   try {
     updateTrayMenu();
   } catch (error) {
     logger.warn('[SETTINGS] Failed to update tray menu:', error);
+  }
+
+  // Handle background mode logging
+  if (settings?.backgroundMode !== undefined) {
+    logger.info(
+      `[SETTINGS] Background mode: ${settings.backgroundMode ? 'enabled' : 'disabled'}`,
+    );
+  }
+
+  // Handle auto-start setting
+  if (settings?.launchOnStartup !== undefined) {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: settings.launchOnStartup,
+        openAsHidden: settings.backgroundMode || false, // Start hidden if background mode is enabled
+        path: process.execPath,
+        args: settings.backgroundMode ? ['--hidden'] : [],
+      });
+      logger.info(
+        `[SETTINGS] Launch on startup: ${settings.launchOnStartup ? 'enabled' : 'disabled'}`,
+      );
+    } catch (error) {
+      logger.error('[SETTINGS] Failed to set auto-start:', error);
+    }
   }
 }
 
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
 const { registerAllIpc } = require('./ipc');
+const registerOllamaIpc = require('./ipc/ollama');
+const registerFilesIpc = require('./ipc/files');
 
 // NOTE: Old handle-file-selection handler removed - using IPC_CHANNELS.FILES.SELECT instead
 
@@ -496,6 +546,7 @@ if (!gotTheLock) {
       );
       const isFirstRun = !fs.existsSync(setupMarker);
 
+      let modelsInstallPending = false;
       if (isFirstRun) {
         logger.info('[STARTUP] First run detected - will check Ollama setup');
 
@@ -533,6 +584,7 @@ if (!gotTheLock) {
                 '[STARTUP] No AI models found, installing essential models...',
               );
               try {
+                modelsInstallPending = true;
                 await installEssentialModels();
                 logger.info('[STARTUP] AI models installed successfully');
               } catch (e) {
@@ -613,6 +665,14 @@ if (!gotTheLock) {
             '[STARTUP] ✅ Whisper model available for audio analysis',
           );
         }
+        try {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win) {
+            win.webContents.send('operation-progress', {
+              type: 'models-download-complete',
+            });
+          }
+        } catch {}
       }
 
       // Register IPC groups now that services and state are ready
@@ -657,8 +717,68 @@ if (!gotTheLock) {
       // Create application menu with theme
       createApplicationMenu();
 
-      createWindow();
+      // Create main window (unless started with --hidden flag)
+      const args = process.argv.slice(1);
+      const startHidden =
+        args.includes('--hidden') ||
+        (currentSettings?.backgroundMode && currentSettings?.launchOnStartup);
+
+      if (!startHidden) {
+        createWindow();
+      } else {
+        logger.info('[STARTUP] Starting in hidden mode');
+      }
       handleSettingsChanged(initialSettings);
+
+      // If models are missing or installation was triggered, inform renderer and poll until ready
+      try {
+        const win = BrowserWindow.getAllWindows()[0];
+        const shouldShowPending =
+          modelsInstallPending || (modelStatus && !modelStatus.success);
+        if (win && shouldShowPending) {
+          try {
+            win.webContents.send('operation-progress', {
+              type: 'models-downloading',
+              message:
+                'Downloading essential AI models in the background. You can continue using basic features.',
+            });
+          } catch {}
+
+          // Poll for completion and notify renderer
+          const setupScript = path.join(__dirname, '../../setup-ollama.js');
+          const pollInterval = setInterval(async () => {
+            try {
+              let ready = false;
+              if (fs.existsSync(setupScript)) {
+                const { getInstalledModels } = require(setupScript);
+                const models = await getInstalledModels();
+                ready = Array.isArray(models) && models.length > 0;
+              } else {
+                // Fallback: re-verify via ModelVerifier
+                const MV = require('./services/ModelVerifier');
+                const mv = new MV();
+                const status = await mv.verifyEssentialModels();
+                ready = !!status?.success;
+              }
+
+              if (ready) {
+                try {
+                  win.webContents.send('operation-progress', {
+                    type: 'models-download-complete',
+                  });
+                } catch {}
+                try {
+                  pollInterval.unref?.();
+                } catch {}
+                clearInterval(pollInterval);
+              }
+            } catch {}
+          }, 5000);
+          try {
+            pollInterval.unref?.();
+          } catch {}
+        }
+      } catch {}
 
       // Start periodic system metrics broadcast to renderer
       try {
@@ -703,6 +823,18 @@ if (!gotTheLock) {
               });
             } catch {}
           }
+        }
+        if (args.includes('--show-model-downloads')) {
+          try {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win) {
+              win.webContents.send('operation-progress', {
+                type: 'models-downloading',
+                message:
+                  'Downloading essential AI models in the background. You can continue using basic features.',
+              });
+            }
+          } catch {}
         }
       } catch {}
       // Windows Jump List tasks
@@ -808,6 +940,66 @@ if (!gotTheLock) {
       } catch {}
     } catch (error) {
       logger.error('[STARTUP] Failed to initialize:', error);
+      // Ensure critical IPC (Ollama) is registered even if other init failed
+      try {
+        const getMainWindow = () => mainWindow;
+        registerOllamaIpc({
+          ipcMain,
+          IPC_CHANNELS,
+          logger,
+          systemAnalytics,
+          getMainWindow,
+          getOllama,
+          getOllamaModel,
+          getOllamaVisionModel,
+          getOllamaEmbeddingModel,
+          getOllamaHost,
+        });
+        // Also register essential handlers so basic UI operations work
+        const registerAnalysisIpc = require('./ipc/analysis');
+        const registerSettingsIpc = require('./ipc/settings');
+
+        registerFilesIpc({
+          ipcMain,
+          IPC_CHANNELS,
+          logger,
+          dialog,
+          shell,
+          getMainWindow,
+          getServiceIntegration: () => ({}),
+        });
+
+        registerAnalysisIpc({
+          ipcMain,
+          IPC_CHANNELS,
+          logger,
+          tesseract,
+          systemAnalytics,
+          analyzeDocumentFile,
+          analyzeImageFile,
+          getServiceIntegration: () => ({}),
+          getCustomFolders: () => customFolders,
+        });
+
+        registerSettingsIpc({
+          ipcMain,
+          IPC_CHANNELS,
+          logger,
+          settingsService: settingsService || {
+            load: () => ({}),
+            save: () => ({}),
+          },
+          setOllamaHost,
+          setOllamaModel,
+          setOllamaVisionModel,
+          setOllamaEmbeddingModel,
+          onSettingsChanged: handleSettingsChanged,
+        });
+      } catch (e) {
+        try {
+          logger.warn('[STARTUP] Failed to register minimal IPC:', e?.message);
+        } catch {}
+      }
       createWindow();
     }
   });
@@ -828,8 +1020,18 @@ app.on('before-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // On macOS, keep app running when all windows are closed
+  if (process.platform === 'darwin') {
+    return;
+  }
+
+  // On other platforms, only quit if background mode is disabled
+  if (!currentSettings?.backgroundMode) {
     app.quit();
+  } else {
+    logger.info(
+      '[BACKGROUND] All windows closed, continuing in background mode',
+    );
   }
 });
 
@@ -924,30 +1126,71 @@ function createSystemTray() {
       trayIcon.setTemplateImage(true);
     }
     tray = new Tray(trayIcon);
-    tray.setToolTip('StratoSort');
+    tray.setToolTip('StratoSort - AI File Organization');
+
+    // Handle tray click events
+    tray.on('click', () => {
+      // Single click shows/hides window
+      if (mainWindow) {
+        if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+          mainWindow.hide();
+        } else {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      } else {
+        createWindow();
+      }
+      updateTrayMenu();
+    });
+
+    tray.on('double-click', () => {
+      // Double click always shows window
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
+        createWindow();
+      }
+    });
+
     updateTrayMenu();
+    logger.info('[TRAY] System tray initialized successfully');
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[TRAY] initialization failed', e);
+    logger.error('[TRAY] initialization failed:', e);
   }
 }
 
 function updateTrayMenu() {
   if (!tray) return;
+
+  const isWindowVisible =
+    mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized();
+
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Open StratoSort',
+      label: isWindowVisible ? 'Hide StratoSort' : 'Show StratoSort',
       click: () => {
-        const win = BrowserWindow.getAllWindows()[0] || createWindow();
-        if (win && win.isMinimized()) win.restore();
-        if (win) {
-          win.show();
-          win.focus();
+        if (isWindowVisible) {
+          mainWindow.hide();
+        } else {
+          const win = BrowserWindow.getAllWindows()[0] || createWindow();
+          if (win && win.isMinimized()) win.restore();
+          if (win) {
+            win.show();
+            win.focus();
+          }
         }
+        // Update menu after action
+        setTimeout(() => updateTrayMenu(), 100);
       },
     },
+    { type: 'separator' },
     {
       label: downloadWatcher ? 'Pause Auto-Sort' : 'Resume Auto-Sort',
+      enabled: true,
       click: async () => {
         const enable = !downloadWatcher;
         try {
@@ -965,14 +1208,70 @@ function updateTrayMenu() {
         updateTrayMenu();
       },
     },
+    {
+      label: `Background Mode: ${currentSettings?.backgroundMode ? 'On' : 'Off'}`,
+      enabled: true,
+      click: async () => {
+        const newBackgroundMode = !currentSettings?.backgroundMode;
+        try {
+          if (settingsService) {
+            const merged = await settingsService.save({
+              backgroundMode: newBackgroundMode,
+            });
+            handleSettingsChanged(merged);
+          } else {
+            handleSettingsChanged({ backgroundMode: newBackgroundMode });
+          }
+        } catch (err) {
+          logger.warn('[TRAY] Failed to toggle background mode:', err.message);
+        }
+        updateTrayMenu();
+      },
+    },
     { type: 'separator' },
     {
-      label: 'Quit',
+      label: 'Settings',
+      click: () => {
+        const win = BrowserWindow.getAllWindows()[0] || createWindow();
+        if (win && win.isMinimized()) win.restore();
+        if (win) {
+          win.show();
+          win.focus();
+          // Send message to open settings
+          win.webContents.send('open-settings');
+        }
+      },
+    },
+    {
+      label: 'About StratoSort',
+      click: () => {
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'About StratoSort',
+          message: 'StratoSort',
+          detail: `Version: ${app.getVersion()}\nAI-powered file organization tool\n\nRunning in ${currentSettings?.backgroundMode ? 'background' : 'foreground'} mode`,
+          buttons: ['OK'],
+        });
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit StratoSort',
       click: () => {
         isQuitting = true;
         app.quit();
       },
     },
   ]);
+
   tray.setContextMenu(contextMenu);
+
+  // Update tooltip with current status
+  const status = [];
+  if (downloadWatcher) status.push('Auto-sort: On');
+  if (currentSettings?.backgroundMode) status.push('Background: On');
+
+  tray.setToolTip(
+    status.length > 0 ? `StratoSort - ${status.join(', ')}` : 'StratoSort',
+  );
 }

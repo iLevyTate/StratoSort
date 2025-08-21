@@ -2,6 +2,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
 const {
+  categoryMappingService,
+} = require('../../shared/categoryMappingService');
+const {
   getOllamaVisionModel,
   loadOllamaConfig,
   getOllamaClient,
@@ -16,9 +19,11 @@ const {
   getIntelligentKeywords: getIntelligentImageKeywords,
   safeSuggestedName,
 } = require('./fallbackUtils');
-const { getInstance: getChromaDB } = require('../services/ChromaDBService');
+const {
+  getInstance: getEmbeddingIndex,
+} = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
-let chromaDbSingleton = null;
+let embeddingIndexSingleton = null;
 let folderMatcherSingleton = null;
 
 // In-memory cache for image analysis keyed by path|size|mtimeMs
@@ -332,13 +337,34 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       smartFolders,
     );
 
+    // Ensure category mapping consistency with smart folders
+    categoryMappingService.updateSmartFolders(smartFolders);
+
+    // Fix category to match available smart folders
+    if (analysis.category) {
+      const validCategory = categoryMappingService.findBestCategoryMatch(
+        analysis.category,
+        {
+          project: analysis.project,
+          purpose: analysis.purpose,
+          content_type: analysis.content_type,
+        },
+      );
+      if (validCategory !== analysis.category) {
+        analysis.originalCategory = analysis.category;
+        analysis.category = validCategory;
+      }
+    }
+
     // Semantic folder refinement using embeddings based on image JSON fields
     try {
       // Reuse single service instances to avoid reloading data repeatedly
-      const chromaDb = chromaDbSingleton || (chromaDbSingleton = getChromaDB());
+      const embeddingIndex =
+        embeddingIndexSingleton ||
+        (embeddingIndexSingleton = getEmbeddingIndex());
       const folderMatcher =
         folderMatcherSingleton ||
-        (folderMatcherSingleton = new FolderMatchingService(chromaDb));
+        (folderMatcherSingleton = new FolderMatchingService(embeddingIndex));
       if (smartFolders && smartFolders.length > 0) {
         await Promise.all(
           smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
@@ -360,7 +386,11 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       if (Array.isArray(candidates) && candidates.length > 0) {
         const top = candidates[0];
         if (top.score >= 0.55) {
-          analysis.category = top.name;
+          // Use category mapping service to ensure consistency
+          const refinedCategory = categoryMappingService.findBestCategoryMatch(
+            top.name,
+          );
+          analysis.category = refinedCategory;
         }
         analysis.folderMatchCandidates = candidates;
       }

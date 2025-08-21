@@ -178,6 +178,11 @@ const IPC_CHANNELS = {
     CLOSE: 'window-close',
   },
 
+  // UI (Renderer-driven themed dialogs)
+  UI: {
+    DIALOG_RESPONSE: 'ui-dialog-response',
+  },
+
   // Menu Actions
   MENU: {
     NEW_ANALYSIS: 'menu-new-analysis',

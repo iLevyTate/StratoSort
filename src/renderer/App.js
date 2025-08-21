@@ -10,12 +10,16 @@ import AppProviders from './components/AppProviders';
 import ErrorBoundary from './components/ErrorBoundary';
 import FirstRunWizard from './components/setup';
 // ProgressIndicator folded into NavigationBar
+import ModelDownloadBanner from './components/ModelDownloadBanner';
+import GlobalDialogHost from './components/GlobalDialogHost';
 
 function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
         <AppShell header={<NavigationBar />}>
+          <GlobalDialogHost />
+          <ModelDownloadBanner />
           <PhaseRenderer />
           <TooltipManager />
           <FirstRunWizard

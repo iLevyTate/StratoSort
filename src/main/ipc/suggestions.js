@@ -5,14 +5,14 @@ const { logger } = require('../../shared/logger');
 function registerSuggestionsIpc({
   ipcMain,
   IPC_CHANNELS,
-  chromaDbService,
+  embeddingService,
   folderMatchingService,
   settingsService,
   getCustomFolders,
 }) {
   // Initialize the suggestion service
   const suggestionService = new OrganizationSuggestionService({
-    chromaDbService,
+    embeddingService,
     folderMatchingService,
     settingsService,
   });

@@ -1,5 +1,58 @@
 import React, { memo, useMemo } from 'react';
 
+// Helper function to determine file type from extension
+const getFileTypeFromName = (fileName) => {
+  if (!fileName) return 'file';
+
+  const extension = fileName.toLowerCase().split('.').pop() || '';
+  const imageExts = [
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'bmp',
+    'webp',
+    'svg',
+    'tiff',
+    'ico',
+  ];
+  const videoExts = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', '3gp'];
+  const docExts = [
+    'pdf',
+    'doc',
+    'docx',
+    'txt',
+    'md',
+    'rtf',
+    'odt',
+    'pages',
+    'xlsx',
+    'xls',
+    'ppt',
+    'pptx',
+  ];
+  const codeExts = [
+    'js',
+    'ts',
+    'py',
+    'java',
+    'cpp',
+    'c',
+    'html',
+    'css',
+    'json',
+    'xml',
+  ];
+  const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'];
+
+  if (imageExts.includes(extension)) return 'image';
+  if (videoExts.includes(extension)) return 'video';
+  if (docExts.includes(extension)) return 'document';
+  if (codeExts.includes(extension)) return 'code';
+  if (archiveExts.includes(extension)) return 'archive';
+  return 'file';
+};
+
 function AnalysisResultsList({
   results = [],
   onFileAction,
@@ -28,14 +81,19 @@ function AnalysisResultsList({
                   {file.source?.replace('_', ' ')}
                   {file.size ? ` • ${Math.round(file.size / 1024)} KB` : ''}
                 </div>
-                {file.analysis?.category && (
-                  <div className="text-xs text-system-gray-600 mt-3">
-                    Category:{' '}
-                    <span className="text-stratosort-blue">
-                      {file.analysis.category}
-                    </span>
-                  </div>
-                )}
+                <div className="text-xs text-system-gray-600 mt-3">
+                  Category:{' '}
+                  <span className="text-stratosort-blue">
+                    {file.analysis?.category || getFileTypeFromName(file.name)}
+                  </span>
+                  {file.analysis?.category &&
+                    getFileTypeFromName(file.name) !==
+                      file.analysis.category && (
+                      <span className="text-system-gray-400 ml-2">
+                        (was: {getFileTypeFromName(file.name)})
+                      </span>
+                    )}
+                </div>
               </div>
               <div
                 className={`text-sm font-medium flex items-center gap-3 ${stateDisplay.color}`}

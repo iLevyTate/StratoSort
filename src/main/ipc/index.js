@@ -121,13 +121,13 @@ function registerAllIpc({
   if (getServiceIntegration) {
     const serviceIntegration = getServiceIntegration();
     if (
-      serviceIntegration.chromaDbService &&
+      serviceIntegration.embeddingService &&
       serviceIntegration.folderMatchingService
     ) {
       registerSuggestionsIpc({
         ipcMain,
         IPC_CHANNELS,
-        chromaDbService: serviceIntegration.chromaDbService,
+        embeddingService: serviceIntegration.embeddingService,
         folderMatchingService: serviceIntegration.folderMatchingService,
         settingsService,
         getCustomFolders,

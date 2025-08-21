@@ -52,8 +52,7 @@
       { "ext": "pptx" },
       { "ext": "txt" },
       { "ext": "md" }
-    ],
-    "publisherName": "StratoSort Team"
+    ]
   },
   "nsis": {
     "oneClick": false,

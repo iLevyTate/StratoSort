@@ -11,8 +11,8 @@ import {
   SelectionControls,
   DragAndDropZone,
   AnalysisResultsList,
-  AnalysisProgress,
 } from '../components/discover';
+import AnalysisProgressDisplay from '../components/AnalysisProgressDisplay';
 
 function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
@@ -1520,9 +1520,11 @@ function DiscoverPhase() {
           defaultOpen
           persistKey="discover-progress"
         >
-          <AnalysisProgress
-            progress={analysisProgress}
-            currentFile={currentAnalysisFile}
+          <AnalysisProgressDisplay
+            analysisProgress={analysisProgress}
+            currentAnalysisFile={currentAnalysisFile}
+            isAnalyzing={isAnalyzing}
+            className="mb-4"
           />
           {/* Add reset button if analysis appears stuck */}
           {analysisProgress.lastActivity &&

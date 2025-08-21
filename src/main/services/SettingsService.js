@@ -15,6 +15,7 @@ class SettingsService {
       maxConcurrentAnalysis: 3,
       autoOrganize: false,
       backgroundMode: false,
+      launchOnStartup: false,
       // Organization Confidence Thresholds
       autoApproveThreshold: 0.8,
       downloadConfidenceThreshold: 0.9,
@@ -73,4 +74,15 @@ class SettingsService {
   }
 }
 
+// Singleton pattern
+let instance = null;
+
+function getService() {
+  if (!instance) {
+    instance = new SettingsService();
+  }
+  return instance;
+}
+
 module.exports = SettingsService;
+module.exports.getService = getService;

@@ -22,6 +22,7 @@ const ALLOWED_CHANNELS = {
   WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
   SUGGESTIONS: Object.values(IPC_CHANNELS.SUGGESTIONS || {}),
   ORGANIZE: Object.values(IPC_CHANNELS.ORGANIZE || {}),
+  UI: Object.values(IPC_CHANNELS.UI || {}),
 };
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -29,6 +30,8 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'operation-progress',
   'app:error',
   'app:update',
+  'open-settings',
+  'ui-dialog',
 ];
 
 // Flatten allowed send channels for validation
@@ -526,6 +529,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
     onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
+    onOpenSettings: (callback) => secureIPC.safeOn('open-settings', callback),
+    onUiDialog: (callback) => secureIPC.safeOn('ui-dialog', callback),
   },
 
   // Settings
@@ -533,6 +538,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.GET),
     save: (settings) =>
       secureIPC.safeInvoke(IPC_CHANNELS.SETTINGS.SAVE, settings),
+  },
+
+  // UI helpers
+  ui: {
+    respondDialog: (token, responseIndex) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.UI.DIALOG_RESPONSE, {
+        token,
+        index: responseIndex,
+      }),
   },
 });
 

@@ -7,8 +7,8 @@ const {
 } = require('../ollamaUtils');
 
 class OrganizationSuggestionService {
-  constructor({ chromaDbService, folderMatchingService, settingsService }) {
-    this.chromaDb = chromaDbService;
+  constructor({ embeddingService, folderMatchingService, settingsService }) {
+    this.embeddingService = embeddingService;
     this.folderMatcher = folderMatchingService;
     this.settings = settingsService;
 

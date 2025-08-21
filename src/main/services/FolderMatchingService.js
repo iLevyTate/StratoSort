@@ -3,8 +3,8 @@ const crypto = require('crypto');
 const { logger } = require('../../shared/logger');
 
 class FolderMatchingService {
-  constructor(chromaDbService) {
-    this.chromaDbService = chromaDbService;
+  constructor(embeddingService) {
+    this.embeddingService = embeddingService;
     this.ollama = null;
     this.modelName = '';
   }
@@ -57,7 +57,7 @@ class FolderMatchingService {
         updatedAt: new Date().toISOString(),
       };
 
-      await this.chromaDbService.upsertFolder(payload);
+      await this.embeddingService.upsertFolder(payload);
       logger.debug('[FolderMatchingService] Upserted folder embedding', {
         id: folderId,
         name: folder.name,
@@ -77,7 +77,7 @@ class FolderMatchingService {
     try {
       const { vector, model } = await this.embedText(contentSummary || '');
 
-      await this.chromaDbService.upsertFile({
+      await this.embeddingService.upsertFile({
         id: fileId,
         vector,
         model,
@@ -100,7 +100,7 @@ class FolderMatchingService {
 
   async matchFileToFolders(fileId, topK = 5) {
     try {
-      const results = await this.chromaDbService.queryFolders(fileId, topK);
+      const results = await this.embeddingService.queryFolders(fileId, topK);
       return results;
     } catch (error) {
       logger.error(
@@ -116,12 +116,9 @@ class FolderMatchingService {
    */
   async findSimilarFiles(fileId, topK = 10) {
     try {
-      // Get the file's embedding first
-      const fileResult = await this.chromaDbService.fileCollection.get({
-        ids: [fileId],
-      });
-
-      if (!fileResult.embeddings || fileResult.embeddings.length === 0) {
+      // Use the EmbeddingService to find similar files
+      const fileEmbedding = this.embeddingService.fileEmbeddings.get(fileId);
+      if (!fileEmbedding || !fileEmbedding.vector) {
         logger.warn(
           '[FolderMatchingService] File not found for similarity search:',
           fileId,
@@ -129,8 +126,10 @@ class FolderMatchingService {
         return [];
       }
 
-      const fileEmbedding = fileResult.embeddings[0];
-      return await this.chromaDbService.querySimilarFiles(fileEmbedding, topK);
+      return await this.embeddingService.queryFiles(
+        { vector: fileEmbedding.vector },
+        topK,
+      );
     } catch (error) {
       logger.error(
         '[FolderMatchingService] Failed to find similar files:',
@@ -144,7 +143,10 @@ class FolderMatchingService {
    * Get database statistics
    */
   async getStats() {
-    return await this.chromaDbService.getStats();
+    return {
+      fileCount: this.embeddingService.fileEmbeddings.size,
+      folderCount: this.embeddingService.folderEmbeddings.size,
+    };
   }
 }
 

@@ -28,9 +28,23 @@ if ($Fix) {
   npm run format:check
 }
 
-# Typecheck
-Write-Host "Typecheck" -ForegroundColor Yellow
-npm run typecheck
+# Typecheck (optional)
+try {
+  $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
+  $hasTypecheck = $false
+  if ($pkg -and $pkg.scripts) {
+    $hasTypecheck = $pkg.scripts.PSObject.Properties.Name -contains "typecheck"
+  }
+} catch {
+  $hasTypecheck = $false
+}
+
+if ($hasTypecheck) {
+  Write-Host "Typecheck" -ForegroundColor Yellow
+  npm run typecheck
+} else {
+  Write-Host "Typecheck (skipped - no script)" -ForegroundColor DarkYellow
+}
 
 # Tests
 Write-Host "Tests" -ForegroundColor Yellow

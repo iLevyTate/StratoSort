@@ -32,7 +32,9 @@ const {
   getIntelligentKeywords,
   safeSuggestedName,
 } = require('./fallbackUtils');
-const { getInstance: getChromaDB } = require('../services/ChromaDBService');
+const {
+  getInstance: getEmbeddingIndex,
+} = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 
 // In-memory cache of per-file analysis results (path|size|mtimeMs -> result)
@@ -54,8 +56,8 @@ const ModelVerifier = require('../services/ModelVerifier');
 // AppConfig now provided by documentLlm.js
 
 const modelVerifier = new ModelVerifier();
-const chromaDbService = getChromaDB();
-const folderMatcher = new FolderMatchingService(chromaDbService);
+const embeddingService = getEmbeddingIndex();
+const folderMatcher = new FolderMatchingService(embeddingService);
 
 // LLM moved to documentLlm.js
 

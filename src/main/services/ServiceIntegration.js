@@ -1,7 +1,7 @@
 const AnalysisHistoryService = require('./AnalysisHistoryService');
 const UndoRedoService = require('./UndoRedoService');
 const ProcessingStateService = require('./ProcessingStateService');
-const { getInstance: getChromaDB } = require('./ChromaDBService');
+const { getInstance: getEmbeddingIndex } = require('./EmbeddingIndexService');
 const FolderMatchingService = require('./FolderMatchingService');
 const OrganizationSuggestionService = require('./OrganizationSuggestionService');
 const AutoOrganizeService = require('./AutoOrganizeService');
@@ -11,7 +11,7 @@ class ServiceIntegration {
     this.analysisHistory = null;
     this.undoRedo = null;
     this.processingState = null;
-    this.chromaDbService = null;
+    this.embeddingService = null;
     this.folderMatchingService = null;
     this.suggestionService = null;
     this.autoOrganizeService = null;
@@ -26,16 +26,16 @@ class ServiceIntegration {
     this.undoRedo = new UndoRedoService();
     this.processingState = new ProcessingStateService();
 
-    // Initialize ChromaDB and folder matching
-    this.chromaDbService = getChromaDB();
+    // Initialize JSON embedding storage and folder matching
+    this.embeddingService = getEmbeddingIndex();
     this.folderMatchingService = new FolderMatchingService(
-      this.chromaDbService,
+      this.embeddingService,
     );
 
     // Initialize suggestion service
     const { getService: getSettingsService } = require('./SettingsService');
     this.suggestionService = new OrganizationSuggestionService({
-      chromaDbService: this.chromaDbService,
+      embeddingService: this.embeddingService,
       folderMatchingService: this.folderMatchingService,
       settingsService: getSettingsService(),
     });
@@ -53,7 +53,7 @@ class ServiceIntegration {
       this.analysisHistory.initialize(),
       this.undoRedo.initialize(),
       this.processingState.initialize(),
-      this.chromaDbService.initialize(),
+      this.embeddingService.initialize(),
     ]);
 
     this.initialized = true;

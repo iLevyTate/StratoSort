@@ -1,4 +1,6 @@
-const { getInstance: getChromaDB } = require('../services/ChromaDBService');
+const {
+  getInstance: getEmbeddingIndex,
+} = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 const path = require('path');
 const { SUPPORTED_IMAGE_EXTENSIONS } = require('../../shared/constants');
@@ -13,37 +15,16 @@ function registerEmbeddingsIpc({
   getServiceIntegration,
 }) {
   // Use ChromaDB singleton instance
-  const chromaDbService = getChromaDB();
-  const folderMatcher = new FolderMatchingService(chromaDbService);
+  const embeddingService = getEmbeddingIndex();
+  const folderMatcher = new FolderMatchingService(embeddingService);
 
-  // Initialize ChromaDB and migrate existing data on startup
+  // Initialize JSON embedding service on startup
   (async () => {
     try {
-      await chromaDbService.initialize();
-
-      // Attempt to migrate existing JSONL data if present
-      const { app } = require('electron');
-      const basePath = path.join(app.getPath('userData'), 'embeddings');
-      const filesPath = path.join(basePath, 'file-embeddings.jsonl');
-      const foldersPath = path.join(basePath, 'folder-embeddings.jsonl');
-
-      const filesMigrated = await chromaDbService.migrateFromJsonl(
-        filesPath,
-        'file',
-      );
-      const foldersMigrated = await chromaDbService.migrateFromJsonl(
-        foldersPath,
-        'folder',
-      );
-
-      if (filesMigrated > 0 || foldersMigrated > 0) {
-        logger.info('[ChromaDB] Migration complete', {
-          files: filesMigrated,
-          folders: foldersMigrated,
-        });
-      }
+      await embeddingService.initialize();
+      logger.info('[EmbeddingService] JSON-based storage initialized');
     } catch (error) {
-      logger.error('[ChromaDB] Initialization/migration failed:', error);
+      logger.error('[EmbeddingService] Initialization failed:', error);
     }
   })();
 
@@ -52,7 +33,9 @@ function registerEmbeddingsIpc({
     withErrorLogging(logger, async () => {
       try {
         const smartFolders = getCustomFolders().filter((f) => f && f.name);
-        await chromaDbService.resetFolders();
+        // Clear folder embeddings
+        embeddingService.folderEmbeddings.clear();
+        await embeddingService.saveData();
 
         // Re-index all smart folders
         await Promise.all(
@@ -99,7 +82,9 @@ function registerEmbeddingsIpc({
         }
 
         // Reset file vectors to rebuild from scratch
-        await chromaDbService.resetFiles();
+        // Clear file embeddings
+        embeddingService.fileEmbeddings.clear();
+        await embeddingService.saveData();
 
         let rebuilt = 0;
         for (const entry of allEntries) {
@@ -150,7 +135,10 @@ function registerEmbeddingsIpc({
     IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE,
     withErrorLogging(logger, async () => {
       try {
-        await chromaDbService.resetAll();
+        // Clear all embeddings
+        embeddingService.fileEmbeddings.clear();
+        embeddingService.folderEmbeddings.clear();
+        await embeddingService.saveData();
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };
@@ -163,7 +151,10 @@ function registerEmbeddingsIpc({
     IPC_CHANNELS.EMBEDDINGS.GET_STATS,
     withErrorLogging(logger, async () => {
       try {
-        const stats = await chromaDbService.getStats();
+        const stats = {
+          fileCount: embeddingService.fileEmbeddings.size,
+          folderCount: embeddingService.folderEmbeddings.size,
+        };
         return { success: true, ...stats };
       } catch (e) {
         return { success: false, error: e.message };
@@ -193,7 +184,7 @@ function registerEmbeddingsIpc({
   const { app } = require('electron');
   app.on('before-quit', async () => {
     try {
-      await chromaDbService.cleanup();
+      await embeddingService.cleanup();
     } catch (error) {
       logger.error('[ChromaDB] Cleanup error:', error);
     }

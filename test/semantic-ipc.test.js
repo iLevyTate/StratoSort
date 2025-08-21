@@ -21,15 +21,18 @@ describe('Embeddings/Semantic IPC', () => {
         upsertFileEmbedding: jest.fn(async () => {}),
       })),
     );
-    jest.doMock('../src/main/services/ChromaDBService', () => ({
-      getInstance: () => ({
-        initialize: jest.fn(async () => {}),
-        resetFolders: jest.fn(async () => {}),
-        resetFiles: jest.fn(async () => {}),
-        migrateFromJsonl: jest.fn(async () => 0),
-        cleanup: jest.fn(async () => {}),
-        resetAll: jest.fn(async () => {}),
-      }),
+
+    const mockSaveData = jest.fn(async () => {});
+    const mockEmbeddingService = {
+      initialize: jest.fn(async () => {}),
+      folderEmbeddings: new Map(),
+      fileEmbeddings: new Map(),
+      saveData: mockSaveData,
+      cleanup: jest.fn(async () => {}),
+    };
+
+    jest.doMock('../src/main/services/EmbeddingIndexService', () => ({
+      getInstance: () => mockEmbeddingService,
     }));
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
@@ -70,16 +73,7 @@ describe('Embeddings/Semantic IPC', () => {
         }),
       })),
     );
-    jest.doMock('../src/main/services/ChromaDBService', () => ({
-      getInstance: () => ({
-        initialize: jest.fn(async () => {}),
-        resetFolders: jest.fn(async () => {}),
-        resetFiles: jest.fn(async () => {}),
-        migrateFromJsonl: jest.fn(async () => 0),
-        cleanup: jest.fn(async () => {}),
-        resetAll: jest.fn(async () => {}),
-      }),
-    }));
+
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     const mockHistory = {
@@ -115,21 +109,30 @@ describe('Embeddings/Semantic IPC', () => {
     expect(inserted[0].id).toContain('file:');
   });
 
-  test('CLEAR_STORE calls resetAll successfully', async () => {
+  test('CLEAR_STORE clears all embeddings successfully', async () => {
     jest.resetModules();
     const logger = { error: jest.fn(), info: jest.fn(), warn: jest.fn() };
-    // Mock ChromaDBService to ensure resetAll is called
-    const resetAllCalls = [];
-    jest.doMock('../src/main/services/ChromaDBService', () => ({
-      getInstance: () => ({
-        initialize: jest.fn(async () => {}),
-        resetAll: jest.fn(async () => {
-          resetAllCalls.push(1);
-        }),
-        migrateFromJsonl: jest.fn(async () => 0),
-        cleanup: jest.fn(async () => {}),
-      }),
+
+    // Mock EmbeddingIndexService to track clear operations
+    const mockSaveData = jest.fn(async () => {});
+    const mockEmbeddingService = {
+      initialize: jest.fn(async () => {}),
+      folderEmbeddings: new Map([
+        ['folder1', {}],
+        ['folder2', {}],
+      ]),
+      fileEmbeddings: new Map([
+        ['file1', {}],
+        ['file2', {}],
+      ]),
+      saveData: mockSaveData,
+      cleanup: jest.fn(async () => {}),
+    };
+
+    jest.doMock('../src/main/services/EmbeddingIndexService', () => ({
+      getInstance: () => mockEmbeddingService,
     }));
+
     const { registerAllIpc } = require('../src/main/ipc');
     const { IPC_CHANNELS } = require('../src/shared/constants');
     registerAllIpc({
@@ -146,6 +149,8 @@ describe('Embeddings/Semantic IPC', () => {
     const handler = ipcMain._handlers.get(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE);
     const result = await handler();
     expect(result.success).toBe(true);
-    expect(resetAllCalls.length).toBe(1);
+    expect(mockEmbeddingService.folderEmbeddings.size).toBe(0);
+    expect(mockEmbeddingService.fileEmbeddings.size).toBe(0);
+    expect(mockSaveData).toHaveBeenCalledTimes(1);
   });
 });

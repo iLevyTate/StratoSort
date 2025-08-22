@@ -9,11 +9,11 @@ lerna-debug.log*
 # Production builds
 dist/
 release/
-build/
+build/*
+!build/installer.nsh
 out/
 
 # Development
-.DS_Store
 .env.local
 .env.development.local
 .env.test.local
@@ -53,6 +53,9 @@ junit.xml
 *.temp
 .cache/
 
+# ESLint
+.eslintcache
+
 # Electron
 electron-builder.yml
 !electron-builder.yml
@@ -78,3 +81,12 @@ docs/.doctrees/
 
 # Project data and local artifacts
 Documents/
+tmpUserData/
+
+# Git command outputs (prevent accidental commits)
+tatus*
+how-*
+temp_*.txt
+
+# Windows specific
+*.stackdump

@@ -6,6 +6,9 @@ on:
       - 'v*.*.*'
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -28,6 +31,22 @@ jobs:
       - name: Build Windows installer
         run: npx electron-builder --win --config electron-builder.json
 
+      - name: Verify build artifacts
+        run: |
+          if [ ! -d "release/build" ]; then
+            echo "❌ Build directory not found"
+            exit 1
+          fi
+
+          if [ ! "$(ls -A release/build/*.exe 2>/dev/null)" ]; then
+            echo "❌ No .exe files found"
+            exit 1
+          fi
+
+          echo "✅ Build artifacts verified"
+          ls -la release/build/
+        shell: bash
+
       - name: Upload artifacts (Windows)
         uses: actions/upload-artifact@v4
         with:
@@ -45,5 +64,3 @@ jobs:
             release/build/*.exe
             release/build/*.msi
             release/build/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

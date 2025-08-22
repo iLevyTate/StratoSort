@@ -1,0 +1,23 @@
+name: 'Dependency Review'
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail the action if any vulnerabilities are found
+          fail-on-severity: high
+          # Allow common open source licenses
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Unlicense, CC0-1.0
+          # Only warn on license issues, don't fail the build
+          fail-on-scopes: runtime

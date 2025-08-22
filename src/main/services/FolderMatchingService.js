@@ -49,11 +49,13 @@ class FolderMatchingService {
 
       const payload = {
         id: folderId,
-        name: folder.name,
-        description: folder.description || '',
-        path: folder.path || '',
         vector,
         model,
+        metadata: {
+          name: folder.name,
+          description: folder.description || '',
+          path: folder.path || '',
+        },
         updatedAt: new Date().toISOString(),
       };
 

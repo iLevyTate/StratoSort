@@ -77,7 +77,10 @@ class OrganizationSuggestionService {
       );
 
       // 3. Get pattern-based suggestions from user history
-      const patternMatches = this.getPatternBasedSuggestions(file);
+      const patternMatches = this.getPatternBasedSuggestions(
+        file,
+        smartFolders,
+      );
 
       // 4. Get LLM-powered alternative suggestions
       const llmSuggestions = await this.getLLMAlternativeSuggestions(
@@ -231,21 +234,26 @@ class OrganizationSuggestionService {
       // Map matches to smart folders
       const suggestions = [];
       for (const match of matches) {
+        // Extract metadata from match (match.metadata contains name, path, description)
+        const matchMetadata = match.metadata || {};
+        const matchId = match.id || match.folderId;
+
         // Find corresponding smart folder
         const smartFolder = smartFolders.find(
           (f) =>
-            f.id === match.folderId ||
-            f.name === match.name ||
-            f.path === match.path,
+            f.id === matchId ||
+            f.name === matchMetadata.name ||
+            f.path === matchMetadata.path,
         );
 
         if (smartFolder || match.score > 0.4) {
           suggestions.push({
-            folder: smartFolder?.name || match.name,
-            path: smartFolder?.path || match.path,
+            folder: smartFolder?.name || matchMetadata.name || 'General',
+            path: smartFolder?.path || matchMetadata.path || '',
             score: match.score,
             confidence: match.score,
-            description: smartFolder?.description || match.description,
+            description:
+              smartFolder?.description || matchMetadata.description || '',
             method: 'semantic_embedding',
             isSmartFolder: !!smartFolder,
           });
@@ -273,6 +281,9 @@ class OrganizationSuggestionService {
 
       if (score > 0.3) {
         const folder = this.mapFileToStrategy(file, strategy, smartFolders);
+        const matchingFolder = smartFolders.find(
+          (f) => f.name.toLowerCase() === folder.name.toLowerCase(),
+        );
         suggestions.push({
           folder: folder.name,
           path: folder.path,
@@ -281,6 +292,8 @@ class OrganizationSuggestionService {
           strategy: strategyId,
           strategyName: strategy.name,
           pattern: strategy.pattern,
+          description: matchingFolder?.description || '',
+          isSmartFolder: Boolean(matchingFolder),
           method: 'strategy_based',
         });
       }
@@ -292,7 +305,7 @@ class OrganizationSuggestionService {
   /**
    * Get pattern-based suggestions from user history
    */
-  getPatternBasedSuggestions(file) {
+  getPatternBasedSuggestions(file, smartFolders = []) {
     const suggestions = [];
 
     // Look for similar files in user patterns
@@ -300,12 +313,18 @@ class OrganizationSuggestionService {
       const similarity = this.calculatePatternSimilarity(file, pattern);
 
       if (similarity > 0.5) {
+        const matched = smartFolders.find(
+          (f) =>
+            f.name.toLowerCase() === String(data.folder || '').toLowerCase(),
+        );
         suggestions.push({
           folder: data.folder,
-          path: data.path,
+          path: matched?.path || data.path,
           score: similarity * data.confidence,
           confidence: similarity * data.confidence,
           pattern: pattern,
+          description: matched?.description || '',
+          isSmartFolder: Boolean(matched),
           method: 'user_pattern',
           usageCount: data.count,
         });
@@ -362,14 +381,52 @@ Return JSON: {
       });
 
       const parsed = JSON.parse(response.response);
-      return (parsed.suggestions || []).map((s) => ({
-        folder: s.folder,
-        score: s.confidence || 0.5,
-        confidence: s.confidence || 0.5,
-        reasoning: s.reasoning,
-        strategy: s.strategy,
-        method: 'llm_creative',
-      }));
+      return (parsed.suggestions || []).map((s) => {
+        // Validate and sanitize folder name
+        let folderName = s.folder || 'General';
+
+        // If folder name is too long or contains description text, truncate it
+        if (folderName.length > 50 || folderName.includes('To provide')) {
+          logger.warn(
+            '[OrganizationSuggestionService] LLM returned invalid folder name:',
+            {
+              original: folderName,
+              file: file.name,
+            },
+          );
+
+          // Try to extract a valid folder name
+          if (folderName.includes(':')) {
+            folderName = folderName.split(':')[0].trim();
+          } else if (folderName.includes('\\')) {
+            folderName = folderName.split('\\')[0].trim();
+          } else {
+            // Take first few words
+            folderName = folderName.split(' ').slice(0, 2).join(' ');
+          }
+
+          // Final sanitization
+          if (folderName.length > 50) {
+            folderName = 'General';
+          }
+        }
+
+        const matched = smartFolders.find(
+          (f) => f.name.toLowerCase() === folderName.toLowerCase(),
+        );
+
+        return {
+          folder: folderName,
+          path: matched?.path || undefined,
+          score: s.confidence || 0.5,
+          confidence: s.confidence || 0.5,
+          reasoning: s.reasoning,
+          strategy: s.strategy,
+          description: matched?.description || '',
+          isSmartFolder: Boolean(matched),
+          method: 'llm_creative',
+        };
+      });
     } catch (error) {
       logger.warn(
         '[OrganizationSuggestionService] LLM suggestions failed:',
@@ -391,7 +448,11 @@ Return JSON: {
       if (!key) continue;
 
       if (!uniqueSuggestions.has(key)) {
-        uniqueSuggestions.set(key, suggestion);
+        // Initialize sources list for confidence aggregation
+        uniqueSuggestions.set(key, {
+          ...suggestion,
+          sources: suggestion.source ? [suggestion.source] : [],
+        });
       } else {
         // Merge scores if duplicate
         const existing = uniqueSuggestions.get(key);
@@ -405,6 +466,13 @@ Return JSON: {
         if (suggestion.confidence > existing.confidence) {
           existing.source = suggestion.source;
           existing.method = suggestion.method;
+        }
+
+        // Merge sources array for multi-source agreement boosting
+        if (suggestion.source) {
+          const set = new Set(existing.sources || []);
+          set.add(suggestion.source);
+          existing.sources = Array.from(set);
         }
       }
     }
@@ -688,7 +756,11 @@ Return JSON: {
       .replace('{stage}', analysis.stage || 'Working')
       .replace('{main_category}', analysis.category || 'Documents')
       .replace('{subcategory}', analysis.subcategory || 'General')
-      .replace('{specific_folder}', analysis.purpose || 'Misc');
+      // Never use purpose as a folder name - it's a description field
+      .replace(
+        '{specific_folder}',
+        analysis.subcategory || analysis.project || 'Misc',
+      );
 
     // Find matching smart folder or create suggestion
     const matchingFolder = smartFolders.find(

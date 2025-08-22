@@ -87,16 +87,15 @@ describe('StratoSort React App', () => {
       expect(hookContent).toContain('handleDrop');
     });
 
-    test('file analysis supports multiple file types (via DiscoverPhase)', () => {
-      const discoverContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/phases/DiscoverPhase.jsx'),
+    test('file analysis supports multiple file types (via OrganizePhase)', () => {
+      const organizeContent = fs.readFileSync(
+        path.join(__dirname, '../src/renderer/phases/OrganizePhase.jsx'),
         'utf8',
       );
-      expect(discoverContent).toContain('getFileType');
-      expect(discoverContent).toContain('analyzeFiles');
-      expect(discoverContent.toLowerCase()).toContain('pdf');
-      expect(discoverContent.toLowerCase()).toContain('txt');
-      expect(discoverContent.toLowerCase()).toContain('docx');
+      expect(organizeContent).toContain('analyzeFiles');
+      expect(organizeContent.toLowerCase()).toContain('pdf');
+      expect(organizeContent.toLowerCase()).toContain('txt');
+      expect(organizeContent.toLowerCase()).toContain('docx');
     });
   });
 

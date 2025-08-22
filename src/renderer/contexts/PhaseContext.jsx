@@ -88,12 +88,66 @@ export function PhaseProvider({ children }) {
       if (savedState) {
         const parsed = JSON.parse(savedState);
         const age = Date.now() - parsed.timestamp;
+
+        console.log('[PHASE] Found saved workflow state:', {
+          phase: parsed.currentPhase,
+          age: Math.round(age / 1000) + 's ago',
+          selectedFiles: parsed.phaseData?.selectedFiles?.length || 0,
+          analysisResults: parsed.phaseData?.analysisResults?.length || 0,
+          organizedFiles: parsed.phaseData?.organizedFiles?.length || 0,
+          version: parsed.version || '1.0',
+        });
+
         if (age < UI_WORKFLOW.RESTORE_MAX_AGE_MS) {
-          dispatch({ type: 'RESTORE_STATE', payload: parsed });
+          // Enhanced restoration with data validation
+          const validatedPhaseData = {
+            smartFolders: Array.isArray(parsed.phaseData?.smartFolders)
+              ? parsed.phaseData.smartFolders
+              : [],
+            selectedFiles: Array.isArray(parsed.phaseData?.selectedFiles)
+              ? parsed.phaseData.selectedFiles
+              : [],
+            analysisResults: Array.isArray(parsed.phaseData?.analysisResults)
+              ? parsed.phaseData.analysisResults
+              : [],
+            organizedFiles: Array.isArray(parsed.phaseData?.organizedFiles)
+              ? parsed.phaseData.organizedFiles
+              : [],
+            fileStates:
+              parsed.phaseData?.fileStates &&
+              typeof parsed.phaseData.fileStates === 'object'
+                ? parsed.phaseData.fileStates
+                : {},
+            namingConvention:
+              parsed.phaseData?.namingConvention &&
+              typeof parsed.phaseData.namingConvention === 'object'
+                ? parsed.phaseData.namingConvention
+                : {},
+            ...parsed.phaseData,
+          };
+
+          dispatch({
+            type: 'RESTORE_STATE',
+            payload: {
+              currentPhase: parsed.currentPhase,
+              phaseData: validatedPhaseData,
+            },
+          });
+
+          console.log('[PHASE] Workflow state restored successfully');
+        } else {
+          console.log('[PHASE] Workflow state too old, not restoring');
+          localStorage.removeItem('stratosort_workflow_state');
         }
+      } else {
+        console.log('[PHASE] No saved workflow state found');
       }
     } catch (error) {
-      console.error('Failed to load workflow state:', error);
+      console.error('[PHASE] Failed to load workflow state:', error);
+      // Clear corrupted state
+      try {
+        localStorage.removeItem('stratosort_workflow_state');
+      } catch {}
     }
   }, []);
 
@@ -101,15 +155,36 @@ export function PhaseProvider({ children }) {
     const save = () => {
       try {
         if (state.currentPhase !== PHASES.WELCOME) {
+          // Enhanced persistence with more comprehensive data
           const workflowState = {
             currentPhase: state.currentPhase,
-            phaseData: state.phaseData,
+            phaseData: {
+              ...state.phaseData,
+              // Ensure critical data is always preserved
+              smartFolders: state.phaseData.smartFolders || [],
+              selectedFiles: state.phaseData.selectedFiles || [],
+              analysisResults: state.phaseData.analysisResults || [],
+              organizedFiles: state.phaseData.organizedFiles || [],
+              fileStates: state.phaseData.fileStates || {},
+              namingConvention: state.phaseData.namingConvention || {},
+            },
             timestamp: Date.now(),
+            version: '1.1', // Version for future compatibility
           };
+
           localStorage.setItem(
             'stratosort_workflow_state',
             JSON.stringify(workflowState),
           );
+
+          // Log state save for debugging persistence issues
+          console.log('[PHASE] Workflow state saved:', {
+            phase: state.currentPhase,
+            selectedFiles: state.phaseData.selectedFiles?.length || 0,
+            analysisResults: state.phaseData.analysisResults?.length || 0,
+            organizedFiles: state.phaseData.organizedFiles?.length || 0,
+            timestamp: new Date(workflowState.timestamp).toLocaleTimeString(),
+          });
         }
       } catch (error) {
         console.error('Failed to save workflow state:', error);
@@ -120,9 +195,44 @@ export function PhaseProvider({ children }) {
   }, [state.currentPhase, state.phaseData]);
 
   const advancePhase = useCallback(
-    (targetPhase, data) =>
-      dispatch({ type: 'ADVANCE_PHASE', payload: { targetPhase, data } }),
-    [dispatch],
+    (targetPhase, data) => {
+      console.log(
+        `[PHASE] Advancing from ${state.currentPhase} to ${targetPhase}`,
+      );
+      dispatch({ type: 'ADVANCE_PHASE', payload: { targetPhase, data } });
+
+      // Immediately save state when advancing phases (critical transitions)
+      setTimeout(() => {
+        try {
+          const currentState = JSON.parse(
+            localStorage.getItem('stratosort_workflow_state') || '{}',
+          );
+          const workflowState = {
+            ...currentState,
+            currentPhase: targetPhase,
+            phaseData: {
+              ...currentState.phaseData,
+              ...data,
+            },
+            timestamp: Date.now(),
+            version: '1.1',
+          };
+          localStorage.setItem(
+            'stratosort_workflow_state',
+            JSON.stringify(workflowState),
+          );
+          console.log(
+            `[PHASE] Immediately saved state for phase transition to ${targetPhase}`,
+          );
+        } catch (error) {
+          console.error(
+            '[PHASE] Failed to immediately save phase transition:',
+            error,
+          );
+        }
+      }, 50); // Small delay to ensure dispatch has completed
+    },
+    [dispatch, state.currentPhase],
   );
   const setPhaseData = useCallback(
     (key, value) =>

@@ -159,7 +159,12 @@ ${truncated}`;
 
     if (response.response) {
       try {
+        console.log('[AI-DEBUG] Raw AI response:', response.response);
         const parsedJson = JSON.parse(response.response);
+        console.log(
+          '[AI-DEBUG] Parsed AI result fields:',
+          Object.keys(parsedJson),
+        );
         if (parsedJson.date) {
           try {
             parsedJson.date = new Date(parsedJson.date)
@@ -184,6 +189,11 @@ ${truncated}`;
           ...parsedJson,
           keywords: finalKeywords,
         };
+        console.log('[AI-DEBUG] Final result fields:', Object.keys(result));
+        console.log(
+          '[AI-DEBUG] suggestedName in result:',
+          result.suggestedName,
+        );
         setCache(cacheKey, result);
         return result;
       } catch (e) {

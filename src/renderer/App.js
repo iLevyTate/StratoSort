@@ -10,7 +10,7 @@ import AppProviders from './components/AppProviders';
 import ErrorBoundary from './components/ErrorBoundary';
 import FirstRunWizard from './components/setup';
 // ProgressIndicator folded into NavigationBar
-import ModelDownloadBanner from './components/ModelDownloadBanner';
+import ModelDownloadNotifications from './components/ModelDownloadNotifications';
 import GlobalDialogHost from './components/GlobalDialogHost';
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
       <AppProviders>
         <AppShell header={<NavigationBar />}>
           <GlobalDialogHost />
-          <ModelDownloadBanner />
+          <ModelDownloadNotifications />
           <PhaseRenderer />
           <TooltipManager />
           <FirstRunWizard

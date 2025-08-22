@@ -52,11 +52,15 @@ function initializeApp() {
       </React.StrictMode>,
     );
 
-    // Remove initial loading after first paint
-    requestAnimationFrame(() => {
+    // Remove initial loading immediately after React renders
+    setTimeout(() => {
       const initialLoading = document.getElementById('initial-loading');
-      if (initialLoading) initialLoading.remove();
-    });
+      if (initialLoading) {
+        initialLoading.style.opacity = '0';
+        initialLoading.style.transition = 'opacity 200ms ease-out';
+        setTimeout(() => initialLoading.remove(), 200);
+      }
+    }, 100); // Very short delay for smoother transition
 
     console.log('[RENDERER] React application initialized successfully');
   } catch (error) {

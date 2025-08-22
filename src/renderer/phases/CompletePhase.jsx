@@ -7,6 +7,8 @@ import Button from '../components/ui/Button';
 function CompletePhase() {
   const { actions, phaseData } = usePhase();
   const organizedFiles = phaseData.organizedFiles || [];
+  const failedOrganizations = phaseData.failedOrganizations || [];
+  const totalProcessed = organizedFiles.length + failedOrganizations.length;
 
   return (
     <div className="container-narrow py-34">
@@ -14,8 +16,19 @@ function CompletePhase() {
         <div className="text-6xl mb-13">✅</div>
         <h2 className="heading-primary mb-8">Organization Complete!</h2>
         <p className="text-lg text-system-gray-600 max-w-2xl mx-auto">
-          Successfully organized {organizedFiles.length} files using AI-powered
-          analysis.
+          {failedOrganizations.length === 0 ? (
+            <>
+              Successfully organized {organizedFiles.length} files using
+              AI-powered analysis.
+            </>
+          ) : (
+            <>
+              Processed {totalProcessed} files: {organizedFiles.length}{' '}
+              organized successfully
+              {failedOrganizations.length > 0 &&
+                `, ${failedOrganizations.length} failed`}
+            </>
+          )}
         </p>
         <div className="flex items-center justify-center gap-8 mt-8">
           <button
@@ -60,16 +73,42 @@ function CompletePhase() {
           <div className="space-y-5">
             {organizedFiles.slice(0, 5).map((file, index) => (
               <div key={index} className="text-sm">
-                <span className="text-system-gray-600">✓</span>{' '}
+                <span className="text-green-600">✓</span>{' '}
                 {file.originalName || `File ${index + 1}`} →{' '}
                 {file.path || file.newLocation || 'Organized'}
               </div>
             ))}
             {organizedFiles.length > 5 && (
               <div className="text-sm text-system-gray-500 italic">
-                ...and {organizedFiles.length - 5} more files
+                ...and {organizedFiles.length - 5} more files organized
+                successfully
               </div>
             )}
+          </div>
+        </Collapsible>
+      )}
+
+      {failedOrganizations.length > 0 && (
+        <Collapsible
+          title="Failed Operations"
+          defaultOpen
+          persistKey="complete-failures"
+          contentClassName="max-h-[400px] overflow-y-auto pr-8"
+        >
+          <div className="space-y-5">
+            {failedOrganizations.map((file, index) => (
+              <div key={index} className="text-sm">
+                <span className="text-red-600">✗</span>{' '}
+                {file.source
+                  ? file.source.split(/[\\/]/).pop()
+                  : `File ${index + 1}`}
+                {file.error && (
+                  <div className="ml-5 text-xs text-red-600 mt-1">
+                    Error: {file.error}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </Collapsible>
       )}

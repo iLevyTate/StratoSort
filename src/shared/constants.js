@@ -278,6 +278,13 @@ const TIMEOUTS = {
   THROTTLE: 100,
 };
 
+// Allowed folder naming patterns
+const FOLDER_NAME_PATTERNS = [
+  /^[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)*$/, // PascalCase
+  /^[a-z][a-z0-9]+(?:[A-Z][a-z0-9]+)*$/, // camelCase
+  /^[a-z0-9]+(?:-[a-z0-9]+)*$/, // kebab-case
+];
+
 // File type mappings
 const SUPPORTED_TEXT_EXTENSIONS = [
   '.txt',
@@ -435,6 +442,7 @@ module.exports = {
   SHORTCUTS,
   LIMITS,
   TIMEOUTS,
+  FOLDER_NAME_PATTERNS,
   SUPPORTED_TEXT_EXTENSIONS,
   SUPPORTED_DOCUMENT_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,

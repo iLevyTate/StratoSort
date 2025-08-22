@@ -5,6 +5,7 @@ const {
   getOllamaModel,
   buildOllamaOptions,
 } = require('../ollamaUtils');
+const { sanitizeLLMFolderName } = require('../../shared/folderNameUtils');
 
 class OrganizationSuggestionService {
   constructor({ embeddingService, folderMatchingService, settingsService }) {
@@ -382,33 +383,16 @@ Return JSON: {
 
       const parsed = JSON.parse(response.response);
       return (parsed.suggestions || []).map((s) => {
-        // Validate and sanitize folder name
-        let folderName = s.folder || 'General';
-
-        // If folder name is too long or contains description text, truncate it
-        if (folderName.length > 50 || folderName.includes('To provide')) {
+        const original = s.folder;
+        const folderName = sanitizeLLMFolderName(original);
+        if (folderName === 'General' && original && original !== 'General') {
           logger.warn(
             '[OrganizationSuggestionService] LLM returned invalid folder name:',
             {
-              original: folderName,
+              original,
               file: file.name,
             },
           );
-
-          // Try to extract a valid folder name
-          if (folderName.includes(':')) {
-            folderName = folderName.split(':')[0].trim();
-          } else if (folderName.includes('\\')) {
-            folderName = folderName.split('\\')[0].trim();
-          } else {
-            // Take first few words
-            folderName = folderName.split(' ').slice(0, 2).join(' ');
-          }
-
-          // Final sanitization
-          if (folderName.length > 50) {
-            folderName = 'General';
-          }
         }
 
         const matched = smartFolders.find(

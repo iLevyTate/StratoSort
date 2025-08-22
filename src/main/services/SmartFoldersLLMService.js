@@ -1,4 +1,5 @@
 const { logger } = require('../../shared/logger');
+const { sanitizeLLMFolderName } = require('../../shared/folderNameUtils');
 
 async function enhanceSmartFolderWithLLM(
   folderData,
@@ -10,6 +11,12 @@ async function enhanceSmartFolderWithLLM(
       '[LLM-ENHANCEMENT] Analyzing smart folder for optimization:',
       folderData.name,
     );
+    const safeName = sanitizeLLMFolderName(folderData.name);
+    if (safeName === 'General' && folderData.name !== 'General') {
+      logger.warn('[LLM-ENHANCEMENT] Invalid folder name provided:', {
+        original: folderData.name,
+      });
+    }
 
     const existingFolderContext = existingFolders.map((f) => ({
       name: f.name,
@@ -21,7 +28,7 @@ async function enhanceSmartFolderWithLLM(
     const prompt = `You are an expert file organization system. Analyze this new smart folder and provide enhancements based on existing folder structure.
 
 NEW FOLDER:
-Name: "${folderData.name}"
+Name: "${safeName}"
 Path: "${folderData.path}"
 Description: "${folderData.description || ''}"
 
@@ -79,10 +86,16 @@ async function calculateFolderSimilarities(
   getOllamaModel,
 ) {
   try {
+    const safeCategory = sanitizeLLMFolderName(suggestedCategory);
+    if (safeCategory === 'General' && suggestedCategory !== 'General') {
+      logger.warn('[SEMANTIC] Invalid suggested category:', {
+        original: suggestedCategory,
+      });
+    }
     const similarities = [];
     for (const folder of folderCategories) {
       const prompt = `Compare these two categories for semantic similarity:
-Category 1: "${suggestedCategory}"
+Category 1: "${safeCategory}"
 Category 2: "${folder.name}" (Description: "${folder.description}")
 
 Rate similarity from 0.0 to 1.0 where:
@@ -130,7 +143,7 @@ Respond with only a number between 0.0 and 1.0:`;
           folderError.message,
         );
         const basicSimilarity = calculateBasicSimilarity(
-          suggestedCategory,
+          safeCategory,
           folder.name,
         );
         similarities.push({

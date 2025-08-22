@@ -589,7 +589,7 @@ class AutoOrganizeService {
     const { convention, dateFormat, caseConvention, separator } =
       namingConvention;
 
-    console.log('[AutoOrganizeService] Applying naming convention:', {
+    logger.debug('[AutoOrganizeService] Applying naming convention', {
       fileName: file.name,
       convention,
       dateFormat,
@@ -597,9 +597,10 @@ class AutoOrganizeService {
       separator,
     });
 
-    // Get the base name - use original file name for consistent naming convention application
-    // The suggested name from AI is for categorization, not for naming convention base
-    const baseName = file.name.replace(/\.[^/.]+$/, '');
+    // Base name should come from the analysis suggestion when available
+    // Fall back to the original file name if no suggestion exists
+    const baseName =
+      file.analysis?.suggestedName || file.name.replace(/\.[^/.]+$/, '');
     const extension = file.name.includes('.')
       ? '.' + file.name.split('.').pop()
       : '';
@@ -647,7 +648,7 @@ class AutoOrganizeService {
     newName = this.applyCaseConvention(newName, caseConvention);
 
     const finalName = newName + extension;
-    console.log('[AutoOrganizeService] Name transformation:', {
+    logger.debug('[AutoOrganizeService] Name transformation', {
       original: file.name,
       baseName,
       newName,

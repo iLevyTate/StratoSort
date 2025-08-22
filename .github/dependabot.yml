@@ -1,6 +1,22 @@
 version: 2
 updates:
-  - package-ecosystem: 'npm'
-    directory: '/' # Location of package.json, adjust if needed
+  - package-ecosystem: npm
+    directory: '/'
     schedule:
-      interval: 'daily'
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - automerge
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    labels:
+      - ci
+      - automerge

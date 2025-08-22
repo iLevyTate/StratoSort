@@ -256,11 +256,14 @@ function DiscoverPhase() {
     };
   };
 
-  const generatePreviewName = (originalName) => {
+  const generatePreviewName = (originalName, originalFileName) => {
+    // Always use the extension from the original file, not from the suggested name
+    const originalExtension =
+      originalFileName && originalFileName.includes('.')
+        ? '.' + originalFileName.split('.').pop()
+        : '';
+
     const baseName = originalName.replace(/\.[^/.]+$/, '');
-    const extension = originalName.includes('.')
-      ? '.' + originalName.split('.').pop()
-      : '';
     const today = new Date();
     let previewName = '';
     switch (namingConvention) {
@@ -282,7 +285,7 @@ function DiscoverPhase() {
       default:
         previewName = baseName;
     }
-    return applyCaseConvention(previewName, caseConvention) + extension;
+    return applyCaseConvention(previewName, caseConvention) + originalExtension;
   };
 
   const formatDate = (date, format) => {
@@ -1034,6 +1037,7 @@ function DiscoverPhase() {
               ...analysis,
               suggestedName: generatePreviewName(
                 analysis.suggestedName || fileName,
+                fileName,
               ),
               namingConvention: {
                 convention: namingConvention,

@@ -154,7 +154,7 @@
     "cross-env": "^10.0.0",
     "crypto-browserify": "^3.12.1",
     "css-loader": "^7.1.2",
-    "css-minimizer-webpack-plugin": "^5.0.1",
+    "css-minimizer-webpack-plugin": "^7.0.2",
     "cssnano": "^7.1.0",
     "detect-port": "^2.1.0",
     "electron": "^37.3.1",

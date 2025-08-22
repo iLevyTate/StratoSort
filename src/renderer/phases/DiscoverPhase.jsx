@@ -1,18 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { PHASES, RENDERER_LIMITS } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useConfirmDialog, useDragAndDrop } from '../hooks';
 import { Collapsible, Button, Input, Select } from '../components/ui';
-import AnalysisDetails from '../components/AnalysisDetails';
+// AnalysisDetails removed in current UI simplification
 import AnalysisHistoryModal from '../components/AnalysisHistoryModal';
 import {
   NamingSettings,
   SelectionControls,
   DragAndDropZone,
-  AnalysisResultsList,
 } from '../components/discover';
-import AnalysisProgressDisplay from '../components/AnalysisProgressDisplay';
+// Analysis progress display moved to OrganizePhase
+// Organize-related imports removed - handled in OrganizePhase
 
 function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
@@ -39,6 +39,9 @@ function DiscoverPhase() {
   const hasResumedRef = useRef(false);
   const analysisLockRef = useRef(false); // Add analysis lock to prevent multiple simultaneous calls
   const [globalAnalysisActive, setGlobalAnalysisActive] = useState(false); // Global analysis state
+  const isFirstMountRef = useRef(true);
+
+  // Remove organize-related state - this belongs in OrganizePhase
 
   useEffect(() => {
     const persistedResults = phaseData.analysisResults || [];
@@ -52,6 +55,25 @@ function DiscoverPhase() {
     };
     const persistedCurrent = phaseData.currentAnalysisFile || '';
 
+    // On first mount, always clear any stuck analysis state
+    if (isFirstMountRef.current && persistedIsAnalyzing) {
+      console.log('[ANALYSIS] Clearing analysis state on first mount');
+      actions.setPhaseData('isAnalyzing', false);
+      actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
+      actions.setPhaseData('currentAnalysisFile', '');
+      setIsAnalyzing(false);
+      setAnalysisProgress({ current: 0, total: 0 });
+      setCurrentAnalysisFile('');
+      analysisLockRef.current = false;
+      setGlobalAnalysisActive(false);
+      isFirstMountRef.current = false;
+
+      // Clear any stuck localStorage state
+      try {
+        localStorage.removeItem('stratosort_workflow_state');
+      } catch {}
+    }
+
     // Restore persisted state regardless of whether results exist yet
     setSelectedFiles(persistedFiles);
     setFileStates(persistedStates);
@@ -60,20 +82,31 @@ function DiscoverPhase() {
     setCaseConvention(persistedNaming.caseConvention || 'kebab-case');
     setSeparator(persistedNaming.separator || '-');
     if (persistedResults.length > 0) setAnalysisResults(persistedResults);
-    if (persistedIsAnalyzing) {
+
+    // Don't restore analysis state if we just cleared it on first mount
+    if (!isFirstMountRef.current && persistedIsAnalyzing) {
       // Check if analysis state is actually valid (not stuck)
       const lastActivity = persistedProgress.lastActivity || Date.now();
       const timeSinceActivity = Date.now() - lastActivity;
-      const isStuck = timeSinceActivity > 2 * 60 * 1000; // 2 minutes
+      const isStuck = timeSinceActivity > 30 * 1000; // 30 seconds for fresh mount
 
-      if (isStuck) {
+      if (isStuck || persistedProgress.total === 0) {
         console.log(
-          '[ANALYSIS] Detected stuck analysis state on mount, resetting...',
+          '[ANALYSIS] Detected stuck/invalid analysis state on mount, resetting...',
         );
         // Don't restore stuck analysis state
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
         actions.setPhaseData('currentAnalysisFile', '');
+
+        // Clear local state
+        setIsAnalyzing(false);
+        setAnalysisProgress({ current: 0, total: 0 });
+        setCurrentAnalysisFile('');
+
+        // Clear the analysis lock
+        analysisLockRef.current = false;
+        setGlobalAnalysisActive(false);
 
         // Clear any stuck localStorage state
         try {
@@ -108,8 +141,15 @@ function DiscoverPhase() {
           3000,
           'analysis-resume',
         );
-        // Kick off analysis for remaining files only
-        analyzeFiles(remaining);
+        // Save remaining files and advance to Organize where analysis runs
+        actions.setPhaseData('selectedFiles', remaining);
+        actions.setPhaseData('namingConvention', {
+          convention: namingConvention,
+          dateFormat,
+          caseConvention,
+          separator,
+        });
+        actions.advancePhase(PHASES.ORGANIZE);
       } else {
         hasResumedRef.current = true;
         // Nothing left to do; clear analyzing flag
@@ -214,46 +254,6 @@ function DiscoverPhase() {
         [filePath]: { state, timestamp: new Date().toISOString(), ...metadata },
       });
     }
-  };
-
-  const getFileState = (filePath) => fileStates[filePath]?.state || 'pending';
-
-  const getFileStateDisplay = (filePath, hasAnalysis) => {
-    const state = getFileState(filePath);
-    if (state === 'analyzing')
-      return {
-        icon: '🔄',
-        label: 'Analyzing...',
-        color: 'text-blue-600',
-        spinning: true,
-      };
-    if (state === 'error')
-      return {
-        icon: '❌',
-        label: 'Error',
-        color: 'text-red-600',
-        spinning: false,
-      };
-    if (hasAnalysis && state === 'ready')
-      return {
-        icon: '✅',
-        label: 'Ready',
-        color: 'text-green-600',
-        spinning: false,
-      };
-    if (state === 'pending')
-      return {
-        icon: '⏳',
-        label: 'Pending',
-        color: 'text-yellow-600',
-        spinning: false,
-      };
-    return {
-      icon: '❌',
-      label: 'Failed',
-      color: 'text-red-600',
-      spinning: false,
-    };
   };
 
   const generatePreviewName = (originalName) => {
@@ -398,7 +398,17 @@ function DiscoverPhase() {
         );
       }
 
-      await analyzeFiles(enhancedFiles);
+      // Clear previous analysis and move to Organize phase; analysis runs there now
+      actions.setPhaseData('analysisResults', []);
+      actions.setPhaseData('fileStates', {});
+      actions.setPhaseData('selectedFiles', enhancedFiles);
+      actions.setPhaseData('namingConvention', {
+        convention: namingConvention,
+        dateFormat,
+        caseConvention,
+        separator,
+      });
+      actions.advancePhase(PHASES.ORGANIZE);
     }
   };
 
@@ -586,8 +596,17 @@ function DiscoverPhase() {
           );
         }
 
-        // Only analyze the new files
-        await analyzeFiles(enhancedFiles);
+        // Clear previous analysis and pass the new files to Organize for analysis
+        actions.setPhaseData('analysisResults', []);
+        actions.setPhaseData('fileStates', {});
+        actions.setPhaseData('selectedFiles', enhancedFiles);
+        actions.setPhaseData('namingConvention', {
+          convention: namingConvention,
+          dateFormat,
+          caseConvention,
+          separator,
+        });
+        actions.advancePhase(PHASES.ORGANIZE);
       } else {
         addNotification('No files selected', 'info', 2000, 'file-selection');
       }
@@ -727,8 +746,17 @@ function DiscoverPhase() {
               'files-added',
             );
           }
-
-          await analyzeFiles(enhancedFiles);
+          // Clear previous analysis and pass files to Organize for analysis
+          actions.setPhaseData('analysisResults', []);
+          actions.setPhaseData('fileStates', {});
+          actions.setPhaseData('selectedFiles', enhancedFiles);
+          actions.setPhaseData('namingConvention', {
+            convention: namingConvention,
+            dateFormat,
+            caseConvention,
+            separator,
+          });
+          actions.advancePhase(PHASES.ORGANIZE);
         } else {
           addNotification(
             'No files found in the selected folder',
@@ -841,522 +869,17 @@ function DiscoverPhase() {
     }
   };
 
-  const analyzeFiles = async (files) => {
-    if (!files || files.length === 0) return;
+  // Analysis logic moved to OrganizePhase - DiscoverPhase now focuses on file selection only
 
-    console.log('[ANALYSIS] analyzeFiles called with:', {
-      filesCount: files.length,
-      isAnalyzing,
-      analysisProgress,
-      hasLastActivity: !!analysisProgress.lastActivity,
-      timeSinceActivity: analysisProgress.lastActivity
-        ? Date.now() - analysisProgress.lastActivity
-        : 'N/A',
-      lockStatus: analysisLockRef.current,
-    });
-
-    // Prevent multiple simultaneous analysis calls (silent)
-    if (analysisLockRef.current || globalAnalysisActive) {
-      console.log(
-        '[ANALYSIS] Analysis already in progress, skipping duplicate call',
-        {
-          lockRef: analysisLockRef.current,
-          globalState: globalAnalysisActive,
-        },
-      );
-      return;
-    }
-
-    // Additional check: prevent analysis if UI shows it's already running (silent)
-    if (isAnalyzing) {
-      console.log(
-        '[ANALYSIS] UI shows analysis already in progress, skipping call',
-      );
-      return;
-    }
-
-    // Set the lock immediately
-    analysisLockRef.current = true;
-    setGlobalAnalysisActive(true);
-    console.log('[ANALYSIS] Analysis lock acquired and global state set');
-
-    // Small delay to ensure lock is properly established
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    // Set a timeout to release the lock after 5 minutes (safety measure)
-    const lockTimeout = setTimeout(
-      () => {
-        if (analysisLockRef.current) {
-          console.warn(
-            '[ANALYSIS] Analysis lock timeout reached, forcing release',
-          );
-          analysisLockRef.current = false;
-        }
-      },
-      5 * 60 * 1000,
-    ); // 5 minutes
-
-    // Force reset any existing analysis state to ensure clean start
-    if (isAnalyzing || analysisProgress.total > 0) {
-      console.log(
-        '[ANALYSIS] Force resetting existing analysis state for clean start',
-      );
-      setIsAnalyzing(false);
-      setCurrentAnalysisFile('');
-      setAnalysisProgress({ current: 0, total: 0 });
-      actions.setPhaseData('isAnalyzing', false);
-      actions.setPhaseData('currentAnalysisFile', '');
-      actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
-    }
-
-    // Remove the old blocking logic since we now have the lock system
-    // The lock check at the beginning is sufficient
-
-    setIsAnalyzing(true);
-    const initialProgress = {
-      current: 0,
-      total: files.length,
-      lastActivity: Date.now(),
-    };
-    setAnalysisProgress(initialProgress);
-    setCurrentAnalysisFile('');
-    actions.setPhaseData('isAnalyzing', true);
-    actions.setPhaseData('analysisProgress', initialProgress);
-    actions.setPhaseData('currentAnalysisFile', '');
-
-    console.log('[ANALYSIS] Started analysis with progress:', initialProgress);
-
-    // Set up progress heartbeat to prevent stuck states
-    const heartbeatInterval = setInterval(() => {
-      if (isAnalyzing) {
-        const currentProgress = {
-          current: analysisProgress.current,
-          total: analysisProgress.total,
-          lastActivity: Date.now(),
-        };
-
-        // Validate progress before updating
-        if (validateProgressState(currentProgress)) {
-          setAnalysisProgress(currentProgress);
-          actions.setPhaseData('analysisProgress', currentProgress);
-        } else {
-          console.warn(
-            '[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis',
-          );
-          clearInterval(heartbeatInterval);
-          resetAnalysisState();
-        }
-      }
-    }, 30000); // Update every 30 seconds
-
-    const results = [];
-    let maxConcurrent = 3;
-    try {
-      const persistedSettings = await window.electronAPI.settings.get();
-      if (
-        persistedSettings &&
-        typeof persistedSettings.maxConcurrentAnalysis !== 'undefined'
-      ) {
-        maxConcurrent = Number(persistedSettings.maxConcurrentAnalysis);
-      }
-    } catch {}
-
-    const concurrency = Math.max(1, Math.min(Number(maxConcurrent) || 3, 8));
-
-    try {
-      // Single notification for analysis start
-      addNotification(
-        `Starting AI analysis of ${files.length} files...`,
-        'info',
-        3000,
-        'analysis-start',
-      );
-
-      // Create a Set to track processed files and prevent duplicates
-      const processedFiles = new Set();
-      const fileQueue = [...files];
-      let completedCount = 0;
-
-      // Create a single worker function that processes files sequentially
-      const processFile = async (file) => {
-        // Skip if already processed
-        if (processedFiles.has(file.path)) {
-          return;
-        }
-
-        const fileName = file.name || file.path.split(/[\\/]/).pop();
-
-        // Mark as processing
-        processedFiles.add(file.path);
-        updateFileState(file.path, 'analyzing', { fileName });
-
-        try {
-          // Update progress atomically with proper lastActivity tracking
-          completedCount++;
-          const progress = {
-            current: completedCount,
-            total: files.length,
-            lastActivity: Date.now(),
-          };
-
-          // Validate progress before updating
-          if (validateProgressState(progress)) {
-            // Update all progress states atomically
-            setAnalysisProgress(progress);
-            setCurrentAnalysisFile(fileName);
-            actions.setPhaseData('analysisProgress', progress);
-            actions.setPhaseData('currentAnalysisFile', fileName);
-          } else {
-            console.warn(
-              '[ANALYSIS] Invalid progress state detected, skipping update',
-            );
-          }
-
-          const fileInfo = {
-            ...file,
-            size: file.size || 0,
-            created: file.created,
-            modified: file.modified,
-          };
-
-          const analysis = await Promise.race([
-            window.electronAPI.files.analyze(file.path),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error('Analysis timeout after 3 minutes')),
-                RENDERER_LIMITS.ANALYSIS_TIMEOUT_MS,
-              ),
-            ),
-          ]);
-
-          if (analysis && !analysis.error) {
-            const enhancedAnalysis = {
-              ...analysis,
-              suggestedName: generatePreviewName(
-                analysis.suggestedName || fileName,
-              ),
-              namingConvention: {
-                convention: namingConvention,
-                dateFormat,
-                caseConvention,
-                separator,
-              },
-            };
-            const result = {
-              ...fileInfo,
-              analysis: enhancedAnalysis,
-              status: 'analyzed',
-              analyzedAt: new Date().toISOString(),
-            };
-            results.push(result);
-            updateFileState(file.path, 'ready', {
-              analysis: enhancedAnalysis,
-              analyzedAt: new Date().toISOString(),
-            });
-          } else {
-            const result = {
-              ...fileInfo,
-              analysis: null,
-              error: analysis?.error || 'Analysis failed',
-              status: 'failed',
-              analyzedAt: new Date().toISOString(),
-            };
-            results.push(result);
-            updateFileState(file.path, 'error', {
-              error: analysis?.error || 'Analysis failed',
-              analyzedAt: new Date().toISOString(),
-            });
-          }
-        } catch (error) {
-          const result = {
-            ...file,
-            analysis: null,
-            error: error.message,
-            status: 'failed',
-            analyzedAt: new Date().toISOString(),
-          };
-          results.push(result);
-          updateFileState(file.path, 'error', {
-            error: error.message,
-            analyzedAt: new Date().toISOString(),
-          });
-        }
-
-        // Persist progress to localStorage
-        try {
-          const workflowState = {
-            currentPhase: phaseData.currentPhase || PHASES.DISCOVER,
-            phaseData: {
-              ...phaseData,
-              isAnalyzing: true,
-              analysisProgress: {
-                current: completedCount,
-                total: files.length,
-              },
-              currentAnalysisFile: fileName,
-            },
-            timestamp: Date.now(),
-          };
-          localStorage.setItem(
-            'stratosort_workflow_state',
-            JSON.stringify(workflowState),
-          );
-        } catch {}
-      };
-
-      // Process files with controlled concurrency
-      const processBatch = async (batch) => {
-        try {
-          const promises = batch.map((file) => processFile(file));
-          await Promise.all(promises);
-
-          // Update lastActivity after each batch to prevent stuck state
-          const currentProgress = {
-            current: completedCount,
-            total: files.length,
-            lastActivity: Date.now(),
-          };
-
-          // Validate progress before updating
-          if (validateProgressState(currentProgress)) {
-            setAnalysisProgress(currentProgress);
-            actions.setPhaseData('analysisProgress', currentProgress);
-          } else {
-            console.warn(
-              '[ANALYSIS] Invalid batch progress state detected, skipping update',
-            );
-          }
-        } catch (error) {
-          console.error('[ANALYSIS] Batch processing error:', error);
-          // Don't fail the entire analysis for batch errors
-        }
-      };
-
-      // Process files in batches to control concurrency
-      for (let i = 0; i < fileQueue.length; i += concurrency) {
-        const batch = fileQueue.slice(i, i + concurrency);
-        await processBatch(batch);
-      }
-
-      // Merge with any existing results (important for resume)
-      const resultsByPath = new Map(
-        (analysisResults || []).map((r) => [r.path, r]),
-      );
-      results.forEach((r) => resultsByPath.set(r.path, r));
-      const mergedResults = Array.from(resultsByPath.values());
-      setAnalysisResults(mergedResults);
-
-      // Merge file states (preserve previous states, update changed)
-      const mergedStates = { ...(fileStates || {}) };
-      results.forEach((result) => {
-        if (result.analysis && !result.error) {
-          mergedStates[result.path] = {
-            state: 'ready',
-            timestamp: new Date().toISOString(),
-            analysis: result.analysis,
-            analyzedAt: result.analyzedAt,
-          };
-        } else if (result.error) {
-          mergedStates[result.path] = {
-            state: 'error',
-            timestamp: new Date().toISOString(),
-            error: result.error,
-            analyzedAt: new Date().toISOString(),
-          };
-        }
-      });
-      setFileStates(mergedStates);
-
-      actions.setPhaseData('analysisResults', mergedResults);
-      actions.setPhaseData('fileStates', mergedStates);
-      actions.setPhaseData('namingConvention', {
-        convention: namingConvention,
-        dateFormat,
-        caseConvention,
-        separator,
-      });
-
-      const successCount = results.filter((r) => r.analysis).length;
-      const failureCount = results.length - successCount;
-
-      // Consolidated completion notification
-      if (successCount > 0 && failureCount === 0) {
-        addNotification(
-          `🎉 Analysis complete! ${successCount} files ready for organization`,
-          'success',
-          4000,
-          'analysis-complete',
-        );
-        setTimeout(() => {
-          addNotification(
-            '📂 Proceeding to organize phase...',
-            'info',
-            3000,
-            'phase-transition',
-          );
-          actions.advancePhase(PHASES.ORGANIZE);
-        }, 2000);
-      } else if (successCount > 0 && failureCount > 0) {
-        addNotification(
-          `Analysis complete: ${successCount} successful, ${failureCount} failed`,
-          'warning',
-          4000,
-          'analysis-complete',
-        );
-        setTimeout(() => {
-          addNotification(
-            '📂 Proceeding to organize phase...',
-            'info',
-            3000,
-            'phase-transition',
-          );
-          actions.advancePhase(PHASES.ORGANIZE);
-        }, 2000);
-      } else if (failureCount > 0) {
-        addNotification(
-          `Analysis failed for all ${failureCount} files`,
-          'error',
-          5000,
-          'analysis-complete',
-        );
-      }
-    } catch (error) {
-      addNotification(
-        `Analysis process failed: ${error.message}`,
-        'error',
-        5000,
-        'analysis-error',
-      );
-    } finally {
-      // Always reset analysis state, regardless of success/failure
-      clearInterval(heartbeatInterval); // Clean up heartbeat
-      setIsAnalyzing(false);
-      setCurrentAnalysisFile('');
-      setAnalysisProgress({ current: 0, total: 0 });
-      actions.setPhaseData('isAnalyzing', false);
-      actions.setPhaseData('currentAnalysisFile', '');
-      actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
-
-      // Release the analysis lock
-      analysisLockRef.current = false;
-      setGlobalAnalysisActive(false);
-      clearTimeout(lockTimeout); // Clear the timeout
-
-      // Clear any stuck localStorage state
-      try {
-        localStorage.removeItem('stratosort_workflow_state');
-      } catch {}
-    }
-  };
-
-  const resetAnalysisState = () => {
-    setIsAnalyzing(false);
-    setCurrentAnalysisFile('');
-    setAnalysisProgress({ current: 0, total: 0 });
-    actions.setPhaseData('isAnalyzing', false);
-    actions.setPhaseData('currentAnalysisFile', '');
-    actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
-
-    // Release the analysis lock
-    analysisLockRef.current = false;
-    setGlobalAnalysisActive(false);
-
-    // Clear any stuck localStorage state
-    try {
-      localStorage.removeItem('stratosort_workflow_state');
-    } catch {}
-
-    addNotification(
-      'Analysis state reset successfully',
-      'info',
-      2000,
-      'analysis-reset',
-    );
-  };
-
-  const forceReleaseAnalysisLock = () => {
-    console.log('[ANALYSIS] Manually releasing analysis lock');
-    analysisLockRef.current = false;
-    setGlobalAnalysisActive(false);
-    addNotification(
-      'Analysis lock manually released',
-      'info',
-      2000,
-      'analysis-reset',
-    );
-  };
-
-  const validateProgressState = (progress) => {
-    // Ensure progress state is valid
-    if (!progress || typeof progress !== 'object') return false;
-    if (
-      typeof progress.current !== 'number' ||
-      typeof progress.total !== 'number'
-    )
-      return false;
-    if (progress.current < 0 || progress.total < 0) return false;
-    if (progress.current > progress.total) return false;
-    if (!progress.lastActivity || typeof progress.lastActivity !== 'number')
-      return false;
-
-    // Check if progress is too old (more than 10 minutes)
-    const timeSinceActivity = Date.now() - progress.lastActivity;
-    if (timeSinceActivity > 10 * 60 * 1000) return false;
-
-    return true;
-  };
-
-  const clearAnalysisQueue = () => {
-    setSelectedFiles([]);
-    setAnalysisResults([]);
-    setFileStates({});
-    setAnalysisProgress({ current: 0, total: 0 });
-    setCurrentAnalysisFile('');
-    actions.setPhaseData('selectedFiles', []);
-    actions.setPhaseData('analysisResults', []);
-    actions.setPhaseData('fileStates', {});
-    actions.setPhaseData('isAnalyzing', false);
-    actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
-    actions.setPhaseData('currentAnalysisFile', '');
-    addNotification('Analysis queue cleared', 'info', 2000, 'queue-management');
-  };
-
-  const removeFileFromQueue = (filePath) => {
-    setSelectedFiles((prev) => prev.filter((f) => f.path !== filePath));
-    setAnalysisResults((prev) => prev.filter((f) => f.path !== filePath));
-    setFileStates((prev) => {
-      const newStates = { ...prev };
-      delete newStates[filePath];
-      return newStates;
-    });
-
-    // Update phase data
-    const newSelectedFiles = selectedFiles.filter((f) => f.path !== filePath);
-    const newAnalysisResults = analysisResults.filter(
-      (f) => f.path !== filePath,
-    );
-    const newFileStates = { ...fileStates };
-    delete newFileStates[filePath];
-
-    actions.setPhaseData('selectedFiles', newSelectedFiles);
-    actions.setPhaseData('analysisResults', newAnalysisResults);
-    actions.setPhaseData('fileStates', newFileStates);
-
-    addNotification(
-      'File removed from queue',
-      'info',
-      2000,
-      'queue-management',
-    );
-  };
+  // Analysis-related functions moved to OrganizePhase
 
   return (
     <div className="w-full">
       <div className="mb-21 text-center">
-        <h2 className="heading-primary">🔍 Discover & Analyze</h2>
+        <h2 className="heading-primary">🔍 Discover & Organize</h2>
         <p className="text-lg text-system-gray-600 leading-relaxed max-w-2xl mx-auto">
-          Select files or scan a folder, then let StratoSort analyze and prepare
-          them for organization.
+          Select files or scan a folder, analyze them with AI, and organize them
+          into smart folders.
         </p>
       </div>
       <div className="flex items-center justify-center gap-8 -mt-8 mb-13">
@@ -1438,73 +961,46 @@ function DiscoverPhase() {
           <div className="mt-4 flex items-center justify-between p-8 bg-system-gray-50 rounded-lg border border-system-gray-200">
             <div className="text-sm text-system-gray-600">
               <span className="font-medium">{selectedFiles.length}</span> file
-              {selectedFiles.length !== 1 ? 's' : ''} in queue
-              {analysisResults.length > 0 && (
-                <span className="ml-2">
-                  •{' '}
-                  <span className="font-medium">
-                    {analysisResults.filter((r) => r.analysis).length}
-                  </span>{' '}
-                  analyzed
-                  {analysisResults.filter((r) => r.error).length > 0 && (
-                    <span className="ml-2 text-red-600">
-                      •{' '}
-                      <span className="font-medium">
-                        {analysisResults.filter((r) => r.error).length}
-                      </span>{' '}
-                      failed
-                    </span>
-                  )}
-                </span>
-              )}
-              {analysisLockRef.current && (
-                <span className="ml-2 text-orange-600">
-                  • 🔒 Analysis locked
-                </span>
-              )}
+              {selectedFiles.length !== 1 ? 's' : ''} selected for organization
             </div>
             <div className="flex gap-5">
               <button
-                onClick={clearAnalysisQueue}
+                onClick={() => {
+                  setSelectedFiles([]);
+                  actions.setPhaseData('selectedFiles', []);
+                  addNotification('File selection cleared', 'info', 2000);
+                }}
                 className="px-8 py-5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-                title="Clear all files from the analysis queue"
+                title="Clear all selected files"
               >
-                Clear Queue
+                Clear Files
               </button>
-              {isAnalyzing && (
-                <button
-                  onClick={() => {
-                    setIsAnalyzing(false);
-                    setCurrentAnalysisFile('');
-                    setAnalysisProgress({ current: 0, total: 0 });
-                    actions.setPhaseData('isAnalyzing', false);
-                    actions.setPhaseData('currentAnalysisFile', '');
-                    actions.setPhaseData('analysisProgress', {
-                      current: 0,
-                      total: 0,
-                    });
-                    addNotification(
-                      'Analysis state reset',
-                      'info',
-                      2000,
-                      'analysis-reset',
-                    );
-                  }}
-                  className="px-8 py-5 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
-                  title="Reset stuck analysis state"
-                >
-                  Reset Analysis
-                </button>
-              )}
-              {analysisLockRef.current && !isAnalyzing && (
-                <button
-                  onClick={forceReleaseAnalysisLock}
-                  className="px-8 py-5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
-                  title="Release stuck analysis lock"
-                >
-                  Release Lock
-                </button>
-              )}
+              <Button
+                onClick={() => {
+                  // Clear any previous analysis results for fresh start
+                  actions.setPhaseData('analysisResults', []);
+                  actions.setPhaseData('fileStates', {});
+
+                  // Save files to phase data and advance to organize phase
+                  actions.setPhaseData('selectedFiles', selectedFiles);
+                  actions.setPhaseData('namingConvention', {
+                    convention: namingConvention,
+                    dateFormat,
+                    caseConvention,
+                    separator,
+                  });
+                  actions.advancePhase(PHASES.ORGANIZE);
+                  addNotification(
+                    `📂 Moving to Organize phase with ${selectedFiles.length} files`,
+                    'info',
+                    3000,
+                  );
+                }}
+                variant="primary"
+                className="px-8 py-5"
+              >
+                Proceed to Organize →
+              </Button>
             </div>
           </div>
         )}
@@ -1514,59 +1010,8 @@ function DiscoverPhase() {
         <DragAndDropZone isDragging={isDragging} dragProps={dragProps} />
       </Collapsible>
 
-      {isAnalyzing && (
-        <Collapsible
-          title="Analysis Progress"
-          defaultOpen
-          persistKey="discover-progress"
-        >
-          <AnalysisProgressDisplay
-            analysisProgress={analysisProgress}
-            currentAnalysisFile={currentAnalysisFile}
-            isAnalyzing={isAnalyzing}
-            className="mb-4"
-          />
-          {/* Add reset button if analysis appears stuck */}
-          {analysisProgress.lastActivity &&
-            Date.now() - analysisProgress.lastActivity > 2 * 60 * 1000 && (
-              <div className="mt-8 p-8 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-5">
-                    <span className="text-amber-600">⚠️</span>
-                    <span className="text-sm text-amber-800">
-                      Analysis appears to be stuck. Last activity:{' '}
-                      {new Date(
-                        analysisProgress.lastActivity,
-                      ).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <button
-                    onClick={resetAnalysisState}
-                    className="px-8 py-5 text-sm bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
-                    title="Reset stuck analysis state"
-                  >
-                    Reset Analysis
-                  </button>
-                </div>
-              </div>
-            )}
-        </Collapsible>
-      )}
+      {/* Analysis progress and controls moved to OrganizePhase */}
 
-      {analysisResults.length > 0 && (
-        <Collapsible
-          title="Analysis Results"
-          defaultOpen
-          persistKey="discover-results"
-          contentClassName="max-h-[480px] overflow-y-auto pr-8"
-        >
-          <AnalysisResultsList
-            results={analysisResults}
-            onFileAction={handleFileAction}
-            getFileStateDisplay={getFileStateDisplay}
-          />
-        </Collapsible>
-      )}
       <ConfirmDialog />
       {showAnalysisHistory && (
         <AnalysisHistoryModal

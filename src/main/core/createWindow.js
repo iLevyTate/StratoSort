@@ -35,8 +35,8 @@ function createMainWindow() {
     minHeight: 600,
     // Use native frame with dark theme
     frame: true,
-    backgroundColor: '#0f0f10', // Dark background while loading
-    darkTheme: true, // Force dark theme on Windows
+    backgroundColor: '#ffffff', // Clean white background while loading
+    darkTheme: false, // Use system theme
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -137,6 +137,33 @@ function createMainWindow() {
       win.loadFile(path.join(__dirname, '../../renderer/index.html'));
     });
   }
+
+  // Development diagnostics: open DevTools and log load lifecycle
+  if (isDev) {
+    try {
+      win.webContents.openDevTools({ mode: 'detach' });
+    } catch {}
+  }
+
+  win.webContents.on('did-finish-load', () => {
+    try {
+      logger.info('[WINDOW] did-finish-load fired');
+    } catch {}
+  });
+
+  win.webContents.on(
+    'did-fail-load',
+    (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      try {
+        logger.error('[WINDOW] did-fail-load', {
+          errorCode,
+          errorDescription,
+          validatedURL,
+          isMainFrame,
+        });
+      } catch {}
+    },
+  );
 
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';

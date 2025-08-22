@@ -137,8 +137,10 @@ class ErrorHandler {
   determineSeverity(errorType) {
     switch (errorType) {
       case ERROR_TYPES.PERMISSION_DENIED:
-      case ERROR_TYPES.UNKNOWN:
         return 'critical';
+      case ERROR_TYPES.UNKNOWN:
+        // Treat unknown errors as non-fatal by default to avoid auto-quits
+        return 'error';
       case ERROR_TYPES.FILE_NOT_FOUND:
       case ERROR_TYPES.AI_UNAVAILABLE:
         return 'error';
@@ -162,20 +164,46 @@ class ErrorHandler {
       stack: error?.stack,
     });
 
-    // Show error dialog
-    const response = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Critical Error',
-      message: 'Stratosort encountered a critical error',
-      detail: `${message}\n\nWould you like to restart the application?`,
-      buttons: ['Restart', 'Quit'],
-      defaultId: 0,
-    });
-
-    if (response.response === 0) {
-      app.relaunch();
+    // In development, never auto-quit; log and return
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('app:error', {
+            message: `${message} (development mode: not quitting)`,
+            type: 'error',
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch {}
+      return;
     }
-    app.quit();
+
+    // Show error dialog in production; quit only on explicit choice
+    try {
+      const response = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Critical Error',
+        message: 'Stratosort encountered a critical error',
+        detail: `${message}\n\nWould you like to restart the application?`,
+        buttons: ['Restart', 'Quit', 'Ignore'],
+        defaultId: 0,
+        cancelId: 2,
+      });
+
+      if (response.response === 0) {
+        app.relaunch();
+        app.exit(0);
+        return;
+      }
+      if (response.response === 1) {
+        app.quit();
+        return;
+      }
+      // Ignore: keep running
+    } catch {
+      // If we cannot show a dialog, keep running to avoid crash loops
+    }
   }
 
   /**

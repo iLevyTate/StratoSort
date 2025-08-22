@@ -7,26 +7,57 @@
     <!-- CSP is set by the main process. Keeping meta minimal to avoid conflicts. -->
   </head>
   <body>
-    <!-- Initial loading screen -->
+    <!-- Minimal loading screen -->
     <div
       id="initial-loading"
-      class="h-screen flex items-center justify-center font-sans"
+      style="
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #ffffff;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      "
     >
-      <section class="text-center max-w-[400px]">
-        <div class="animate-float text-[48px] mb-4" aria-hidden="true">🚀</div>
-        <h1 class="text-system-gray-800 m-0 text-xl font-semibold">
-          Loading StratoSort
-        </h1>
-        <p class="text-system-gray-500 mt-2 text-sm">
-          AI-Powered File Organization
-        </p>
-        <div class="mt-6">
-          <div
-            class="loading-spinner w-6 h-6 border-2 border-system-gray-200 border-b-stratosort-blue rounded-full mx-auto"
-          ></div>
+      <div style="text-align: center">
+        <!-- Elegant StratoSort logo/wordmark -->
+        <div
+          style="
+            font-size: 32px;
+            font-weight: 300;
+            color: #1a1a1a;
+            margin-bottom: 24px;
+            letter-spacing: -0.5px;
+          "
+        >
+          StratoSort
         </div>
-      </section>
+        <!-- Minimal progress indicator -->
+        <div
+          style="
+            width: 24px;
+            height: 24px;
+            border: 2px solid #e5e5e5;
+            border-top: 2px solid #007aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+          "
+        ></div>
+      </div>
     </div>
+
+    <style>
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
 
     <!-- React root container (must be empty for React to work) -->
     <div id="root"></div>

@@ -15,6 +15,10 @@ const isDev = process.env.NODE_ENV === 'development';
 // Logging utility
 const { logger } = require('../shared/logger');
 
+// Initialize centralized error handling (logs, dialogs, crash diagnostics)
+// Temporarily disabled to debug crash
+// const errorHandler = require('./errors/ErrorHandler');
+
 // Import error handling system (not needed directly in this file)
 
 const { scanDirectory } = require('./folderScanner');
@@ -171,10 +175,16 @@ try {
   // Disable features that commonly cause issues
   app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 
-  // Add fallback for WebGL
-  app.commandLine.appendSwitch('use-gl', 'swiftshader');
+  // Don't use SwiftShader as it conflicts with ANGLE GL backend
+  // Only use SwiftShader as fallback if explicitly needed
+  if (process.env.FORCE_SOFTWARE_RENDER === 'true') {
+    app.commandLine.appendSwitch('use-gl', 'swiftshader');
+    logger.info('[GPU] Software rendering forced with SwiftShader');
+  }
 
-  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}, WebGL fallback enabled`);
+  logger.info(
+    `[GPU] Flags set: ANGLE=${angleBackend}, Hardware acceleration enabled`,
+  );
 } catch (e) {
   try {
     logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
@@ -505,40 +515,45 @@ if (!gotTheLock) {
     }
   });
 
-  // Production optimizations - ensure GPU acceleration
+  // Production optimizations - additional GPU settings
   if (!isDev) {
-    // Production GPU optimizations
-    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    // Production GPU optimizations (avoid duplicating flags already set above)
     app.commandLine.appendSwitch(
       'enable-gpu-memory-buffer-compositor-resources',
     );
     app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-    app.commandLine.appendSwitch('ignore-gpu-blacklist');
-    app.commandLine.appendSwitch('disable-software-rasterizer');
 
     // Performance optimizations
     app.commandLine.appendSwitch('enable-zero-copy');
     app.commandLine.appendSwitch('enable-hardware-overlays');
     app.commandLine.appendSwitch(
       'enable-features',
-      'Vulkan,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoder,VaapiVideoEncoder',
+      'CanvasOopRasterization,UseSkiaRenderer',
     );
 
-    logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
+    logger.info('[PRODUCTION] Additional GPU optimizations enabled');
   } else {
-    // Even in dev, prefer GPU acceleration where possible
-    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    // Development mode - basic performance optimizations
     app.commandLine.appendSwitch('enable-zero-copy');
     app.commandLine.appendSwitch(
       'enable-features',
-      'Vulkan,CanvasOopRasterization,UseSkiaRenderer',
+      'CanvasOopRasterization,UseSkiaRenderer',
     );
-    logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
+    logger.info('[DEVELOPMENT] Basic GPU acceleration enabled');
   }
 
   // Initialize services after app is ready
   app.whenReady().then(async () => {
     try {
+      // Initialize crash/error diagnostics early
+      // Temporarily disabled to debug crash
+      // try {
+      //   await errorHandler.initialize();
+      // } catch (e) {
+      //   try {
+      //     logger.warn('[ERROR] ErrorHandler init failed:', e?.message);
+      //   } catch {}
+      // }
       // Check for first run (check if we've set up before)
       const setupMarker = path.join(
         app.getPath('userData'),
@@ -1020,19 +1035,23 @@ app.on('before-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  // On macOS, keep app running when all windows are closed
-  if (process.platform === 'darwin') {
+  // In development, keep the app alive to aid debugging
+  if (isDev) {
+    logger.info(
+      '[DEVELOPMENT] window-all-closed: keeping app alive for debugging',
+    );
     return;
   }
 
+  // On macOS, keep app running when all windows are closed
+  if (process.platform === 'darwin') return;
+
   // On other platforms, only quit if background mode is disabled
-  if (!currentSettings?.backgroundMode) {
-    app.quit();
-  } else {
+  if (!currentSettings?.backgroundMode) app.quit();
+  else
     logger.info(
       '[BACKGROUND] All windows closed, continuing in background mode',
     );
-  }
 });
 
 app.on('activate', () => {

@@ -135,7 +135,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
-    "@types/react-dropzone": "^4.2.2",
+    "@types/react-dropzone": "^5.1.0",
     "@types/react-test-renderer": "^19.1.0",
     "@types/react-window": "^1.8.8",
     "@types/semver": "^7.7.0",

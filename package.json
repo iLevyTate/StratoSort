@@ -174,7 +174,7 @@
     "browserslist-config-erb": "^0.0.3",
     "buffer": "^6.0.3",
     "chalk": "^4.1.2",
-    "concurrently": "^8.2.1",
+    "concurrently": "^9.2.0",
     "core-js": "^3.32.2",
     "cross-env": "^7.0.3",
     "crypto-browserify": "^3.12.1",

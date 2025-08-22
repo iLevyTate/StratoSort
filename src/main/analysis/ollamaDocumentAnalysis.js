@@ -64,6 +64,30 @@ const folderMatcher = new FolderMatchingService(embeddingService);
 
 // LLM moved to documentLlm.js
 
+function buildFallbackResult(
+  fileName,
+  fileExtension,
+  smartFolders,
+  confidence,
+) {
+  const intelligentCategory = getIntelligentCategory(
+    fileName,
+    fileExtension,
+    smartFolders,
+  );
+  const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
+  return {
+    purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
+    project: fileName.replace(fileExtension, ''),
+    category: intelligentCategory,
+    date: new Date().toISOString().split('T')[0],
+    keywords: intelligentKeywords,
+    confidence,
+    suggestedName: safeSuggestedName(fileName, fileExtension),
+    extractionMethod: 'filename_fallback',
+  };
+}
+
 async function analyzeDocumentFile(filePath, smartFolders = []) {
   const { logger } = require('../../shared/logger');
   logger.info(`[DOC] Analyzing document file`, { path: filePath });
@@ -111,22 +135,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
     }
   } catch (error) {
     console.error('Pre-flight verification failed:', error.message);
-    const intelligentCategory = getIntelligentCategory(
-      fileName,
-      fileExtension,
-      smartFolders,
-    );
-    const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
-    return {
-      purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
-      project: fileName.replace(fileExtension, ''),
-      category: intelligentCategory,
-      date: new Date().toISOString().split('T')[0],
-      keywords: intelligentKeywords,
-      confidence: 65,
-      suggestedName: safeSuggestedName(fileName, fileExtension),
-      extractionMethod: 'filename_fallback',
-    };
+    return buildFallbackResult(fileName, fileExtension, smartFolders, 65);
   }
 
   try {
@@ -492,24 +501,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       error: error.message,
     });
     // Graceful fallback to filename-based analysis on any failure
-    const intelligentCategory = getIntelligentCategory(
-      fileName,
-      fileExtension,
-      smartFolders,
-    );
-    const intelligentKeywords = getIntelligentKeywords(fileName, fileExtension);
-    return {
-      purpose: `${intelligentCategory.charAt(0).toUpperCase() + intelligentCategory.slice(1)} document (fallback)`,
-      project: fileName.replace(fileExtension, ''),
-      category: intelligentCategory,
-      date: new Date().toISOString().split('T')[0],
-      keywords: intelligentKeywords,
-      confidence: 60,
-      suggestedName: fileName
-        .replace(fileExtension, '')
-        .replace(/[^a-zA-Z0-9_-]/g, '_'),
-      extractionMethod: 'filename_fallback',
-    };
+    return buildFallbackResult(fileName, fileExtension, smartFolders, 60);
   }
 }
 

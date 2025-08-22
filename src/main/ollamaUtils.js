@@ -21,32 +21,27 @@ let selectedTextModel = null;
 let selectedVisionModel = null;
 let selectedEmbeddingModel = null;
 
+function createOllamaClient(host) {
+  try {
+    const http = require('http');
+    const https = require('https');
+    const isHttps = host.startsWith('https://');
+    const agent = isHttps
+      ? new https.Agent({ keepAlive: true, maxSockets: 10 })
+      : new http.Agent({ keepAlive: true, maxSockets: 10 });
+    return new Ollama({
+      host,
+      fetch: (url, opts = {}) => fetch(url, { agent, ...opts }),
+    });
+  } catch {
+    return new Ollama({ host });
+  }
+}
+
 // Function to initialize or get the Ollama instance
 function getOllama() {
   if (!ollamaInstance) {
-    // Host is configurable via environment variables or saved config
-    // Reuse a single client and enable keep-alive where supported
-    // The Ollama client uses node-fetch internally; when an agent is supported,
-    // pass it here to keep connections warm.
-    try {
-      const http = require('http');
-      const https = require('https');
-      const isHttps = ollamaHost.startsWith('https://');
-      const agent = isHttps
-        ? new https.Agent({ keepAlive: true, maxSockets: 10 })
-        : new http.Agent({ keepAlive: true, maxSockets: 10 });
-      ollamaInstance = new Ollama({
-        host: ollamaHost,
-        fetch: (url, opts = {}) => {
-          return (global.fetch || require('node-fetch'))(url, {
-            agent,
-            ...opts,
-          });
-        },
-      });
-    } catch {
-      ollamaInstance = new Ollama({ host: ollamaHost });
-    }
+    ollamaInstance = createOllamaClient(ollamaHost);
   }
   return ollamaInstance;
 }
@@ -119,25 +114,7 @@ async function setOllamaHost(host) {
     if (typeof host === 'string' && host.trim()) {
       ollamaHost = host.trim();
       // Recreate client with new host
-      try {
-        const http = require('http');
-        const https = require('https');
-        const isHttps = ollamaHost.startsWith('https://');
-        const agent = isHttps
-          ? new https.Agent({ keepAlive: true, maxSockets: 10 })
-          : new http.Agent({ keepAlive: true, maxSockets: 10 });
-        ollamaInstance = new Ollama({
-          host: ollamaHost,
-          fetch: (url, opts = {}) => {
-            return (global.fetch || require('node-fetch'))(url, {
-              agent,
-              ...opts,
-            });
-          },
-        });
-      } catch {
-        ollamaInstance = new Ollama({ host: ollamaHost });
-      }
+      ollamaInstance = createOllamaClient(ollamaHost);
       const current = await loadOllamaConfig();
       await saveOllamaConfig({ ...current, host: ollamaHost });
       logger.info(`[OLLAMA] Host set to: ${ollamaHost}`);

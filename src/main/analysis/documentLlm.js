@@ -5,6 +5,7 @@ const {
 } = require('../ollamaUtils');
 const crypto = require('crypto');
 const { AI_DEFAULTS } = require('../../shared/constants');
+const { buildFolderCategoriesString } = require('./utils');
 
 const AppConfig = {
   ai: {
@@ -88,27 +89,10 @@ async function analyzeTextWithOllama(
       return analysisCache.get(cacheKey);
     }
 
-    let folderCategoriesStr = '';
-    if (smartFolders && smartFolders.length > 0) {
-      const validFolders = smartFolders
-        .filter(
-          (f) => f && typeof f.name === 'string' && f.name.trim().length > 0,
-        )
-        .slice(0, 10)
-        .map((f) => ({
-          name: f.name.trim().slice(0, 50),
-          description: (f.description || '').trim().slice(0, 140),
-        }));
-      if (validFolders.length > 0) {
-        const folderListDetailed = validFolders
-          .map(
-            (f, i) =>
-              `${i + 1}. "${f.name}" — ${f.description || 'no description provided'}`,
-          )
-          .join('\n');
-        folderCategoriesStr = `\n\nAVAILABLE SMART FOLDERS (name — description):\n${folderListDetailed}\n\nSELECTION RULES (CRITICAL):\n- Choose the category by comparing the document's CONTENT to the folder DESCRIPTIONS above.\n- Output the category EXACTLY as one of the folder names above (verbatim).\n- Do NOT invent new categories. If unsure, choose the closest match by description or use the first folder as a fallback.`;
-      }
-    }
+    const folderCategoriesStr = buildFolderCategoriesString(
+      smartFolders,
+      "the document's CONTENT",
+    );
 
     const prompt = `You are an expert document analyzer. Analyze the ACTUAL TEXT CONTENT below (not just the filename) and extract structured information based on what the document actually contains.
 

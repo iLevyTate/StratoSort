@@ -361,6 +361,17 @@ function OrganizePhase() {
         const dest = `${destinationDir}/${newName}`;
         const normalized =
           window.electronAPI?.files?.normalizePath?.(dest) || dest;
+
+        // Debug logging
+        console.log('DEBUG: File operation', {
+          fileName: file.name,
+          sourcePath: file.path,
+          destinationDir,
+          newName,
+          destination: normalized,
+          defaultLocation,
+        });
+
         return { type: 'move', source: file.path, destination: normalized };
       });
 
@@ -471,6 +482,13 @@ function OrganizePhase() {
         },
       };
 
+      console.log(
+        'DEBUG: About to execute organize batch with',
+        operations.length,
+        'operations',
+      );
+      console.log('DEBUG: Operations array:', operations);
+
       // Execute as a single undoable action
       const result = await executeAction(
         createOrganizeBatchAction(
@@ -479,10 +497,15 @@ function OrganizePhase() {
           stateCallbacks,
         ),
       );
+
+      console.log('DEBUG: Organize result:', result);
+
       // Only advance if at least one file organized successfully
       const successCount = Array.isArray(result?.results)
         ? result.results.filter((r) => r.success).length
         : 0;
+      console.log('DEBUG: Success count:', successCount);
+
       if (successCount > 0) actions.advancePhase(PHASES.COMPLETE);
     } catch (error) {
       addNotification(`Organization failed: ${error.message}`, 'error');

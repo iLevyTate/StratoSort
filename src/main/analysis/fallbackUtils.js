@@ -280,7 +280,9 @@ function getIntelligentKeywords(fileName, extension) {
 }
 
 function safeSuggestedName(fileName, extension) {
-  return fileName.replace(extension, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const nameWithoutExt = fileName.replace(extension, '');
+  const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return cleanName + extension;
 }
 
 module.exports = {

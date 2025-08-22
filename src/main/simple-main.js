@@ -53,7 +53,6 @@ const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
 // Import OCR library
 const tesseract = require('node-tesseract-ocr');
 const { spawn } = require('child_process');
-const fetch = global.fetch || require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 

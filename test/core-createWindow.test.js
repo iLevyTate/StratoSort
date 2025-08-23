@@ -94,6 +94,7 @@ describe('createWindow', () => {
 
   test('creates a BrowserWindow with correct configuration', () => {
     const windowStateKeeper = require('electron-window-state');
+    const path = require('path');
 
     const result = createMainWindow();
 
@@ -112,13 +113,21 @@ describe('createWindow', () => {
       frame: true,
       backgroundColor: '#0f0f10',
       darkTheme: true,
-      webPreferences: expect.objectContaining({
+      webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: false,
+        enableRemoteModule: false,
         preload: expect.stringContaining('preload.js'),
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false,
+        backgroundThrottling: false,
         devTools: true,
-      }),
+        hardwareAcceleration: true,
+        enableWebGL: true,
+        safeDialogs: true,
+      },
       icon: expect.stringContaining('stratosort-logo.png'),
       show: false,
       titleBarStyle: 'default',

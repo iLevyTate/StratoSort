@@ -16,23 +16,23 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Generate repository visualization
-        uses: githubocto/repo-visualizer@0.9.1
+        uses: githubocto/repo-visualizer@0.7.1
         with:
           excluded_paths: 'node_modules,.git,coverage,dist,release'
           output_file: 'repository-visualization.svg'
-
       - name: Upload visualization artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: repository-visualization
           path: repository-visualization.svg
+          retention-days: 90
 
       - name: Comment visualization on PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');

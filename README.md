@@ -16,7 +16,7 @@
   <div style="margin: 1.5em 0;">
     [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](https://opensource.org/licenses/MIT)
     [![Coverage](https://img.shields.io/badge/Coverage-32.88%25-blue.svg?style=flat)](coverage/lcov-report/index.html)
-    [![Tests](https://img.shields.io/badge/Tests-39%2B-green.svg?style=flat)](test/)
+    [![Tests](https://img.shields.io/badge/Tests-400%20passed-green.svg?style=flat)](test/)
     [![Electron](https://img.shields.io/badge/Electron-47848F?style=flat&logo=electron&logoColor=white)](https://www.electronjs.org/)
     [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
     [![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -263,12 +263,13 @@ Configure your preferred models in Settings:
 <div style="margin: 1.5em 0;">
   <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 1.5em; background: #fafafa;">
 
-| Metric          | Coverage    | Status        |
-| --------------- | ----------- | ------------- |
-| **Statements**  | `32.88%`    | Moderate      |
-| **Functions**   | `32.65%`    | Moderate      |
-| **Lines**       | `33.18%`    | Moderate      |
-| **Total Tests** | `39+ files` | Comprehensive |
+| Metric         | Coverage        | Status       |
+| -------------- | --------------- | ------------ | ------------- |
+| **Statements** | `32.88%`        | Moderate     |
+| **Functions**  | `32.65%`        | Moderate     |
+| **Lines**      | `33.18%`        | Moderate     |
+|                | **Test Suites** | `40 passed`  | Comprehensive |
+|                | **Total Tests** | `400 passed` | All Passing   |
 
   </div>
 </div>

@@ -11,15 +11,20 @@ function getCustomFoldersPath() {
 function normalizeFolderPaths(folders) {
   try {
     return (Array.isArray(folders) ? folders : []).map((f) => {
-      const normalized = { ...f };
-      if (
-        normalized &&
-        typeof normalized.path === 'string' &&
-        normalized.path.trim()
-      ) {
-        normalized.path = path.normalize(normalized.path);
+      // Only normalize if it's an object with properties
+      if (f && typeof f === 'object' && !Array.isArray(f)) {
+        const normalized = { ...f };
+        if (
+          normalized &&
+          typeof normalized.path === 'string' &&
+          normalized.path.trim()
+        ) {
+          normalized.path = path.normalize(normalized.path);
+        }
+        return normalized;
       }
-      return normalized;
+      // Return non-objects as-is (null, undefined, strings, etc.)
+      return f;
     });
   } catch {
     return Array.isArray(folders) ? folders : [];
@@ -70,4 +75,5 @@ module.exports = {
   getCustomFoldersPath,
   loadCustomFolders,
   saveCustomFolders,
+  normalizeFolderPaths,
 };

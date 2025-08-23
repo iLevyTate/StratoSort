@@ -1,0 +1,46 @@
+name: Repository Visualizer
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [closed]
+  push:
+    branches: [main, master]
+
+jobs:
+  visualize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Generate repository visualization
+        uses: githubocto/repo-visualizer@0.7.1
+        with:
+          excluded_paths: 'node_modules,.git,coverage,dist,release'
+          output_file: 'repository-visualization.svg'
+      - name: Upload visualization artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-visualization
+          path: repository-visualization.svg
+          retention-days: 90
+
+      - name: Comment visualization on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const svg = fs.readFileSync('repository-visualization.svg', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "## 📊 Repository Visualization\n\nHere's an interactive visualization of the repository structure:\n\n![Repository Visualization](https://raw.githubusercontent.com/" + context.repo.owner + "/" + context.repo.repo + "/" + context.sha + "/repository-visualization.svg)\n\nThis visualization shows the relationships between files and directories, making it easier to understand the project architecture."
+            });

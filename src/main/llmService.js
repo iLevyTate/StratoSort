@@ -228,4 +228,5 @@ module.exports = {
   getOllamaModel,
   setOllamaModel,
   testOllamaConnection,
+  parseTextResponse,
 };

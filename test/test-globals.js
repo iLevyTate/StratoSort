@@ -77,3 +77,17 @@ global.fetch = jest.fn(() =>
     blob: () => Promise.resolve(new Blob()),
   }),
 );
+
+// Helper function to normalize paths across different OS
+global.normalizePath = (path) => {
+  return path.replace(/\\/g, '/');
+};
+
+// Helper to create cross-platform temp directories
+global.createTestTempDir = async (prefix = 'test-') => {
+  const fs = require('fs').promises;
+  const path = require('path');
+  const os = require('os');
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  return global.normalizePath(tempDir);
+};

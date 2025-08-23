@@ -88,6 +88,7 @@ describe('createWindow', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    delete process.env.NODE_ENV;
     delete process.env.USE_DEV_SERVER;
     delete process.env.FORCE_DEV_TOOLS;
   });
@@ -219,6 +220,10 @@ describe('createWindow', () => {
   });
 
   test('opens DevTools when FORCE_DEV_TOOLS is true', async () => {
+    // Clear any previous mocks
+    jest.clearAllMocks();
+
+    // Set environment variables
     process.env.NODE_ENV = 'development';
     process.env.USE_DEV_SERVER = 'true';
     process.env.FORCE_DEV_TOOLS = 'true';
@@ -230,7 +235,7 @@ describe('createWindow', () => {
       BrowserWindow.mock.results[BrowserWindow.mock.results.length - 1].value;
 
     // Wait for the promise chain to resolve
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(mockWin.webContents.openDevTools).toHaveBeenCalled();
     expect(result).toBeDefined();

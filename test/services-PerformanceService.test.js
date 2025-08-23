@@ -14,6 +14,7 @@ const {
 describe('PerformanceService', () => {
   let spawnSpy;
   let originalCpus;
+  let originalPlatform;
   let stdoutCallback;
   let closeCallback;
   let errorCallback;
@@ -31,8 +32,9 @@ describe('PerformanceService', () => {
     // Use the mocked spawn
     spawnSpy = spawn;
 
-    // Store original os.cpus
+    // Store original values
     originalCpus = os.cpus;
+    originalPlatform = process.platform;
   });
 
   afterEach(() => {
@@ -44,6 +46,18 @@ describe('PerformanceService', () => {
       null;
 
     jest.clearAllMocks();
+
+    // Restore any mocked process properties
+    if (
+      Object.prototype.hasOwnProperty.call(process, 'platform') &&
+      process.platform !== originalPlatform
+    ) {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        writable: false,
+        configurable: true,
+      });
+    }
   });
 
   describe('detectNvidiaGpu', () => {

@@ -207,7 +207,7 @@ describe('createWindow', () => {
     expect(result).toBeDefined();
   });
 
-  test('opens DevTools when FORCE_DEV_TOOLS is true', () => {
+  test('opens DevTools when FORCE_DEV_TOOLS is true', async () => {
     process.env.USE_DEV_SERVER = 'true';
     process.env.FORCE_DEV_TOOLS = 'true';
 
@@ -216,6 +216,10 @@ describe('createWindow', () => {
     expect(BrowserWindow).toHaveBeenCalled();
     const mockWin =
       BrowserWindow.mock.results[BrowserWindow.mock.results.length - 1].value;
+
+    // Wait for the promise chain to resolve
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     expect(mockWin.webContents.openDevTools).toHaveBeenCalled();
     expect(result).toBeDefined();
   });

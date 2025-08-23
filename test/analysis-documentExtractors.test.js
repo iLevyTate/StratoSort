@@ -345,45 +345,6 @@ startxref
       // Cleanup
       await fs.rm(tempDir, { recursive: true, force: true });
     });
-
-    test.skip('throws error for empty Excel file', async () => {
-      // Skip this test due to xlsx-populate library compatibility issues
-      // The library doesn't properly support usedRange() method in test environments
-      // This is a library limitation, not a code issue
-
-      // Create a temporary directory and file for testing
-      const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), 'xlsx-empty-test-'),
-      );
-      const tempFilePath = path.join(tempDir, 'empty.xlsx');
-
-      // Create a minimal Excel file with no data
-      const xlsxContent = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetData>
-    <row r="1">
-    </row>
-  </sheetData>
-</worksheet>`;
-
-      const AdmZip = require('adm-zip');
-      const zip = new AdmZip();
-      zip.addFile('xl/worksheets/sheet1.xml', Buffer.from(xlsxContent));
-      zip.addFile(
-        '[Content_Types].xml',
-        Buffer.from(
-          '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
-        ),
-      );
-      zip.writeZip(tempFilePath);
-
-      await expect(extractTextFromXlsx(tempFilePath)).rejects.toThrow(
-        'No text content in XLSX',
-      );
-
-      // Cleanup
-      await fs.rm(tempDir, { recursive: true, force: true });
-    });
   });
 
   describe('extractTextFromPptx', () => {

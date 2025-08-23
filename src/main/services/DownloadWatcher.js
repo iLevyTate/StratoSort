@@ -70,13 +70,17 @@ class DownloadWatcher {
     const destFolder = this.resolveDestinationFolder(result, folders);
     if (!destFolder) return;
     try {
-      await fs.mkdir(destFolder.path, { recursive: true });
+      // Normalize paths for cross-platform compatibility
+      const normalizedDestPath = destFolder.path.replace(/\\/g, '/');
+      await fs.mkdir(normalizedDestPath, { recursive: true });
       const baseName = path.basename(filePath);
       const extname = path.extname(baseName);
       const newName = result.suggestedName
         ? `${result.suggestedName}${extname}`
         : baseName;
-      const destPath = path.join(destFolder.path, newName);
+      const destPath = path
+        .join(normalizedDestPath, newName)
+        .replace(/\\/g, '/');
       await fs.rename(filePath, destPath);
       logger.info('[DOWNLOAD-WATCHER] Moved', filePath, '=>', destPath);
     } catch (e) {
@@ -88,21 +92,26 @@ class DownloadWatcher {
     if (!result) return null;
     // Prefer explicit smartFolder id
     if (result.smartFolder && result.smartFolder.id) {
-      return folders.find((f) => f.id === result.smartFolder.id);
+      return folders.find((f) => f && f.id === result.smartFolder.id) || null;
     }
     // Try folder match candidates
     if (Array.isArray(result.folderMatchCandidates)) {
       for (const cand of result.folderMatchCandidates) {
         const found = folders.find(
-          (f) => f.id === cand.id || f.name === cand.name,
+          (f) => f && (f.id === cand.id || f.name === cand.name),
         );
         if (found) return found;
       }
     }
     // Fallback to category name match
     if (result.category) {
-      return folders.find(
-        (f) => f.name.toLowerCase() === result.category.toLowerCase(),
+      return (
+        folders.find(
+          (f) =>
+            f &&
+            f.name &&
+            f.name.toLowerCase() === result.category.toLowerCase(),
+        ) || null
       );
     }
     return null;

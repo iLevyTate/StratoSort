@@ -108,4 +108,5 @@ async function buildOllamaOptions(task = 'text') {
 module.exports = {
   detectSystemCapabilities,
   buildOllamaOptions,
+  detectNvidiaGpu, // Export for testing
 };

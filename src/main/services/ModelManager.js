@@ -16,7 +16,9 @@ class ModelManager {
     this.selectedModel = null;
     this.modelCapabilities = new Map();
     this.lastHealthCheck = null;
-    this.configPath = path.join(app.getPath('userData'), 'model-config.json');
+    this.configPath = path
+      .join(app.getPath('userData'), 'model-config.json')
+      .replace(/\\/g, '/');
 
     // Model categories and their capabilities
     this.modelCategories = {

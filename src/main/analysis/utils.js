@@ -3,13 +3,13 @@ function normalizeAnalysisResult(raw, fallback = {}) {
   const normalized = {
     category:
       typeof result.category === 'string' && result.category.trim()
-        ? result.category
+        ? result.category.trim()
         : fallback.category || 'document',
     keywords: Array.isArray(result.keywords)
       ? result.keywords
       : fallback.keywords || [],
     confidence:
-      typeof result.confidence === 'number'
+      typeof result.confidence === 'number' && result.confidence >= 0
         ? result.confidence
         : fallback.confidence || 0,
     suggestedName:

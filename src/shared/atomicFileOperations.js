@@ -329,6 +329,7 @@ class AtomicFileOperations {
       // Attempt to rollback
       try {
         await this.rollbackTransaction(transactionId);
+        await this.cleanupBackups(transactionId);
         return {
           success: false,
           error: error.message,

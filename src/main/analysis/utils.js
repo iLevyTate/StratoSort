@@ -21,7 +21,7 @@ function normalizeAnalysisResult(raw, fallback = {}) {
     contentLength:
       typeof result.contentLength === 'number'
         ? result.contentLength
-        : fallback.contentLength || null,
+        : (fallback.contentLength ?? null),
   };
   return { ...result, ...normalized };
 }

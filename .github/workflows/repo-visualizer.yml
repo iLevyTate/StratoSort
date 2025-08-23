@@ -24,7 +24,7 @@ jobs:
           excluded_paths: 'node_modules,.git,coverage,dist,release'
           output_file: 'repository-visualization.svg'
       - name: Upload visualization artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: repository-visualization
           path: repository-visualization.svg

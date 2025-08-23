@@ -123,7 +123,7 @@ describe('createWindow', () => {
         allowRunningInsecureContent: false,
         experimentalFeatures: false,
         backgroundThrottling: false,
-        devTools: true,
+        devTools: true, // NODE_ENV is set to 'development' in test
         hardwareAcceleration: true,
         enableWebGL: true,
         safeDialogs: true,
@@ -156,6 +156,7 @@ describe('createWindow', () => {
   });
 
   test('loads from development server when USE_DEV_SERVER is true', () => {
+    process.env.NODE_ENV = 'development';
     process.env.USE_DEV_SERVER = 'true';
 
     const result = createMainWindow();
@@ -168,6 +169,7 @@ describe('createWindow', () => {
   });
 
   test('falls back to built files when dev server fails', async () => {
+    process.env.NODE_ENV = 'development';
     process.env.USE_DEV_SERVER = 'true';
 
     // Set up the mock to reject before creating the window
@@ -217,6 +219,7 @@ describe('createWindow', () => {
   });
 
   test('opens DevTools when FORCE_DEV_TOOLS is true', async () => {
+    process.env.NODE_ENV = 'development';
     process.env.USE_DEV_SERVER = 'true';
     process.env.FORCE_DEV_TOOLS = 'true';
 

@@ -2,10 +2,10 @@ name: Repository Visualizer
 
 on:
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master]
+    types: [closed]
   push:
-    branches: [main, master, develop]
-  workflow_dispatch:
+    branches: [main, master]
 
 jobs:
   visualize:

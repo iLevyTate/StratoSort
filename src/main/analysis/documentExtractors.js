@@ -10,6 +10,134 @@ const AdmZip = require('adm-zip');
 
 const { FileProcessingError } = require('../errors/AnalysisError');
 
+// Memory-efficient streaming extractor for large files
+async function extractTextFromLargeFile(filePath, maxChunkSize = 1024 * 1024) {
+  // 1MB chunks
+  let fileStats, fileSize;
+  try {
+    fileStats = await fs.stat(filePath);
+    fileSize = fileStats.size;
+  } catch (error) {
+    console.warn(
+      `[STREAMING-EXTRACT] Failed to stat file ${filePath}:`,
+      error.message,
+    );
+    return ''; // Return empty string on error
+  }
+
+  console.log(`[STREAMING-EXTRACT] Processing large file: ${fileSize} bytes`);
+
+  if (fileSize < maxChunkSize * 2) {
+    // For smaller files, use normal processing
+    const content = await fs.readFile(filePath, 'utf8');
+    return content;
+  }
+
+  // For large files, process in chunks
+  const chunks = [];
+  const fileHandle = await fs.open(filePath, 'r');
+  let position = 0;
+
+  try {
+    while (position < fileSize) {
+      const remaining = fileSize - position;
+      const chunkSize = Math.min(maxChunkSize, remaining);
+
+      const buffer = Buffer.alloc(chunkSize);
+      const { bytesRead } = await fileHandle.read(
+        buffer,
+        0,
+        chunkSize,
+        position,
+      );
+
+      if (bytesRead === 0) break;
+
+      const chunk = buffer.toString('utf8', 0, bytesRead);
+      chunks.push(chunk);
+      position += bytesRead;
+
+      console.log(
+        `[STREAMING-EXTRACT] Processed chunk: ${position}/${fileSize} bytes (${Math.round((position / fileSize) * 100)}%)`,
+      );
+
+      // Yield control to prevent blocking
+      if (chunks.length % 10 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    // Combine chunks intelligently
+    const combined = chunks.join('');
+
+    // If still too large, sample strategically
+    if (combined.length > 50000) {
+      console.log(
+        `[STREAMING-EXTRACT] Large content detected (${combined.length} chars), using intelligent sampling`,
+      );
+      return sampleLargeContent(combined);
+    }
+
+    return combined;
+  } finally {
+    await fileHandle.close();
+  }
+}
+
+// Intelligent sampling for very large content
+function sampleLargeContent(content) {
+  // Handle edge cases
+  if (!content || content.length === 0) {
+    return content;
+  }
+
+  const maxSampleSize = 40000; // 40KB max sample
+  const contentLength = content.length;
+
+  if (contentLength <= maxSampleSize) {
+    return content;
+  }
+
+  const samples = [];
+
+  // Sample from different sections
+  const samplePoints = [
+    0, // Beginning
+    Math.floor(contentLength * 0.2), // Early content
+    Math.floor(contentLength * 0.5), // Middle
+    Math.floor(contentLength * 0.8), // Later content
+    contentLength - 5000, // End
+  ];
+
+  const sampleSize = Math.floor(maxSampleSize / samplePoints.length);
+
+  for (const startPoint of samplePoints) {
+    const endPoint = Math.min(startPoint + sampleSize, contentLength);
+    const sample = content.substring(startPoint, endPoint);
+
+    // Find sentence boundaries for cleaner cuts
+    const lastSentenceEnd = Math.max(
+      sample.lastIndexOf('.'),
+      sample.lastIndexOf('!'),
+      sample.lastIndexOf('?'),
+      sample.lastIndexOf('\n'),
+    );
+
+    if (lastSentenceEnd > sampleSize * 0.5) {
+      samples.push(sample.substring(0, lastSentenceEnd + 1));
+    } else {
+      samples.push(sample);
+    }
+  }
+
+  const combined = samples.join('\n\n--- SECTION BREAK ---\n\n');
+  console.log(
+    `[STREAMING-EXTRACT] Sampled ${contentLength} chars → ${combined.length} chars (${Math.round((combined.length / contentLength) * 100)}% reduction)`,
+  );
+
+  return combined;
+}
+
 async function extractTextFromPdf(filePath, fileName) {
   const dataBuffer = await fs.readFile(filePath);
   const pdfData = await pdf(dataBuffer);
@@ -229,4 +357,6 @@ module.exports = {
   extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
+  extractTextFromLargeFile,
+  sampleLargeContent,
 };

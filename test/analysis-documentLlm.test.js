@@ -61,6 +61,12 @@ describe('documentLlm', () => {
         keywords: ['test', 'analysis', 'document'],
         confidence: 85,
         suggestedName: 'test_document',
+        sampling: {
+          method: 'intelligent_sampling',
+          originalLength: 23,
+          reductionPercent: '0',
+          sampledLength: 23,
+        },
       });
 
       expect(mockClient.generate).toHaveBeenCalledWith({

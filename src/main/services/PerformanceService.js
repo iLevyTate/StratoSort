@@ -71,8 +71,15 @@ async function buildOllamaOptions(task = 'text') {
 
   // Base threading and context
   const numThread = Math.max(2, Math.min(caps.cpuThreads || 4, 16));
+
   // Context window: keep moderate to avoid RAM spikes, tune by task
-  const numCtx = task === 'vision' ? 2048 : 2048;
+  let numCtx = 2048;
+  if (task === 'vision') {
+    numCtx = 2048;
+  } else if (task === 'embeddings') {
+    // Embeddings don't need large context windows
+    numCtx = 512;
+  }
 
   // Batch sizing – larger when GPU VRAM is available
   let numBatch = 256;

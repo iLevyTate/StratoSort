@@ -24,6 +24,7 @@ const {
   extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
+  extractTextFromLargeFile,
 } = require('./documentExtractors');
 const { analyzeTextWithOllama } = require('./documentLlm');
 const { normalizeAnalysisResult } = require('./utils');
@@ -45,13 +46,121 @@ const modelVerifier = new ModelVerifier();
 const embeddingIndex = new EmbeddingIndexService();
 const folderMatcher = new FolderMatchingService(embeddingIndex);
 
+// Import the cache service for performance optimization
+const { CACHE_CONFIG } = require('../../shared/constants');
+
+// Create a simple cache instance for analysis results
+class AnalysisCache {
+  constructor() {
+    this.cache = new Map();
+    this.cachePath = path.join(
+      require('electron').app.getPath('userData'),
+      'analysis-cache.json',
+    );
+    this.loadCache();
+  }
+
+  generateKey(filePath, contentLength) {
+    const fileHash = crypto.createHash('md5').update(filePath).digest('hex');
+    return `${fileHash}_${contentLength}`;
+  }
+
+  get(key) {
+    if (!CACHE_CONFIG.ENABLED) return null;
+    const item = this.cache.get(key);
+    if (!item) return null;
+
+    const now = Date.now();
+    if (now - item.timestamp > CACHE_CONFIG.TTL.ANALYSIS) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return item.data;
+  }
+
+  set(key, data) {
+    if (!CACHE_CONFIG.ENABLED) return;
+
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+    });
+
+    // Enforce cache size limits
+    if (this.cache.size > CACHE_CONFIG.MAX_SIZE.ANALYSIS_CACHE) {
+      const oldestKey = Array.from(this.cache.keys())[0];
+      this.cache.delete(oldestKey);
+    }
+  }
+
+  async loadCache() {
+    try {
+      const data = await fs.readFile(this.cachePath, 'utf8');
+      const cacheData = JSON.parse(data);
+      const now = Date.now();
+
+      for (const [key, item] of Object.entries(cacheData)) {
+        if (now - item.timestamp < CACHE_CONFIG.TTL.ANALYSIS) {
+          this.cache.set(key, item);
+        }
+      }
+      console.log(
+        `[ANALYSIS-CACHE] Loaded ${this.cache.size} cached analysis results`,
+      );
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn('[ANALYSIS-CACHE] Failed to load cache:', error.message);
+      }
+    }
+  }
+}
+
+const analysisCache = new AnalysisCache();
+
 // LLM moved to documentLlm.js
+
+// Pre-warm embeddings for a batch of files to optimize performance
+async function prewarmEmbeddingsForBatch(smartFolders = []) {
+  if (smartFolders && smartFolders.length > 0) {
+    console.log(
+      `[BATCH-OPTIMIZATION] Pre-warming embeddings for ${smartFolders.length} smart folders`,
+    );
+    try {
+      await folderMatcher.prewarmFolderEmbeddings(smartFolders);
+      console.log(`[BATCH-OPTIMIZATION] Embedding pre-warming completed`);
+    } catch (error) {
+      console.warn(
+        `[BATCH-OPTIMIZATION] Embedding pre-warming failed:`,
+        error.message,
+      );
+    }
+  }
+}
 
 async function analyzeDocumentFile(filePath, smartFolders = []) {
   const { logger } = require('../../shared/logger');
   logger.info(`[DOC] Analyzing document file`, { path: filePath });
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
+
+  // Check for cached analysis results first
+  try {
+    const fileStats = await fs.stat(filePath);
+    const cacheKey = analysisCache.generateKey(filePath, fileStats.size);
+
+    const cachedResult = analysisCache.get(cacheKey);
+    if (cachedResult) {
+      console.log(`[CACHE-HIT] Using cached analysis for ${fileName}`);
+      return {
+        ...cachedResult,
+        fromCache: true,
+        cacheHit: true,
+      };
+    }
+  } catch (cacheError) {
+    console.warn('[CACHE-CHECK] Failed to check cache:', cacheError.message);
+  }
 
   // Pre-flight checks for AI-first operation (graceful fallback if Ollama unavailable)
   try {
@@ -103,7 +212,27 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
   try {
     let extractedText = null;
 
-    if (fileExtension === '.pdf') {
+    // Check file size to determine extraction method
+    const fileStats = await fs.stat(filePath);
+    const fileSizeMB = fileStats.size / (1024 * 1024);
+    let useStreaming = fileSizeMB > 10; // Use streaming for files > 10MB
+
+    if (useStreaming) {
+      console.log(
+        `[STREAMING-MODE] Large file detected (${fileSizeMB.toFixed(1)}MB), using streaming extraction`,
+      );
+      try {
+        extractedText = await extractTextFromLargeFile(filePath);
+      } catch (streamingError) {
+        console.warn(
+          '[STREAMING-MODE] Streaming failed, falling back to normal extraction:',
+          streamingError.message,
+        );
+        useStreaming = false;
+      }
+    }
+
+    if (!useStreaming && fileExtension === '.pdf') {
       try {
         extractedText = await extractTextFromPdf(filePath, fileName);
         if (!extractedText || extractedText.trim().length === 0) {
@@ -142,8 +271,18 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         if (fileExtension === '.doc') {
           extractedText = await extractTextFromDoc(filePath);
         } else {
-          // Regular text file reading with basic format-aware cleanup
-          const raw = await fs.readFile(filePath, 'utf8');
+          // Regular text file reading with basic format-aware cleanup (streaming for large files)
+          let raw;
+          if (fileSizeMB > 5) {
+            // Use streaming for text files > 5MB
+            console.log(
+              `[STREAMING-MODE] Large text file (${fileSizeMB.toFixed(1)}MB), using streaming read`,
+            );
+            raw = await extractTextFromLargeFile(filePath);
+          } else {
+            raw = await fs.readFile(filePath, 'utf8');
+          }
+
           if (fileExtension === '.rtf') {
             extractedText = extractPlainTextFromRtf(raw);
           } else if (
@@ -330,16 +469,23 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         smartFolders,
       );
 
-      // Attempt semantic folder refinement
+      // Optimized semantic folder refinement with pre-warmed embeddings
       try {
-        // Ensure folder embeddings exist
-        if (smartFolders && smartFolders.length > 0) {
-          await Promise.all(
-            smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
-          );
-        }
-        // Create a file id for embedding lookup using path hash-like identifier
         const fileId = `file:${filePath}`;
+
+        // Pre-warm folder embeddings if not already done (non-blocking)
+        if (smartFolders && smartFolders.length > 0) {
+          folderMatcher
+            .prewarmFolderEmbeddings(smartFolders)
+            .catch((err) =>
+              console.warn(
+                '[FOLDER-PREWARM] Background pre-warming failed:',
+                err.message,
+              ),
+            );
+        }
+
+        // Prepare file embedding content immediately after analysis
         const summaryForEmbedding = [
           analysis.project,
           analysis.purpose,
@@ -348,18 +494,30 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
         ]
           .filter(Boolean)
           .join('\n');
+
+        // Generate file embedding (folder embeddings should already be ready from pre-warming)
         await folderMatcher.upsertFileEmbedding(fileId, summaryForEmbedding, {
           path: filePath,
         });
+
+        // Perform semantic matching
         const candidates = await folderMatcher.matchFileToFolders(fileId, 5);
         if (Array.isArray(candidates) && candidates.length > 0) {
           const top = candidates[0];
+          const originalCategory = analysis.category;
           if (top.score >= 0.55) {
             analysis.category = top.name; // refine to closest folder name
+            console.log(
+              `[SEMANTIC-REFINEMENT] Improved category from "${originalCategory}" to "${top.name}" (score: ${top.score.toFixed(2)})`,
+            );
           }
           analysis.folderMatchCandidates = candidates;
         }
       } catch (e) {
+        console.warn(
+          '[SEMANTIC-REFINEMENT] Failed to perform semantic refinement:',
+          e.message,
+        );
         // Non-fatal; continue without refinement
       }
 
@@ -369,7 +527,8 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
           category: analysis.category,
           keywords: analysis.keywords,
         });
-        return normalizeAnalysisResult(
+
+        const finalResult = normalizeAnalysisResult(
           {
             ...analysis,
             contentLength: extractedText.length,
@@ -377,6 +536,21 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
           },
           { category: 'document', keywords: [], confidence: 0 },
         );
+
+        // Cache the successful analysis result
+        try {
+          const fileStats = await fs.stat(filePath);
+          const cacheKey = analysisCache.generateKey(filePath, fileStats.size);
+          analysisCache.set(cacheKey, finalResult);
+          console.log(`[CACHE-STORE] Cached analysis result for ${fileName}`);
+        } catch (cacheError) {
+          console.warn(
+            '[CACHE-STORE] Failed to cache result:',
+            cacheError.message,
+          );
+        }
+
+        return finalResult;
       }
 
       logger.warn(
@@ -493,4 +667,5 @@ function deriveKeywordsFromFilenames(names) {
 
 module.exports = {
   analyzeDocumentFile,
+  prewarmEmbeddingsForBatch,
 };

@@ -71,6 +71,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: expectedModel,
         prompt: testText.slice(0, 8000),
+        options: expect.any(Object),
       });
       expect(result).toEqual({
         vector: mockEmbedding,
@@ -116,10 +117,10 @@ describe('FolderMatchingService', () => {
       const result = await service.embedText(longText);
 
       expect(getOllamaClient).toHaveBeenCalled();
-      expect(getOllamaClient).toHaveBeenCalled();
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: 'a'.repeat(8000),
+        options: expect.any(Object),
       });
       expect(result.model).toBe('test-embedding-model');
     });
@@ -153,6 +154,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: 'Test Folder\nA test folder',
+        options: expect.any(Object),
       });
       expect(mockEmbeddingStore.upsertFolder).toHaveBeenCalledWith(
         expectedPayload,
@@ -201,6 +203,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: 'Test Folder',
+        options: expect.any(Object),
       });
     });
 
@@ -223,6 +226,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: 'Test Folder',
+        options: expect.any(Object),
       });
     });
 
@@ -283,6 +287,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: '',
+        options: expect.any(Object),
       });
     });
 
@@ -301,6 +306,7 @@ describe('FolderMatchingService', () => {
       expect(mockOllamaClient.embeddings).toHaveBeenCalledWith({
         model: 'test-embedding-model',
         prompt: '',
+        options: expect.any(Object),
       });
     });
 

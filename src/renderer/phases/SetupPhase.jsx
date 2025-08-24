@@ -37,7 +37,11 @@ function SetupPhase() {
         setIsLoading(false);
       }
     };
-    initializeSetup();
+
+    // Add a small delay to ensure electronAPI is ready
+    const timer = setTimeout(initializeSetup, 1000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -53,10 +57,18 @@ function SetupPhase() {
 
   const loadDefaultLocation = async () => {
     try {
+      if (!window.electronAPI?.settings?.get) {
+        console.warn('electronAPI.settings.get not available yet');
+        return;
+      }
       const settings = await window.electronAPI.settings.get();
       if (settings?.defaultSmartFolderLocation) {
         setDefaultLocation(settings.defaultSmartFolderLocation);
       } else {
+        if (!window.electronAPI?.files?.getDocumentsPath) {
+          console.warn('electronAPI.files.getDocumentsPath not available yet');
+          return;
+        }
         const documentsPath = await window.electronAPI.files.getDocumentsPath();
         if (documentsPath) {
           setDefaultLocation(documentsPath);
@@ -69,17 +81,61 @@ function SetupPhase() {
 
   const loadSmartFolders = async () => {
     try {
+      console.log('[SetupPhase] Starting to load smart folders...');
+      console.log(
+        '[SetupPhase] window.electronAPI available:',
+        !!window.electronAPI,
+      );
+      console.log(
+        '[SetupPhase] smartFolders API available:',
+        !!window.electronAPI?.smartFolders?.get,
+      );
+
+      if (!window.electronAPI?.smartFolders?.get) {
+        console.warn(
+          '[SetupPhase] electronAPI.smartFolders.get not available yet',
+        );
+        return;
+      }
+
+      console.log('[SetupPhase] Calling electronAPI.smartFolders.get()...');
       const folders = await window.electronAPI.smartFolders.get();
+      console.log(
+        '[SetupPhase] Raw response from smartFolders.get():',
+        folders,
+      );
+      console.log('[SetupPhase] Response type:', typeof folders);
+      console.log('[SetupPhase] Response is array:', Array.isArray(folders));
+
       setSmartFolders(folders || []);
       actions.setPhaseData('smartFolders', folders || []);
-      if (folders && folders.length > 0 && smartFolders.length > 0) {
-        showInfo(
-          'Smart folders updated. Files may need re-analysis to match new folder structure.',
-          7000,
+
+      console.log('[SetupPhase] setSmartFolders called with:', folders || []);
+      console.log('[SetupPhase] Current smartFolders state:', smartFolders);
+
+      if (folders && folders.length > 0) {
+        console.log(
+          '[SetupPhase] Smart folders loaded successfully:',
+          folders.length,
+          'folders',
         );
+        console.log('[SetupPhase] First folder:', folders[0]);
+
+        // Show info only if this is not the first load
+        if (smartFolders.length > 0) {
+          showInfo(
+            'Smart folders updated. Files may need re-analysis to match new folder structure.',
+            7000,
+          );
+        }
+      } else {
+        console.log('[SetupPhase] No smart folders loaded or empty result');
+        console.log('[SetupPhase] Folders value:', folders);
       }
     } catch (error) {
-      console.error('Failed to load smart folders:', error);
+      console.error('[SetupPhase] Failed to load smart folders:', error);
+      console.error('[SetupPhase] Error details:', error.message);
+      console.error('[SetupPhase] Error stack:', error.stack);
       showError('Failed to load smart folders');
     }
   };
@@ -392,43 +448,59 @@ function SetupPhase() {
         persistKey="setup-current-folders"
         contentClassName="max-h-[420px] overflow-y-auto pr-8"
       >
-        {isLoading ? (
-          <SmartFolderSkeleton count={3} />
-        ) : smartFolders.length === 0 ? (
-          <div className="text-center py-21">
-            <div
-              className="text-4xl mb-8 opacity-50"
-              role="img"
-              aria-label="empty folder"
-            >
-              📂
-            </div>
-            <p className="text-muted italic">
-              No smart folders configured yet.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {smartFolders.map((folder, index) => (
-              <SmartFolderItem
-                key={folder.id}
-                folder={folder}
-                index={index}
-                editingFolder={editingFolder}
-                setEditingFolder={setEditingFolder}
-                isSavingEdit={isSavingEdit}
-                isDeleting={isDeletingFolder === folder.id}
-                onSaveEdit={handleSaveEdit}
-                onCancelEdit={handleCancelEdit}
-                onEditStart={handleEditFolder}
-                onDeleteFolder={handleDeleteFolder}
-                onCreateDirectory={createSingleFolder}
-                onOpenFolder={handleOpenFolder}
-                addNotification={addNotification}
-              />
-            ))}
-          </div>
-        )}
+        {(() => {
+          console.log('[SetupPhase] Render debug:', {
+            isLoading,
+            smartFoldersLength: smartFolders.length,
+            smartFolders: smartFolders,
+            hasSmartFolders: smartFolders && smartFolders.length > 0,
+          });
+
+          if (isLoading) {
+            console.log('[SetupPhase] Rendering loading skeleton');
+            return <SmartFolderSkeleton count={3} />;
+          } else if (!smartFolders || smartFolders.length === 0) {
+            console.log('[SetupPhase] Rendering empty state');
+            return (
+              <div className="text-center py-21">
+                <div
+                  className="text-4xl mb-8 opacity-50"
+                  role="img"
+                  aria-label="empty folder"
+                >
+                  📂
+                </div>
+                <p className="text-muted italic">
+                  No smart folders configured yet.
+                </p>
+              </div>
+            );
+          } else {
+            console.log('[SetupPhase] Rendering smart folders list');
+            return (
+              <div className="space-y-8">
+                {smartFolders.map((folder, index) => (
+                  <SmartFolderItem
+                    key={folder.id}
+                    folder={folder}
+                    index={index}
+                    editingFolder={editingFolder}
+                    setEditingFolder={setEditingFolder}
+                    isSavingEdit={isSavingEdit}
+                    isDeleting={isDeletingFolder === folder.id}
+                    onSaveEdit={handleSaveEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onEditStart={handleEditFolder}
+                    onDeleteFolder={handleDeleteFolder}
+                    onCreateDirectory={createSingleFolder}
+                    onOpenFolder={handleOpenFolder}
+                    addNotification={addNotification}
+                  />
+                ))}
+              </div>
+            );
+          }
+        })()}
       </Collapsible>
 
       <Collapsible

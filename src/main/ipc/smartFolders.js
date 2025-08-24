@@ -20,20 +20,52 @@ function registerSmartFoldersIpc({
   ipcMain.handle(
     IPC_CHANNELS.SMART_FOLDERS.GET,
     withErrorLogging(logger, async () => {
+      logger.info('[SMART-FOLDERS] IPC handler called for GET');
+
       const customFolders = getCustomFolders();
       logger.info(
         '[SMART-FOLDERS] Getting Smart Folders for UI:',
-        customFolders.length,
+        customFolders ? customFolders.length : 'undefined',
       );
+
+      if (!customFolders) {
+        logger.error(
+          '[SMART-FOLDERS] getCustomFolders returned null/undefined',
+        );
+        return [];
+      }
+
+      logger.info(
+        '[SMART-FOLDERS] Custom folders data:',
+        JSON.stringify(customFolders, null, 2),
+      );
+
       const foldersWithStatus = await Promise.all(
         customFolders.map(async (folder) => {
           try {
+            if (!folder.path) {
+              logger.info(
+                `[SMART-FOLDERS] Folder ${folder.id} has no path, marking as not physically exists`,
+              );
+              return { ...folder, physicallyExists: false };
+            }
             const stats = await fs.stat(folder.path);
+            logger.info(
+              `[SMART-FOLDERS] Folder ${folder.id} exists: ${stats.isDirectory()}`,
+            );
             return { ...folder, physicallyExists: stats.isDirectory() };
-          } catch {
+          } catch (error) {
+            logger.info(
+              `[SMART-FOLDERS] Folder ${folder.id} does not exist: ${error.message}`,
+            );
             return { ...folder, physicallyExists: false };
           }
         }),
+      );
+
+      logger.info(
+        '[SMART-FOLDERS] Returning folders with status:',
+        JSON.stringify(foldersWithStatus, null, 2),
       );
       return foldersWithStatus;
     }),

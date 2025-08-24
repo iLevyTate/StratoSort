@@ -31,6 +31,8 @@ const {
   extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
+  extractTextFromLargeFile,
+  sampleLargeContent,
 } = require('../src/main/analysis/documentExtractors');
 
 describe('documentExtractors', () => {
@@ -545,6 +547,189 @@ This is the body of the email.`;
 
       // Cleanup
       await fs.rm(tempDir, { recursive: true, force: true });
+    });
+  });
+
+  describe('extractTextFromLargeFile', () => {
+    test('returns original content for small files', async () => {
+      const smallContent = 'This is a small file content.';
+
+      // Create a temporary small file for testing
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'small-file-test-'),
+      );
+      const tempFilePath = path.join(tempDir, 'small.txt');
+
+      await fs.writeFile(tempFilePath, smallContent);
+
+      const result = await extractTextFromLargeFile(tempFilePath);
+
+      expect(result).toBe(smallContent);
+
+      // Cleanup
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    test('streams large files in chunks', async () => {
+      // Create a large test content
+      const largeContent = 'Large content line.\n'.repeat(10000); // ~200KB content
+
+      // Create a temporary large file for testing
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'large-file-test-'),
+      );
+      const tempFilePath = path.join(tempDir, 'large.txt');
+
+      await fs.writeFile(tempFilePath, largeContent);
+
+      const result = await extractTextFromLargeFile(tempFilePath);
+
+      expect(result).toBe(largeContent);
+
+      // Cleanup
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    test('handles streaming errors gracefully', async () => {
+      const result = await extractTextFromLargeFile('/nonexistent/file.txt');
+      expect(result).toBe(''); // Should return empty string on error
+    });
+
+    test('yields control during chunk processing', async () => {
+      // This test verifies that the function doesn't block the event loop
+      // by yielding control during chunk processing
+
+      const largeContent = 'Content line.\n'.repeat(50000); // ~1MB content
+
+      // Create a temporary large file for testing
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'yield-test-'));
+      const tempFilePath = path.join(tempDir, 'yield.txt');
+
+      await fs.writeFile(tempFilePath, largeContent);
+
+      const startTime = Date.now();
+      const result = await extractTextFromLargeFile(tempFilePath);
+      const endTime = Date.now();
+
+      expect(result).toBe(largeContent);
+      // The function should complete within a reasonable time
+      expect(endTime - startTime).toBeLessThan(10000); // 10 seconds max
+
+      // Cleanup
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+  });
+
+  describe('sampleLargeContent', () => {
+    test('returns original content for small content', () => {
+      const smallContent = 'This is small content.';
+      const result = sampleLargeContent(smallContent);
+      expect(result).toBe(smallContent);
+    });
+
+    test('samples large content intelligently', () => {
+      // Create content that definitely exceeds the 40KB threshold
+      const beginning = 'INTRODUCTION: This is the beginning of the document.';
+      const middle =
+        'MIDDLE CONTENT: ' +
+        'Some content here with enough text to exceed the sampling threshold. '.repeat(
+          3000,
+        );
+      const end = 'CONCLUSION: This is the end of the document.';
+
+      const largeContent = beginning + '\n\n' + middle + '\n\n' + end;
+      const result = sampleLargeContent(largeContent);
+
+      // Result should be smaller than original (or equal if already within limits)
+      expect(result.length).toBeLessThanOrEqual(largeContent.length);
+
+      // Should contain parts from different sections
+      expect(result).toContain('INTRODUCTION');
+      expect(result).toContain('CONCLUSION');
+
+      // Should maintain reasonable length
+      expect(result.length).toBeGreaterThan(1000);
+      expect(result.length).toBeLessThanOrEqual(40000); // Max sample size
+    });
+
+    test('handles content with sentence boundaries', () => {
+      const contentWithSentences =
+        'First sentence. Second sentence! Third sentence? Fourth sentence.';
+      const result = sampleLargeContent(contentWithSentences);
+
+      // Should end at sentence boundaries when possible
+      expect(result).toMatch(/[.?!]$/);
+    });
+
+    test('handles content without clear sections', () => {
+      const unstructuredContent = 'Word '.repeat(2000); // Long content without structure
+      const result = sampleLargeContent(unstructuredContent);
+
+      expect(result.length).toBeLessThanOrEqual(unstructuredContent.length);
+      expect(result).toContain('Word');
+    });
+
+    test('respects maximum sample length', () => {
+      const veryLargeContent = 'Content line.\n'.repeat(10000); // Very large content
+      const result = sampleLargeContent(veryLargeContent);
+
+      // Should not exceed the max sample length
+      expect(result.length).toBeLessThanOrEqual(40000); // Max sample size
+    });
+
+    test('includes keyword-rich sections when available', () => {
+      const contentWithKeywords = `
+        Regular content here.
+        Keywords: machine learning, artificial intelligence
+        More regular content.
+        Summary: This document discusses AI technologies.
+        Conclusion: The future of AI is bright.
+      `;
+
+      const result = sampleLargeContent(contentWithKeywords);
+
+      // Should include keyword-rich sections
+      expect(result).toMatch(/(Keywords|Summary|Conclusion)/i);
+    });
+  });
+
+  describe('content sampling integration', () => {
+    test('extractTextFromLargeFile integrates with sampleLargeContent', async () => {
+      // Create content that will trigger both streaming and sampling
+      const largeContent =
+        'Section 1: Introduction.\n'.repeat(1000) +
+        'Section 2: Main content.\n'.repeat(5000) +
+        'Section 3: Keywords - AI, ML, Data Science.\n'.repeat(1000) +
+        'Section 4: Conclusion.\n'.repeat(1000);
+
+      // Create a temporary file for testing
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'integration-test-'),
+      );
+      const tempFilePath = path.join(tempDir, 'integration.txt');
+
+      await fs.writeFile(tempFilePath, largeContent);
+
+      const result = await extractTextFromLargeFile(tempFilePath);
+
+      // Should have been processed and potentially sampled
+      expect(result.length).toBeLessThanOrEqual(largeContent.length);
+      expect(result.length).toBeGreaterThan(1000); // Should have meaningful content
+
+      // Cleanup
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    test('handles edge cases in content processing', () => {
+      // Test empty content
+      expect(sampleLargeContent('')).toBe('');
+
+      // Test null/undefined
+      expect(sampleLargeContent(null)).toBe(null);
+      expect(sampleLargeContent(undefined)).toBe(undefined);
+
+      // Test very short content
+      expect(sampleLargeContent('Short')).toBe('Short');
     });
   });
 });

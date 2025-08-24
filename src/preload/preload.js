@@ -402,6 +402,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     rebuildFiles: () =>
       secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES),
     clearStore: () => secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE),
+    prewarm: (folders) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.EMBEDDINGS.PREWARM, folders),
   },
 
   // Undo/Redo System

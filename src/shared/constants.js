@@ -107,6 +107,7 @@ const IPC_CHANNELS = {
     REBUILD_FOLDERS: 'embeddings-rebuild-folders',
     REBUILD_FILES: 'embeddings-rebuild-files',
     CLEAR_STORE: 'embeddings-clear-store',
+    PREWARM: 'embeddings-prewarm',
   },
 
   // Ollama
@@ -347,20 +348,20 @@ const DEFAULT_AI_MODELS = {
   ],
 };
 
-// AI defaults centralized for analyzers
+// AI defaults optimized for maximum performance with intelligent sampling
 const AI_DEFAULTS = {
   TEXT: {
     MODEL: 'llama3.2:latest',
     HOST: 'http://127.0.0.1:11434',
-    MAX_CONTENT_LENGTH: 12000,
+    MAX_CONTENT_LENGTH: 4000, // Further reduced with intelligent sampling
     TEMPERATURE: 0.1,
-    MAX_TOKENS: 800,
+    MAX_TOKENS: 400, // Further reduced for faster responses
   },
   IMAGE: {
     MODEL: 'llava:latest',
     HOST: 'http://127.0.0.1:11434',
     TEMPERATURE: 0.2,
-    MAX_TOKENS: 1000,
+    MAX_TOKENS: 500, // Further reduced for faster responses
   },
 };
 
@@ -372,12 +373,49 @@ const FILE_SIZE_LIMITS = {
   MAX_DOCUMENT_FILE_SIZE: 200 * 1024 * 1024, // 200MB
 };
 
-// Processing limits - Optimized for faster models
+// Processing limits - Optimized for maximum performance
 const PROCESSING_LIMITS = {
-  MAX_CONCURRENT_ANALYSIS: 3,
+  MAX_CONCURRENT_ANALYSIS: 8, // Increased from 3 for better parallelization
   MAX_BATCH_SIZE: 100,
-  ANALYSIS_TIMEOUT: 60000, // 1 minute for faster models
-  RETRY_ATTEMPTS: 3,
+  ANALYSIS_TIMEOUT: 25000, // Further reduced to 25s with intelligent sampling
+  RETRY_ATTEMPTS: 2, // Reduced from 3 to speed up failures
+};
+
+// Content sampling configuration for intelligent analysis
+const CONTENT_SAMPLING = {
+  ENABLED: true, // Enable/disable intelligent content sampling
+  MAX_SAMPLE_LENGTH: 4000, // Maximum characters for sampled content
+  MIN_SAMPLE_LENGTH: 1000, // Minimum characters to sample
+  STRATEGIES: {
+    BEGINNING: 0.3, // 30% from beginning (title, intro)
+    HEADINGS: 0.2, // 20% from headings and key sections
+    MIDDLE: 0.25, // 25% from middle (core content)
+    END: 0.15, // 15% from end (conclusion, summary)
+    KEYWORDS: 0.1, // 10% from keyword-rich sections
+  },
+};
+
+// Caching configuration for performance optimization
+const CACHE_CONFIG = {
+  ENABLED: true, // Enable/disable caching system
+  TTL: {
+    ANALYSIS: 7 * 24 * 60 * 60 * 1000, // 7 days for analysis results
+    EMBEDDINGS: 30 * 24 * 60 * 60 * 1000, // 30 days for embeddings
+    CONTENT_EXTRACTION: 24 * 60 * 60 * 1000, // 24 hours for extracted content
+  },
+  MAX_SIZE: {
+    ANALYSIS_CACHE: 1000, // Max analysis results to cache
+    EMBEDDING_CACHE: 5000, // Max embeddings to cache
+    CONTENT_CACHE: 500, // Max extracted content to cache
+  },
+  COMPRESSION: {
+    ENABLED: true, // Enable compression for cached data
+    THRESHOLD: 1024, // Only compress items larger than 1KB
+  },
+  PERSISTENCE: {
+    ENABLED: true, // Persist cache to disk
+    FLUSH_INTERVAL: 5 * 60 * 1000, // Flush to disk every 5 minutes
+  },
 };
 
 // Renderer/UI specific constants
@@ -388,7 +426,7 @@ const UI_WORKFLOW = {
 
 const RENDERER_LIMITS = {
   FILE_STATS_BATCH_SIZE: 25,
-  ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000, // 3 minutes
+  ANALYSIS_TIMEOUT_MS: 45 * 1000, // Reduced from 3 minutes to 45 seconds
 };
 
 // CommonJS exports for Node.js compatibility (main process)
@@ -417,6 +455,43 @@ module.exports = {
   AI_DEFAULTS,
   FILE_SIZE_LIMITS,
   PROCESSING_LIMITS,
+  CONTENT_SAMPLING,
+  CACHE_CONFIG,
   UI_WORKFLOW,
   RENDERER_LIMITS,
+
+  // Performance optimization flags
+  PERFORMANCE_FLAGS: {
+    // Enable/disable various optimizations
+    ENABLE_MEMORY_OPTIMIZATION: true,
+    ENABLE_FILE_CACHING: true,
+    ENABLE_CONTENT_SAMPLING: true,
+    ENABLE_STREAMING: true,
+    ENABLE_CONCURRENCY: true,
+
+    // Memory management
+    MAX_MEMORY_USAGE: 0.8, // 80% of available memory
+    GC_INTERVAL: 30000, // 30 seconds
+    CHUNK_SIZE: 1024 * 1024, // 1MB for streaming
+
+    // File operations
+    MAX_CONCURRENT_FILE_OPS: 5,
+    FILE_READ_BUFFER_SIZE: 64 * 1024, // 64KB
+
+    // Network optimizations
+    HTTP_KEEP_ALIVE: true,
+    CONNECTION_TIMEOUT: 10000, // 10 seconds
+    REQUEST_TIMEOUT: 30000, // 30 seconds
+
+    // Caching
+    CACHE_TTL_ANALYSIS: 7 * 24 * 60 * 60 * 1000, // 7 days
+    CACHE_TTL_EMBEDDINGS: 30 * 24 * 60 * 60 * 1000, // 30 days
+    CACHE_COMPRESSION: true,
+    CACHE_MAX_SIZE: 100 * 1024 * 1024, // 100MB
+
+    // UI optimizations
+    REACT_MEMOIZATION: true,
+    VIRTUAL_SCROLLING: true,
+    IMAGE_LAZY_LOADING: true,
+  },
 };

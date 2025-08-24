@@ -12,6 +12,29 @@ const { autoUpdater } = require('electron-updater');
 // const { performance } = require('perf_hooks'); // no longer used
 const isDev = process.env.NODE_ENV === 'development';
 
+// Performance optimizations
+const os = require('os');
+const v8 = require('v8');
+const { PERFORMANCE_FLAGS } = require('../shared/constants');
+
+// Optimize V8 engine
+if (PERFORMANCE_FLAGS.ENABLE_MEMORY_OPTIMIZATION) {
+  v8.setFlagsFromString('--optimize-for-size');
+  v8.setFlagsFromString('--memory-reducer');
+  v8.setFlagsFromString('--optimize-for-memory');
+  v8.setFlagsFromString('--max-old-space-size=4096'); // 4GB heap
+}
+
+// Set garbage collection hints
+if (global.gc && PERFORMANCE_FLAGS.ENABLE_MEMORY_OPTIMIZATION) {
+  // Run garbage collection based on performance flags
+  if (isDev || PERFORMANCE_FLAGS.GC_INTERVAL > 0) {
+    setInterval(() => {
+      global.gc();
+    }, PERFORMANCE_FLAGS.GC_INTERVAL);
+  }
+}
+
 // Logging utility
 const { logger } = require('../shared/logger');
 
@@ -396,8 +419,12 @@ if (!gotTheLock) {
       customFolders = await loadCustomFolders();
       logger.info(
         '[STARTUP] Loaded custom folders:',
-        customFolders.length,
+        customFolders ? customFolders.length : 'null/undefined',
         'folders',
+      );
+      logger.info(
+        '[STARTUP] Custom folders data:',
+        JSON.stringify(customFolders, null, 2),
       );
 
       // Initialize service integration
@@ -451,7 +478,14 @@ if (!gotTheLock) {
       // Register IPC groups now that services and state are ready
       const getMainWindow = () => mainWindow;
       const getServiceIntegration = () => serviceIntegration;
-      const getCustomFolders = () => customFolders;
+      const getCustomFolders = () => {
+        logger.info(
+          '[getCustomFolders] Called, returning:',
+          customFolders ? customFolders.length : 'null/undefined',
+          'folders',
+        );
+        return customFolders;
+      };
       const setCustomFolders = (folders) => {
         customFolders = folders;
       };

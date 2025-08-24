@@ -25,7 +25,22 @@ let selectedEmbeddingModel = null;
 function getOllama() {
   if (!ollamaInstance) {
     // Host is configurable via environment variables or saved config
-    ollamaInstance = new Ollama({ host: ollamaHost });
+    // Add connection optimizations for better performance
+    ollamaInstance = new Ollama({
+      host: ollamaHost,
+      // Enable connection keep-alive for better performance with multiple requests
+      fetch: (url, options = {}) => {
+        return fetch(url, {
+          ...options,
+          keepalive: true,
+          signal: AbortSignal.timeout(30000), // 30 second timeout for embeddings
+          headers: {
+            ...options.headers,
+            Connection: 'keep-alive',
+          },
+        });
+      },
+    });
   }
   return ollamaInstance;
 }

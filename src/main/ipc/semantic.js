@@ -109,6 +109,23 @@ function registerEmbeddingsIpc({
       }
     }),
   );
+
+  // Pre-warm embeddings for batch optimization
+  ipcMain.handle(
+    IPC_CHANNELS.EMBEDDINGS.PREWARM,
+    withErrorLogging(logger, async (event, folders) => {
+      try {
+        console.log(
+          `[IPC] Pre-warming embeddings for ${folders?.length || 0} folders...`,
+        );
+        await folderMatcher.prewarmFolderEmbeddings(folders || []);
+        return { success: true };
+      } catch (e) {
+        console.error('[IPC] Failed to pre-warm embeddings:', e);
+        return { success: false, error: e.message };
+      }
+    }),
+  );
 }
 
 module.exports = registerEmbeddingsIpc;

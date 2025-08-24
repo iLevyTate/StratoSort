@@ -12,8 +12,7 @@ module.exports = (env, argv) => {
     entry: ['./src/renderer/polyfills.js', './src/renderer/index.js'],
     output: {
       path: path.resolve(__dirname, 'dist'),
-      filename: 'renderer.js',
-      chunkFilename: '[id].renderer.js',
+      filename: isProduction ? '[name].[contenthash].js' : '[name].js',
       clean: true,
       publicPath: '',
       globalObject: 'globalThis',
@@ -111,30 +110,12 @@ module.exports = (env, argv) => {
           },
         },
 
-    // Optimization
+    // Optimization - Simplified to avoid chunk conflicts
     optimization: {
       minimize: isProduction,
-      splitChunks: {
-        chunks: 'async',
-        minSize: 20000,
-        minRemainingSize: 0,
-        minChunks: 1,
-        maxAsyncRequests: 30,
-        maxInitialRequests: 30,
-        enforceSizeThreshold: 50000,
-        cacheGroups: {
-          defaultVendors: {
-            test: /[\\/]node_modules[\\/]/,
-            priority: -10,
-            reuseExistingChunk: true,
-          },
-          default: {
-            minChunks: 2,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
-        },
-      },
+      runtimeChunk: 'single',
+      // Disable complex splitting to avoid conflicts
+      splitChunks: false,
     },
   };
 };

@@ -8,7 +8,7 @@ Advanced file analysis and organization platform utilizing local AI (Artificial 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](https://opensource.org/licenses/MIT)
 [![Coverage](https://img.shields.io/badge/Coverage-32.88%25-blue.svg?style=flat)](coverage/lcov-report/index.html)
-[![Tests](https://img.shields.io/badge/Tests-400%20passed-green.svg?style=flat)](test/)
+[![Tests](https://img.shields.io/badge/Tests-427%20passed-green.svg?style=flat)](test/)
 [![Electron](https://img.shields.io/badge/Electron-47848F?style=flat&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -83,6 +83,7 @@ StratoSort provides pre-built executables for all major platforms:
 - **User-configurable Models**: Choose your preferred Ollama models for text, vision, and embedding.
 - **Custom Smart Folders**: Define your own organization categories and rules.
 - **Adjustable Performance**: Control analysis concurrency and processing options.
+- **Performance Optimizations**: Advanced caching, memory management, and AI model optimizations.
 - **Cross-platform**: Runs on Windows, macOS, and Linux.
 
 ---
@@ -171,10 +172,21 @@ Create custom organization categories with:
 
 Configure your preferred models in Settings:
 
-- **Text Model**: For document analysis (default: `llama3.2:latest`)
+- **Text Model**: For document analysis (default: `gemma3:4b` for speed, `llama3.2:latest` for quality)
 - **Vision Model**: For image analysis (default: `llava:latest`)
-- **Embedding Model**: For semantic matching (default: `mxbai-embed-large`)
+- **Embedding Model**: For semantic matching (default: `mxbai-embed-large`, optimized with 30s timeout)
 - **Ollama Host**: Server URL (default: `http://127.0.0.1:11434`)
+
+### 🚀 Performance Optimizations
+
+Recent performance enhancements include:
+
+- **Smart Content Sampling**: Analyzes only relevant portions of large documents
+- **Embedding Caching**: Reduces redundant AI calls with intelligent cache management
+- **Memory Optimization**: Advanced garbage collection and memory pressure monitoring
+- **Concurrent Processing**: Optimized batch processing with configurable limits
+- **Timeout Protection**: 30-second timeouts prevent hanging requests
+- **GPU Acceleration**: Automatic detection and utilization of available GPU resources
 
 ---
 
@@ -187,8 +199,8 @@ Configure your preferred models in Settings:
 | **Statements**  | `32.88%`     | Moderate      |
 | **Functions**   | `32.65%`     | Moderate      |
 | **Lines**       | `33.18%`     | Moderate      |
-| **Test Suites** | `40 passed`  | Comprehensive |
-| **Total Tests** | `400 passed` | All Passing   |
+| **Test Suites** | `41 passed`  | Comprehensive |
+| **Total Tests** | `427 passed` | All Passing   |
 
 ### Running Tests
 
@@ -200,6 +212,12 @@ npm run test:coverage      # Generate coverage report
 ```
 
 > **Test Focus:** Critical business logic and system reliability. Coverage prioritizes AI processing, file operations, and IPC communication.
+
+### 📚 Additional Documentation
+
+- **[Performance Guide](PERFORMANCE_GUIDE.md)**: Comprehensive performance optimization documentation
+- **Test Reports**: View detailed coverage at `coverage/lcov-report/index.html`
+- **API Documentation**: Check individual service files for inline documentation
 
 ---
 
@@ -282,26 +300,31 @@ npm run dist:linux   # Linux
 - 🐌 Analysis takes too long
 - 💾 High memory/CPU usage
 - 🔄 Application becomes unresponsive
+- ❌ "Embeddings unavailable" errors
 
 **Solutions:**
 
+- [ ] **Check AI models**: Ensure `mxbai-embed-large` is installed: `ollama pull mxbai-embed-large`
 - [ ] **Reduce concurrent analysis limit** in Settings (try 2-4)
-- [ ] **Use smaller/faster models** (e.g., `llama3.2:1b` instead of `llama3.2:latest`)
+- [ ] **Use optimized startup**: Run `npm run dev` for performance optimizations
+- [ ] **Use smaller/faster models** (e.g., `gemma3:4b` instead of `llama3.2:latest`)
 - [ ] **Close unnecessary applications** during large operations
 - [ ] **Ensure sufficient RAM** (8GB+ recommended)
 - [ ] **Check available disk space** (2GB+ free recommended)
+- [ ] **Verify Ollama connection**: Test with `curl http://127.0.0.1:11434/api/tags`
 
-> **Performance Tip**: For better performance, process files in reasonable batches.
+> **Performance Tip**: For better performance, process files in reasonable batches. Check [PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) for detailed optimization strategies.
 
 ---
 
 ## Architecture
 
 - **Frontend**: React with modern hooks and context
-- **Backend**: Electron main process with Node.js
-- **AI Integration**: Local Ollama API calls
-- **Storage**: JSON-based vector store
-- **IPC**: Secure inter-process communication
+- **Backend**: Electron main process with Node.js and performance optimizations
+- **AI Integration**: Local Ollama API with timeout protection and caching
+- **Storage**: JSON-based vector store with embedding persistence
+- **IPC**: Secure inter-process communication with error handling
+- **Performance**: Advanced caching, memory management, and GPU acceleration
 
 ---
 

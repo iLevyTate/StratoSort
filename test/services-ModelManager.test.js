@@ -542,8 +542,9 @@ describe('ModelManager', () => {
 
       await modelManager.saveConfig();
 
+      // Atomic operation writes to temp file first, then moves
       expect(fs.writeFile).toHaveBeenCalledWith(
-        normalizePath('/mock/user/data/model-config.json'),
+        expect.stringContaining('model-config.json.tmp'),
         expect.stringContaining('"selectedModel": "llama3.2"'),
       );
     });

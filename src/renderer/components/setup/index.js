@@ -26,6 +26,13 @@ export default function FirstRunWizard({ onComplete }) {
   ];
 
   useEffect(() => {
+    // If user previously chose to skip startup wizard, close immediately
+    const previouslySkipped =
+      localStorage.getItem('skipStartupWizard') === 'true';
+    if (previouslySkipped) {
+      setHostOk(true);
+      return;
+    }
     (async () => {
       try {
         const res = await window.electronAPI?.ollama?.testConnection?.();
@@ -79,7 +86,15 @@ export default function FirstRunWizard({ onComplete }) {
               ))}
             </div>
             <div className="flex items-center justify-end gap-8">
-              <Button onClick={onComplete} variant="secondary">
+              <Button
+                onClick={async () => {
+                  // Persist skip preference and dismiss the modal
+                  localStorage.setItem('skipStartupWizard', 'true');
+                  setHostOk(true);
+                  if (onComplete) onComplete();
+                }}
+                variant="secondary"
+              >
                 Skip
               </Button>
               <Button

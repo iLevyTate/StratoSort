@@ -120,10 +120,18 @@ function SetupPhase() {
         } catch {}
       }
 
-      const illegalChars = /[<>:"|?*\x00-\x1f]/g;
+      const illegalChars = /[<>:"/\\|?*\x00-\x1f]/g;
       if (illegalChars.test(newFolderName)) {
         showError(
-          'Folder name contains invalid characters. Please avoid: < > : " | ? *',
+          'Folder name contains invalid characters. Please avoid: < > : " | ? * / \\',
+        );
+        return;
+      }
+
+      // Validate optional path if provided
+      if (newFolderPath && illegalChars.test(newFolderPath)) {
+        showError(
+          'Folder path contains invalid characters. Please avoid: < > : " | ? * / \\',
         );
         return;
       }
@@ -140,10 +148,11 @@ function SetupPhase() {
         return;
       }
 
-      const parentPath = targetPath.substring(
-        0,
-        targetPath.lastIndexOf('/') || targetPath.lastIndexOf('\\'),
-      );
+      const lastSlash = targetPath.lastIndexOf('/');
+      const lastBackslash = targetPath.lastIndexOf('\\');
+      const parentIdx = Math.max(lastSlash, lastBackslash);
+      const parentPath =
+        parentIdx > 0 ? targetPath.substring(0, parentIdx) : '';
       try {
         if (parentPath) {
           const parentStats =
@@ -331,9 +340,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'true'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'true');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -346,9 +355,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'false'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'false');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}

@@ -240,6 +240,15 @@ describe('AnalysisError', () => {
       expect(error.metadata.fileExtension).toBe('.gz');
       expect(error.metadata.fileName).toBe('archive.tar.gz');
     });
+
+    test('handles second-level extensions correctly (e.g., .tar)', () => {
+      const error = new FileProcessingError(
+        'FILE_TYPE_UNSUPPORTED',
+        'archive.tar',
+      );
+      expect(error.metadata.fileExtension).toBe('.tar');
+      expect(error.metadata.fileName).toBe('archive.tar');
+    });
   });
 
   describe('Error serialization', () => {
@@ -258,6 +267,24 @@ describe('AnalysisError', () => {
       const error = new AnalysisError('TEST_ERROR');
       expect(error.stack).toBeDefined();
       expect(error.stack).toContain('AnalysisError');
+    });
+
+    test('FileProcessingError serializes with file metadata', () => {
+      const error = new FileProcessingError(
+        'PDF_NO_TEXT_CONTENT',
+        'report.pdf',
+        {
+          extra: 'additional-info',
+        },
+      );
+      const serialized = JSON.stringify(error);
+      const parsed = JSON.parse(serialized);
+
+      expect(parsed.name).toBe('AnalysisError');
+      expect(parsed.code).toBe('PDF_NO_TEXT_CONTENT');
+      expect(parsed.metadata.fileName).toBe('report.pdf');
+      expect(parsed.metadata.fileExtension).toBe('.pdf');
+      expect(parsed.metadata.extra).toBe('additional-info');
     });
   });
 });

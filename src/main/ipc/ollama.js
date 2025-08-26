@@ -178,7 +178,7 @@ function registerOllamaIpc({
         }
         return { success: true, results };
       } catch (error) {
-        logger.error('[IPC] Pull models failed]:', error);
+        logger.error('[IPC] Pull models failed:', error);
         return { success: false, error: error.message };
       }
     }),
@@ -193,7 +193,7 @@ function registerOllamaIpc({
         await ollama.delete({ model });
         return { success: true };
       } catch (error) {
-        logger.error('[IPC] Delete model failed]:', error);
+        logger.error('[IPC] Delete model failed:', error);
         return { success: false, error: error.message };
       }
     }),

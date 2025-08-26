@@ -221,6 +221,10 @@ beforeEach(() => {
 
 // Test environment validation
 beforeAll(() => {
+  // Increase max listeners to prevent EventEmitter memory leak warnings
+  // during test runs where multiple listeners are added to process events
+  process.setMaxListeners(20);
+
   console.log('🧪 Stratosort Test Environment Initialized');
   console.log('📋 Test utilities available:', Object.keys(global.testUtils));
   console.log('⚡ Performance monitoring enabled');
@@ -228,6 +232,9 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  // Reset max listeners to default after tests complete
+  process.setMaxListeners(10);
+
   console.log('✅ All Stratosort tests completed');
   console.log('🧹 Test environment cleaned up');
 });

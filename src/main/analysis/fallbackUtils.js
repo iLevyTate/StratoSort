@@ -1,7 +1,7 @@
 // no path usage here
 
 function getIntelligentCategory(fileName, extension, smartFolders = []) {
-  const lowerFileName = fileName.toLowerCase();
+  const lowerFileName = (fileName || '').toLowerCase();
 
   if (smartFolders && smartFolders.length > 0) {
     const validFolders = smartFolders.filter(
@@ -58,7 +58,10 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
         bestMatch = folder.name;
       }
     }
-    if (bestScore >= 5) return bestMatch;
+    if (bestMatch && bestScore >= 5) {
+      // Return the full folder name as matched
+      return bestMatch;
+    }
   }
 
   const patterns = {
@@ -236,7 +239,7 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
     '.pdf': 'document',
     '.doc': 'document',
     '.docx': 'document',
-    '.txt': 'text',
+    '.txt': 'document',
     '.md': 'documentation',
     '.png': 'image',
     '.jpg': 'image',
@@ -248,18 +251,34 @@ function getIntelligentCategory(fileName, extension, smartFolders = []) {
     '.xlsx': 'spreadsheet',
     '.xls': 'spreadsheet',
     '.csv': 'data',
-    '.json': 'data',
+    '.json': 'research',
     '.xml': 'data',
     '.zip': 'archive',
     '.rar': 'archive',
     '.7z': 'archive',
   };
-  return extensionCategories[extension] || 'document';
+
+  // Check extension mapping first
+  if (extension && extensionCategories[extension]) {
+    return extensionCategories[extension];
+  }
+
+  // For unknown extensions, default to 'document' unless filename suggests otherwise
+  const nameParts = lowerFileName.split(/[\s_-]+/).filter((w) => w.length > 2);
+  if (nameParts.length > 0) {
+    const firstWord = nameParts[0];
+    // If the first word is already a known category, use it; otherwise default to 'document'
+    const knownCategories = Object.keys(patterns);
+    if (knownCategories.includes(firstWord)) {
+      return firstWord;
+    }
+  }
+  return 'document';
 }
 
 function getIntelligentKeywords(fileName, extension) {
   const category = getIntelligentCategory(fileName, extension);
-  const lowerFileName = fileName.toLowerCase();
+  const lowerFileName = (fileName || '').toLowerCase();
   const baseKeywords = {
     financial: ['financial', 'money', 'business'],
     legal: ['legal', 'official', 'formal'],
@@ -268,6 +287,15 @@ function getIntelligentKeywords(fileName, extension) {
     technical: ['technical', 'manual', 'guide'],
     document: ['document', 'file', 'text'],
     image: ['image', 'visual', 'graphic'],
+    research: ['research', 'study', 'analysis'],
+    marketing: ['marketing', 'campaign', 'brand'],
+    hr: ['employee', 'staff', 'hiring'],
+    spreadsheet: ['spreadsheet', 'excel', 'data'],
+    video: ['video', 'media', 'multimedia'],
+    data: ['data', 'dataset', 'information'],
+    documentation: ['documentation', 'docs', 'manual'],
+    archive: ['archive', 'compressed', 'zip'],
+    text: ['text', 'document', 'file'],
   };
   const keywords = [...(baseKeywords[category] || ['file', 'document'])];
   if (lowerFileName.includes('report')) keywords.push('report');
@@ -276,7 +304,8 @@ function getIntelligentKeywords(fileName, extension) {
   if (lowerFileName.includes('proposal')) keywords.push('proposal');
   if (lowerFileName.includes('presentation')) keywords.push('presentation');
   if (extension) keywords.push(extension.replace('.', ''));
-  return keywords.slice(0, 7);
+  // Remove duplicates and limit to 7
+  return Array.from(new Set(keywords)).slice(0, 7);
 }
 
 function safeSuggestedName(fileName, extension) {

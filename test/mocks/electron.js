@@ -6,13 +6,29 @@ module.exports = {
     invoke: jest.fn(),
     on: jest.fn(),
     send: jest.fn(),
+    sendSync: jest.fn((channel) => {
+      // Mock the IPC channels response for preload script
+      if (channel === 'get-ipc-channels') {
+        const { IPC_CHANNELS } = require('../../src/shared/constants');
+        return IPC_CHANNELS;
+      }
+      return null;
+    }),
     removeListener: jest.fn(),
   },
   ipcMain: {
     _handlers: new Map(),
+    _eventHandlers: new Map(),
     handle: jest.fn(function (channel, handler) {
       module.exports.ipcMain._handlers.set(channel, handler);
     }),
+    on: jest.fn(function (channel, handler) {
+      if (!module.exports.ipcMain._eventHandlers.has(channel)) {
+        module.exports.ipcMain._eventHandlers.set(channel, []);
+      }
+      module.exports.ipcMain._eventHandlers.get(channel).push(handler);
+    }),
+    removeHandler: jest.fn(),
   },
   dialog: {
     showOpenDialog: jest.fn(async () => ({ canceled: true, filePaths: [] })),
@@ -23,8 +39,20 @@ module.exports = {
     openExternal: jest.fn(async () => {}),
   },
   app: {
-    getPath: jest.fn(() => '/test/path'),
+    getPath: jest.fn((name) => {
+      if (name === 'downloads') {
+        // Return the same path that the test expects
+        const os = require('os');
+        const path = require('path');
+        return path.join(os.homedir(), 'Downloads');
+      }
+      return '/test/path';
+    }),
     setAppUserModelId: jest.fn(),
+    isReady: jest.fn(() => true),
+    whenReady: jest.fn(() => Promise.resolve()),
+    relaunch: jest.fn(),
+    quit: jest.fn(),
   },
   screen: {
     getPrimaryDisplay: jest.fn(() => ({

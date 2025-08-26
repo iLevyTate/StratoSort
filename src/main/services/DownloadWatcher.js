@@ -2,7 +2,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const chokidar = require('chokidar');
+const { app } = require('electron');
 const { logger } = require('../../shared/logger');
+const { atomicFileOps } = require('../../shared/atomicFileOperations');
 
 // Simple utility to determine if a path is an image based on extension
 const IMAGE_EXTENSIONS = new Set([
@@ -25,16 +27,28 @@ class DownloadWatcher {
     this.watcher = null;
   }
 
-  start() {
+  async start() {
     if (this.watcher) return;
-    const downloadsPath = path.join(os.homedir(), 'Downloads');
-    logger.info('[DOWNLOAD-WATCHER] Watching', downloadsPath);
-    this.watcher = chokidar.watch(downloadsPath, { ignoreInitial: true });
-    this.watcher.on('add', (filePath) => {
-      this.handleFile(filePath).catch((e) =>
-        logger.error('[DOWNLOAD-WATCHER] Failed processing', filePath, e),
+
+    try {
+      // Use Electron's built-in downloads path instead of hardcoded path
+      const downloadsPath = app.getPath('downloads');
+
+      // Verify the downloads directory exists and is accessible
+      await fs.access(downloadsPath);
+      logger.info('[DOWNLOAD-WATCHER] Watching', downloadsPath);
+      this.watcher = chokidar.watch(downloadsPath, { ignoreInitial: true });
+      this.watcher.on('add', (filePath) => {
+        this.handleFile(filePath).catch((e) =>
+          logger.error('[DOWNLOAD-WATCHER] Failed processing', filePath, e),
+        );
+      });
+    } catch (error) {
+      logger.warn(
+        '[DOWNLOAD-WATCHER] Downloads directory not accessible:',
+        error.message,
       );
-    });
+    }
   }
 
   stop() {
@@ -46,7 +60,41 @@ class DownloadWatcher {
 
   async handleFile(filePath) {
     const ext = path.extname(filePath).toLowerCase();
-    if (ext === '' || ext.endsWith('crdownload') || ext.endsWith('tmp')) return;
+    if (
+      ext === '' ||
+      ext.endsWith('.crdownload') ||
+      ext.endsWith('.tmp') ||
+      ext.endsWith('.download')
+    )
+      return;
+
+    // Add stability check for partial downloads - verify file size is stable
+    try {
+      const initialStats = await fs.stat(filePath);
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          require('../../shared/constants').TIMEOUTS.FILE_STABILITY_CHECK,
+        ),
+      );
+      const finalStats = await fs.stat(filePath);
+
+      // If file size changed, it's likely still being written
+      if (initialStats.size !== finalStats.size) {
+        logger.debug(
+          '[DOWNLOAD-WATCHER] File size changed, skipping likely partial download:',
+          filePath,
+        );
+        return;
+      }
+    } catch (e) {
+      logger.debug(
+        '[DOWNLOAD-WATCHER] Could not verify file stability, skipping:',
+        filePath,
+        e.message,
+      );
+      return;
+    }
 
     const folders = this.getCustomFolders().filter((f) => f && f.path);
     const folderCategories = folders.map((f) => ({
@@ -72,7 +120,6 @@ class DownloadWatcher {
     try {
       // Normalize paths for cross-platform compatibility
       const normalizedDestPath = destFolder.path.replace(/\\/g, '/');
-      await fs.mkdir(normalizedDestPath, { recursive: true });
       const baseName = path.basename(filePath);
       const extname = path.extname(baseName);
       const newName = result.suggestedName
@@ -81,10 +128,25 @@ class DownloadWatcher {
       const destPath = path
         .join(normalizedDestPath, newName)
         .replace(/\\/g, '/');
-      await fs.rename(filePath, destPath);
-      logger.info('[DOWNLOAD-WATCHER] Moved', filePath, '=>', destPath);
-    } catch (e) {
-      logger.error('[DOWNLOAD-WATCHER] Failed to move file', e);
+
+      // Use atomic file operations for safe move with collision resolution
+      try {
+        const actualDestPath = await atomicFileOps.atomicMove(
+          filePath,
+          destPath,
+        );
+        logger.info('[DOWNLOAD-WATCHER] Moved', filePath, '=>', actualDestPath);
+      } catch (moveError) {
+        logger.error(
+          '[DOWNLOAD-WATCHER] Failed to move file:',
+          moveError.message,
+        );
+      }
+    } catch (error) {
+      logger.error(
+        '[DOWNLOAD-WATCHER] Unexpected error during file processing:',
+        error.message,
+      );
     }
   }
 

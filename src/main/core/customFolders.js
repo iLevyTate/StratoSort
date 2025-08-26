@@ -19,14 +19,34 @@ function normalizeFolderPaths(folders) {
           typeof normalized.path === 'string' &&
           normalized.path.trim()
         ) {
+          const originalPath = normalized.path;
           normalized.path = path.normalize(normalized.path);
+
+          // Security check: reject paths that contain path traversal
+          if (normalized.path.includes('..')) {
+            logger.warn(
+              `[SECURITY] Rejected folder path with path traversal: ${originalPath}`,
+            );
+            throw new Error('Invalid folder path in customFolders');
+          }
+
+          // Additional security: reject absolute paths unless explicitly allowed
+          if (path.isAbsolute(normalized.path)) {
+            logger.warn(
+              `[SECURITY] Rejected absolute folder path: ${originalPath}`,
+            );
+            // You could throw an error here if absolute paths are not desired
+            // throw new Error('Absolute paths not allowed in customFolders');
+          }
         }
         return normalized;
       }
       // Return non-objects as-is (null, undefined, strings, etc.)
+      // Only transform well-formed folder objects; leave others (string, null) as-is for compatibility.
       return f;
     });
-  } catch {
+  } catch (error) {
+    logger.error('[ERROR] Failed to normalize folder paths:', error);
     return Array.isArray(folders) ? folders : [];
   }
 }

@@ -57,7 +57,7 @@ class ErrorBoundary extends React.Component {
                 </svg>
               </div>
               <h1 className="text-2xl font-bold text-system-gray-900 mb-2">
-                Oops! Something went wrong
+                {this.props.fallbackTitle || 'Oops! Something went wrong'}
               </h1>
               <p className="text-system-gray-600">
                 The application encountered an unexpected error.
@@ -110,5 +110,9 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
+ErrorBoundary.defaultProps = {
+  fallbackTitle: 'Application Error',
+};
 
 export default ErrorBoundary;

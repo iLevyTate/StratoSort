@@ -1,3 +1,21 @@
+// Mock electron first, before any other imports
+jest.mock('electron', () => ({
+  ipcMain: {
+    _handlers: new Map(),
+    _eventHandlers: new Map(),
+    handle: jest.fn(function (channel, handler) {
+      this._handlers.set(channel, handler);
+    }),
+    on: jest.fn(function (channel, handler) {
+      if (!this._eventHandlers.has(channel)) {
+        this._eventHandlers.set(channel, []);
+      }
+      this._eventHandlers.get(channel).push(handler);
+    }),
+    removeHandler: jest.fn(),
+  },
+}));
+
 // Mock all IPC registration functions at module level
 jest.mock('../src/main/ipc/files', () => jest.fn());
 jest.mock('../src/main/ipc/smartFolders', () => jest.fn());
@@ -103,6 +121,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       dialog: mockDependencies.dialog,
       shell: mockDependencies.shell,
       getMainWindow: mockDependencies.getMainWindow,
@@ -113,6 +132,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getCustomFolders: mockDependencies.getCustomFolders,
       setCustomFolders: mockDependencies.setCustomFolders,
       saveCustomFolders: mockDependencies.saveCustomFolders,
@@ -125,6 +145,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
 
@@ -132,6 +153,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
 
@@ -171,6 +193,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       settingsService: mockDependencies.settingsService,
       setOllamaHost: mockDependencies.setOllamaHost,
       setOllamaModel: mockDependencies.setOllamaModel,
@@ -183,6 +206,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getCustomFolders: mockDependencies.getCustomFolders,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
@@ -191,6 +215,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getMainWindow: mockDependencies.getMainWindow,
     });
   });

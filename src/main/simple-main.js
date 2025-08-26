@@ -9,16 +9,16 @@ const {
   nativeImage,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
-// const { performance } = require('perf_hooks'); // no longer used
+
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
 const { logger } = require('../shared/logger');
+const { MEMORY_THRESHOLDS, SERVICE_LIMITS } = require('../shared/constants');
 
 // Import error handling system (not needed directly in this file)
 
 const { scanDirectory } = require('./folderScanner');
-// const { getOrganizationSuggestions } = require('./llmService'); // not used currently
 const {
   getOllama,
   getOllamaModel,
@@ -31,10 +31,11 @@ const {
   setOllamaHost,
   loadOllamaConfig,
 } = require('./ollamaUtils');
-// const ModelManager = require('./services/ModelManager'); // not used currently
 const { buildOllamaOptions } = require('./services/PerformanceService');
+const { ensureOllamaWithGpu } = require('./ollamaStartup');
 const SettingsService = require('./services/SettingsService');
 const DownloadWatcher = require('./services/DownloadWatcher');
+const { systemMonitor } = require('./services/SystemMonitor');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
@@ -42,12 +43,74 @@ const ServiceIntegration = require('./services/ServiceIntegration');
 // Import shared constants
 const { IPC_CHANNELS } = require('../shared/constants');
 
-// Import services
-const { analyzeDocumentFile } = require('./analysis/ollamaDocumentAnalysis');
-const { analyzeImageFile } = require('./analysis/ollamaImageAnalysis');
+// Lazy load heavy analysis modules
+let analyzeDocumentFile, analyzeImageFile;
 
-// Import OCR library
-const tesseract = require('node-tesseract-ocr');
+// Lazy load OCR library
+let tesseract;
+
+// Lazy load services
+let ModelManager, ProcessingStateService, AnalysisHistoryService;
+
+// Lazy loading functions
+async function getAnalyzeDocumentFile() {
+  if (!analyzeDocumentFile) {
+    try {
+      const module = require('./analysis/ollamaDocumentAnalysis');
+      analyzeDocumentFile = module.analyzeDocumentFile;
+    } catch (error) {
+      logger.error(
+        '[LAZY-LOAD] Failed to load document analysis module:',
+        error,
+      );
+      // Return a fallback function that throws a meaningful error
+      analyzeDocumentFile = async () => {
+        throw new Error(
+          'Document analysis module failed to load. Please check logs for details.',
+        );
+      };
+    }
+  }
+  return analyzeDocumentFile;
+}
+
+async function getAnalyzeImageFile() {
+  if (!analyzeImageFile) {
+    try {
+      const module = require('./analysis/ollamaImageAnalysis');
+      analyzeImageFile = module.analyzeImageFile;
+    } catch (error) {
+      logger.error('[LAZY-LOAD] Failed to load image analysis module:', error);
+      // Return a fallback function that throws a meaningful error
+      analyzeImageFile = async () => {
+        throw new Error(
+          'Image analysis module failed to load. Please check logs for details.',
+        );
+      };
+    }
+  }
+  return analyzeImageFile;
+}
+
+async function getTesseract() {
+  if (!tesseract) {
+    try {
+      tesseract = require('node-tesseract-ocr');
+      logger.debug('[LAZY-LOAD] Loaded Tesseract OCR library');
+    } catch (error) {
+      logger.error('[LAZY-LOAD] Failed to load Tesseract OCR library:', error);
+      // Return a fallback function that throws a meaningful error
+      tesseract = {
+        recognize: async () => {
+          throw new Error(
+            'Tesseract OCR library failed to load. Please check logs for details.',
+          );
+        },
+      };
+    }
+  }
+  return tesseract;
+}
 
 let mainWindow;
 let customFolders = []; // Initialize customFolders at module level
@@ -58,6 +121,9 @@ let settingsService;
 let downloadWatcher;
 let currentSettings = {};
 let isQuitting = false;
+
+// Performance monitoring (testable via a shared utility)
+const perfMonitor = require('./utils/perfMonitor')(logger);
 
 // ===== GPU PREFERENCES (Windows rendering stability) =====
 try {
@@ -83,7 +149,13 @@ try {
 } catch (e) {
   try {
     logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
-  } catch {}
+  } catch (logError) {
+    // Silent catch for logging errors - critical path for GPU setup
+    console.error(
+      '[GPU] Could not log GPU error:',
+      logError?.message || logError,
+    );
+  }
 }
 
 // Custom folders helpers
@@ -222,6 +294,7 @@ function createWindow() {
     return;
   }
   mainWindow = createMainWindow();
+  // startupTimings.windowReady = Date.now();
   mainWindow.on('close', (e) => {
     if (!isQuitting && currentSettings?.backgroundMode) {
       e.preventDefault();
@@ -238,8 +311,8 @@ function updateDownloadWatcher(settings) {
   if (enabled) {
     if (!downloadWatcher) {
       downloadWatcher = new DownloadWatcher({
-        analyzeDocumentFile,
-        analyzeImageFile,
+        analyzeDocumentFile: getAnalyzeDocumentFile,
+        analyzeImageFile: getAnalyzeImageFile,
         getCustomFolders: () => customFolders,
       });
       downloadWatcher.start();
@@ -351,10 +424,22 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
-    // Someone tried to run a second instance, focus our window instead
+    // Someone tried to run a second instance, focus our window if present,
+    // otherwise attempt to create a new window (e.g., app running in tray)
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+      return;
+    }
+
+    try {
+      // If no window exists, create one so the user's launch actually shows UI
+      createWindow();
+    } catch (e) {
+      logger.warn(
+        '[SECOND-INSTANCE] Failed to create window on second-instance:',
+        e?.message,
+      );
     }
   });
 
@@ -366,7 +451,8 @@ if (!gotTheLock) {
       'enable-gpu-memory-buffer-compositor-resources',
     );
     app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-    app.commandLine.appendSwitch('ignore-gpu-blacklist');
+    // Use the modern, documented flag name consistently
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
     app.commandLine.appendSwitch('disable-software-rasterizer');
 
     // Performance optimizations
@@ -377,6 +463,11 @@ if (!gotTheLock) {
       'Vulkan,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoder,VaapiVideoEncoder',
     );
 
+    // Memory optimization
+    app.commandLine.appendSwitch('--expose-gc');
+    app.commandLine.appendSwitch('--optimize-for-size');
+    app.commandLine.appendSwitch('--memory-reducer');
+
     logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
   } else {
     // Even in dev, prefer GPU acceleration where possible
@@ -386,27 +477,157 @@ if (!gotTheLock) {
       'enable-features',
       'Vulkan,CanvasOopRasterization,UseSkiaRenderer',
     );
+
+    // Memory optimization for development
+    app.commandLine.appendSwitch('--expose-gc');
+    app.commandLine.appendSwitch('--optimize-for-size');
+
     logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
   }
 
   // Initialize services after app is ready
   app.whenReady().then(async () => {
+    // Initialize file logger with userData path for consistent log locations
+    try {
+      const { initializeForMainProcess } = require('../shared/fileLogger');
+      initializeForMainProcess(app.getPath('userData'));
+    } catch (e) {
+      logger.warn('[STARTUP] File logger initialization failed:', e?.message);
+    }
+
+    // Initialize comprehensive system monitoring
+    try {
+      await systemMonitor.initialize();
+      logger.info('[STARTUP] System monitoring initialized');
+    } catch (e) {
+      // Non-fatal: log and continue startup
+      logger.warn(
+        '[STARTUP] System monitoring initialization failed:',
+        e?.message,
+      );
+    }
+
+    // Ensure Ollama is started with GPU-enabled configuration on app startup
+    try {
+      await ensureOllamaWithGpu();
+    } catch (e) {
+      // Non-fatal: log and continue startup
+      logger.debug('[OLLAMA] GPU startup check failed:', e?.message);
+    }
+    perfMonitor.mark('app.whenReady() completed');
     try {
       // Load custom folders
-      customFolders = await loadCustomFolders();
+      const loadedCustomFolders = await perfMonitor.measure(
+        'loadCustomFolders()',
+        async () => await loadCustomFolders(),
+      );
+      customFolders = Array.isArray(loadedCustomFolders)
+        ? loadedCustomFolders
+        : [];
       logger.info(
         '[STARTUP] Loaded custom folders:',
         customFolders.length,
         'folders',
       );
 
-      // Initialize service integration
+      // Initialize service integration (deferred for better startup performance)
       serviceIntegration = new ServiceIntegration();
-      await serviceIntegration.initialize();
-      logger.info('[MAIN] Service integration initialized successfully');
+      // Use background initialization to avoid blocking the UI on heavy I/O
+      setTimeout(() => {
+        try {
+          perfMonitor.measure('serviceIntegration.initializeBackground()', () =>
+            serviceIntegration.initializeBackground(),
+          );
+        } catch (error) {
+          logger.warn(
+            '[MAIN] Service integration background init failed:',
+            error.message,
+          );
+        }
+      }, 1000);
+
+      // Add memory monitoring and cleanup with progressive thresholds
+      let lastGcTime = 0;
+      const GC_COOLDOWN_MS = SERVICE_LIMITS.GC_COOLDOWN;
+
+      setInterval(() => {
+        try {
+          const memUsage = process.memoryUsage();
+          const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+          const heapTotalMB = memUsage.heapTotal / 1024 / 1024;
+          const heapUsagePercent =
+            (memUsage.heapUsed / memUsage.heapTotal) * 100;
+
+          // Progressive thresholds with different actions
+          if (heapUsedMB > MEMORY_THRESHOLDS.CRITICAL_MB) {
+            logger.error('[MEMORY] Critical memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              recommendation: 'Consider restarting the application',
+            });
+
+            // Force GC only if cooldown period has passed
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
+              global.gc();
+              lastGcTime = now;
+              logger.warn(
+                '[MEMORY] Forced garbage collection due to critical usage',
+              );
+            }
+          } else if (heapUsedMB > MEMORY_THRESHOLDS.HIGH_MB) {
+            logger.warn('[MEMORY] High memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              recommendation: 'Monitor for potential memory leaks',
+            });
+
+            // Force GC only if cooldown period has passed
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
+              global.gc();
+              lastGcTime = now;
+              logger.info(
+                '[MEMORY] Forced garbage collection due to high usage',
+              );
+            }
+          } else if (heapUsedMB > 1024) {
+            // 1GB - Moderate
+            logger.info('[MEMORY] Moderate memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+            });
+
+            // Only force GC for moderate usage if it's been very long
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS * 2) {
+              global.gc();
+              lastGcTime = now;
+              logger.debug('[MEMORY] Periodic garbage collection');
+            }
+          } else if (heapUsagePercent > 80) {
+            // High percentage regardless of absolute size
+            logger.info('[MEMORY] High memory percentage:', {
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+            });
+          }
+        } catch (error) {
+          logger.debug('[MEMORY] Memory monitoring failed:', error.message);
+        }
+      }, 120000); // Check every 2 minutes (reduced frequency)
       // Initialize settings service
       settingsService = new SettingsService();
-      const initialSettings = await settingsService.load();
+      const initialSettings = await perfMonitor.measure(
+        'settingsService.load()',
+        async () => await settingsService.load(),
+      );
+      currentSettings = initialSettings;
+      perfMonitor.mark('Settings loaded');
 
       // Resume any incomplete organize batches (best-effort)
       try {
@@ -425,28 +646,27 @@ if (!gotTheLock) {
         );
       }
 
-      // Verify AI models on startup
-      const ModelVerifier = require('./services/ModelVerifier');
-      const modelVerifier = new ModelVerifier();
-      const modelStatus = await modelVerifier.verifyEssentialModels();
+      // Decide whether to skip AI model verification based on settings (default: false)
+      const skipVerification =
+        typeof currentSettings.skipAIModelVerification === 'boolean'
+          ? currentSettings.skipAIModelVerification
+          : false;
+      // startupTimings.modelVerificationStarted = Date.now();
 
-      if (!modelStatus.success) {
-        logger.warn(
-          '[STARTUP] Missing AI models detected:',
-          modelStatus.missingModels,
+      if (skipVerification) {
+        logger.info(
+          '[STARTUP] Skipping AI model verification for better performance',
         );
-        logger.info('[STARTUP] Install missing models:');
-        modelStatus.installationCommands.forEach((cmd) =>
-          logger.info('  ', cmd),
-        );
-      } else {
-        logger.info('[STARTUP] ✅ All essential AI models verified and ready');
-        if (modelStatus.hasWhisper) {
-          logger.info(
-            '[STARTUP] ✅ Whisper model available for audio analysis',
-          );
+        // Send notification to renderer about skipped AI status
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('ai-status-update', {
+            status: 'skipped',
+            message: 'AI model verification skipped for performance',
+          });
         }
       }
+
+      // startupTimings.modelVerificationCompleted = Date.now();
 
       // Register IPC groups now that services and state are ready
       const getMainWindow = () => mainWindow;
@@ -457,35 +677,38 @@ if (!gotTheLock) {
       };
 
       // Grouped IPC registration (single entry)
-      registerAllIpc({
-        ipcMain,
-        IPC_CHANNELS,
-        logger,
-        dialog,
-        shell,
-        systemAnalytics,
-        getMainWindow,
-        getServiceIntegration,
-        getCustomFolders,
-        setCustomFolders,
-        saveCustomFolders,
-        analyzeDocumentFile,
-        analyzeImageFile,
-        tesseract,
-        getOllama,
-        getOllamaModel,
-        getOllamaVisionModel,
-        getOllamaEmbeddingModel,
-        getOllamaHost,
-        buildOllamaOptions,
-        scanDirectory,
-        settingsService,
-        setOllamaHost,
-        setOllamaModel,
-        setOllamaVisionModel,
-        setOllamaEmbeddingModel,
-        onSettingsChanged: handleSettingsChanged,
+      perfMonitor.measure('registerAllIpc()', () => {
+        registerAllIpc({
+          ipcMain,
+          IPC_CHANNELS,
+          logger,
+          dialog,
+          shell,
+          systemAnalytics,
+          getMainWindow,
+          getServiceIntegration,
+          getCustomFolders,
+          setCustomFolders,
+          saveCustomFolders,
+          analyzeDocumentFile: getAnalyzeDocumentFile,
+          analyzeImageFile: getAnalyzeImageFile,
+          tesseract: getTesseract,
+          getOllama,
+          getOllamaModel,
+          getOllamaVisionModel,
+          getOllamaEmbeddingModel,
+          getOllamaHost,
+          buildOllamaOptions,
+          scanDirectory,
+          settingsService,
+          setOllamaHost,
+          setOllamaModel,
+          setOllamaVisionModel,
+          setOllamaEmbeddingModel,
+          onSettingsChanged: handleSettingsChanged,
+        });
       });
+      perfMonitor.mark('IPC registered');
 
       // Create application menu with theme
       createApplicationMenu();
@@ -495,15 +718,34 @@ if (!gotTheLock) {
 
       // Start periodic system metrics broadcast to renderer
       try {
-        setInterval(async () => {
+        const metricsInterval = setInterval(async () => {
           try {
             const win = BrowserWindow.getAllWindows()[0];
             if (!win || win.isDestroyed()) return;
             const metrics = await systemAnalytics.collectMetrics();
             win.webContents.send('system-metrics', metrics);
-          } catch {}
-        }, 10000);
-      } catch {}
+          } catch (metricsError) {
+            // Silent catch for metrics collection - non-critical background task
+            logger.debug(
+              '[METRICS] Failed to collect system metrics:',
+              metricsError?.message,
+            );
+          }
+        }, 300000); // Increased from 30s to 5 minutes for better performance
+        if (metricsInterval && typeof metricsInterval.unref === 'function') {
+          try {
+            metricsInterval.unref();
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      } catch (intervalError) {
+        // Silent catch for metrics interval setup - non-critical feature
+        logger.warn(
+          '[METRICS] Failed to setup metrics collection interval:',
+          intervalError?.message,
+        );
+      }
 
       // Create system tray with quick actions
       try {
@@ -519,7 +761,13 @@ if (!gotTheLock) {
           try {
             const docs = app.getPath('documents');
             shell.openPath(docs);
-          } catch {}
+          } catch (shellError) {
+            // Silent catch for shell operations - non-critical feature
+            logger.debug(
+              '[SHELL] Failed to open documents path:',
+              shellError?.message,
+            );
+          }
         }
         if (args.includes('--analyze-folder')) {
           // Bring window to front and trigger select directory
@@ -531,10 +779,22 @@ if (!gotTheLock) {
                 type: 'hint',
                 message: 'Use Select Directory to analyze a folder',
               });
-            } catch {}
+            } catch (ipcError) {
+              // Silent catch for IPC operations - window might be destroyed
+              logger.debug(
+                '[IPC] Failed to send hint message:',
+                ipcError?.message,
+              );
+            }
           }
         }
-      } catch {}
+      } catch (argsError) {
+        // Silent catch for command line argument processing - non-critical feature
+        logger.debug(
+          '[ARGS] Failed to process command line arguments:',
+          argsError?.message,
+        );
+      }
       // Windows Jump List tasks
       try {
         if (process.platform === 'win32') {
@@ -563,7 +823,13 @@ if (!gotTheLock) {
             },
           ]);
         }
-      } catch {}
+      } catch (jumpListError) {
+        // Silent catch for Jump List setup - Windows-specific feature
+        logger.debug(
+          '[JUMPLIST] Failed to setup Windows Jump List:',
+          jumpListError?.message,
+        );
+      }
       // Fire-and-forget resume of incomplete batches shortly after window is ready
       setTimeout(() => {
         try {
@@ -577,14 +843,21 @@ if (!gotTheLock) {
         }
       }, 500);
 
-      // Load Ollama config and apply any saved selections
-      const cfg = await loadOllamaConfig();
-      if (cfg.selectedTextModel) await setOllamaModel(cfg.selectedTextModel);
-      if (cfg.selectedVisionModel)
-        await setOllamaVisionModel(cfg.selectedVisionModel);
-      if (cfg.selectedEmbeddingModel)
-        await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
-      logger.info('[STARTUP] Ollama configuration loaded');
+      // Defer Ollama config loading for better startup performance
+      setTimeout(async () => {
+        try {
+          const cfg = await loadOllamaConfig();
+          if (cfg.selectedTextModel)
+            await setOllamaModel(cfg.selectedTextModel);
+          if (cfg.selectedVisionModel)
+            await setOllamaVisionModel(cfg.selectedVisionModel);
+          if (cfg.selectedEmbeddingModel)
+            await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
+          logger.info('[STARTUP] Ollama configuration loaded');
+        } catch (error) {
+          logger.warn('[STARTUP] Failed to load Ollama config:', error.message);
+        }
+      }, 2000);
 
       // Install React DevTools in development (opt-in to avoid noisy warnings)
       try {
@@ -593,9 +866,22 @@ if (!gotTheLock) {
             default: installExtension,
             REACT_DEVELOPER_TOOLS,
           } = require('electron-devtools-installer');
-          await installExtension(REACT_DEVELOPER_TOOLS).catch(() => {});
+          await installExtension(REACT_DEVELOPER_TOOLS).catch(
+            (installError) => {
+              logger.debug(
+                '[DEVTOOLS] Failed to install React DevTools:',
+                installError?.message,
+              );
+            },
+          );
         }
-      } catch {}
+      } catch (devToolsError) {
+        // Silent catch for dev tools installation - development-only feature
+        logger.debug(
+          '[DEVTOOLS] Failed to setup React DevTools:',
+          devToolsError?.message,
+        );
+      }
 
       // Auto-updates (production only)
       try {
@@ -610,7 +896,13 @@ if (!gotTheLock) {
               const win = BrowserWindow.getAllWindows()[0];
               if (win && !win.isDestroyed())
                 win.webContents.send('app:update', { status: 'available' });
-            } catch {}
+            } catch (updateError) {
+              // Silent catch for update notification - window might be destroyed
+              logger.debug(
+                '[UPDATE] Failed to send update notification:',
+                updateError?.message,
+              );
+            }
           });
           autoUpdater.on('update-not-available', () => {
             logger.info('[UPDATER] No updates available');
@@ -618,7 +910,13 @@ if (!gotTheLock) {
               const win = BrowserWindow.getAllWindows()[0];
               if (win && !win.isDestroyed())
                 win.webContents.send('app:update', { status: 'none' });
-            } catch {}
+            } catch (updateError) {
+              // Silent catch for update notification - window might be destroyed
+              logger.debug(
+                '[UPDATE] Failed to send no-update notification:',
+                updateError?.message,
+              );
+            }
           });
           autoUpdater.on('update-downloaded', () => {
             logger.info('[UPDATER] Update downloaded');
@@ -626,13 +924,25 @@ if (!gotTheLock) {
               const win = BrowserWindow.getAllWindows()[0];
               if (win && !win.isDestroyed())
                 win.webContents.send('app:update', { status: 'ready' });
-            } catch {}
+            } catch (updateError) {
+              // Silent catch for update notification - window might be destroyed
+              logger.debug(
+                '[UPDATE] Failed to send update-ready notification:',
+                updateError?.message,
+              );
+            }
           });
           autoUpdater
             .checkForUpdatesAndNotify()
             .catch((e) => logger.error('[UPDATER] check failed', e));
         }
-      } catch {}
+      } catch (updaterError) {
+        // Silent catch for auto-updater setup - non-critical feature
+        logger.debug(
+          '[UPDATER] Failed to setup auto-updater:',
+          updaterError?.message,
+        );
+      }
     } catch (error) {
       logger.error('[STARTUP] Failed to initialize:', error);
       createWindow();
@@ -647,11 +957,47 @@ logger.info(
 logger.info('[UI] Modern UI loaded with GPU acceleration');
 
 // App lifecycle
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   isQuitting = true;
   try {
     systemAnalytics.destroy();
-  } catch {}
+  } catch (destroyError) {
+    // Silent catch for analytics cleanup - non-critical during app shutdown
+    logger.debug(
+      '[ANALYTICS] Failed to destroy system analytics:',
+      destroyError?.message,
+    );
+  }
+
+  // Cleanup embedding services
+  try {
+    // Cleanup embedding service from IPC registration
+    const registerEmbeddingsIpc = require('./ipc/semantic');
+    if (
+      registerEmbeddingsIpc.embeddingIndex &&
+      typeof registerEmbeddingsIpc.embeddingIndex.destroy === 'function'
+    ) {
+      await registerEmbeddingsIpc.embeddingIndex.destroy();
+    }
+  } catch (embeddingError) {
+    logger.debug(
+      '[EMBEDDINGS] Failed to destroy IPC embedding service:',
+      embeddingError?.message,
+    );
+  }
+
+  try {
+    // Cleanup shared services from analysis utils
+    const { cleanupSharedServices } = require('./analysis/analysisUtils');
+    if (typeof cleanupSharedServices === 'function') {
+      await cleanupSharedServices();
+    }
+  } catch (sharedServicesError) {
+    logger.debug(
+      '[SHARED-SERVICES] Failed to cleanup shared services:',
+      sharedServicesError?.message,
+    );
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -662,7 +1008,28 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    // Add retry mechanism for window creation
+    const createWindowWithRetry = (retries = 2) => {
+      try {
+        createWindow();
+      } catch (error) {
+        logger.warn(
+          `[WINDOW] Failed to create window (attempt ${3 - retries}/3):`,
+          error?.message,
+        );
+        if (retries > 0) {
+          setTimeout(() => createWindowWithRetry(retries - 1), 1000);
+        } else {
+          logger.error('[WINDOW] Failed to create window after 3 attempts');
+          // Show error dialog as last resort
+          dialog.showErrorBox(
+            'Window Creation Failed',
+            'Failed to create the main application window. Please restart the application.',
+          );
+        }
+      }
+    };
+    createWindowWithRetry();
   }
 });
 
@@ -692,47 +1059,6 @@ logger.debug(
 
 // All Analysis History and System metrics handlers are registered via ./ipc/* modules
 
-// Audio analysis handler REMOVED - audio analysis disabled
-// ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-//   try {
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-//
-//     // Get current smart folders to pass to analysis
-//     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-//     const folderCategories = smartFolders.map(f => ({
-//       name: f.name,
-//       description: f.description || '',
-//       id: f.id
-//     }));
-//
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-//
-//     const result = await analyzeAudioFile(filePath, folderCategories);
-//
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Result:`, {
-//       success: !result.error,
-//       category: result.category,
-//       keywords: result.keywords?.length || 0,
-//       confidence: result.confidence,
-//       has_transcription: result.has_transcription
-//     });
-//
-//     return result;
-//   } catch (error) {
-//     logger.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
-//     return {
-//       error: error.message,
-//       suggestedName: path.basename(filePath, path.extname(filePath)),
-//       category: 'audio',
-//       keywords: [],
-//       confidence: 0,
-//       has_transcription: false
-//     };
-//   }
-// });
-
-// NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
-
 // ===== TRAY INTEGRATION =====
 let tray = null;
 function createSystemTray() {
@@ -746,8 +1072,23 @@ function createSystemTray() {
           ? '../../assets/icons/icons/png/24x24.png'
           : '../../assets/icons/icons/png/16x16.png',
     );
-    const trayIcon = nativeImage.createFromPath(iconPath);
-    if (process.platform === 'darwin') {
+    let trayIcon = nativeImage.createFromPath(iconPath);
+    // If the icon is missing or empty, fallback to bundled logo
+    if (
+      !trayIcon ||
+      (typeof trayIcon.isEmpty === 'function' && trayIcon.isEmpty())
+    ) {
+      const fallback = path.join(
+        __dirname,
+        '../../../assets/stratosort-logo.png',
+      );
+      trayIcon = nativeImage.createFromPath(fallback);
+    }
+    if (
+      process.platform === 'darwin' &&
+      trayIcon &&
+      typeof trayIcon.setTemplateImage === 'function'
+    ) {
       trayIcon.setTemplateImage(true);
     }
     tray = new Tray(trayIcon);

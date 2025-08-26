@@ -1,12 +1,18 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const path = require('path');
 const sanitizeHtml = require('sanitize-html');
 
-console.log('[PRELOAD] Secure preload script loaded');
+// Import centralized IPC channel map - simplified for sandbox compatibility
+// The main process will provide the IPC channels via a synchronous IPC call
+let IPC_CHANNELS = null;
 
-// Import centralized IPC channel map using an absolute path to avoid resolution issues when the preload is bundled or moved
-const constantsPath = path.resolve(__dirname, '..', 'shared', 'constants.js');
-const { IPC_CHANNELS } = require(constantsPath);
+try {
+  // Request IPC channels from main process synchronously
+  IPC_CHANNELS = ipcRenderer.sendSync('get-ipc-channels');
+} catch (error) {
+  console.error('Failed to get IPC channels:', error);
+  // Fallback to empty object to prevent crashes
+  IPC_CHANNELS = {};
+}
 
 // Dynamically derive allowed send channels from centralized IPC_CHANNELS to prevent drift
 const ALLOWED_CHANNELS = {
@@ -22,15 +28,22 @@ const ALLOWED_CHANNELS = {
   WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
 };
 
-const ALLOWED_RECEIVE_CHANNELS = [
+// Fast-path receive channels (Set-based for quick lookups)
+const ALLOWED_RECEIVE_CHANNELS_SET = new Set([
   'system-metrics',
   'operation-progress',
   'app:error',
   'app:update',
-];
+  'ai-status-update',
+]);
+// Flatten allowed send channels for validation into a Set for O(1) lookups
+const ALL_SEND_CHANNELS_SET = new Set(
+  [].concat(...Object.values(ALLOWED_CHANNELS)),
+);
 
-// Flatten allowed send channels for validation
-const ALL_SEND_CHANNELS = Object.values(ALLOWED_CHANNELS).flat();
+// Backwards-compatible aliases: some code paths expect arrays, others Sets
+const ALL_SEND_CHANNELS = Array.from(ALL_SEND_CHANNELS_SET);
+const ALLOWED_RECEIVE_CHANNELS = Array.from(ALLOWED_RECEIVE_CHANNELS_SET);
 
 /**
  * Enhanced IPC validation with security checks
@@ -86,6 +99,24 @@ class SecureIPCManager {
 
       // Rate limiting
       this.checkRateLimit(channel);
+
+      // File path validation for file-related operations
+      const fileChannels = [
+        ...(IPC_CHANNELS.FILES ? Object.values(IPC_CHANNELS.FILES) : []),
+        ...(IPC_CHANNELS.ANALYSIS ? Object.values(IPC_CHANNELS.ANALYSIS) : []),
+      ];
+
+      if (fileChannels.includes(channel)) {
+        for (const arg of args) {
+          if (typeof arg === 'string' && !this.validateFilePath(arg)) {
+            throw new Error(`Invalid file path detected: ${arg}`);
+          }
+          // Recursively validate file paths in objects and arrays
+          if (typeof arg === 'object' && arg !== null) {
+            this.validateObjectPaths(arg);
+          }
+        }
+      }
 
       // Argument sanitization
       const sanitizedArgs = this.sanitizeArguments(args);
@@ -173,6 +204,55 @@ class SecureIPCManager {
   }
 
   /**
+   * Validate file paths to prevent path traversal attacks
+   */
+  validateFilePath(filePath) {
+    if (typeof filePath !== 'string') {
+      return false;
+    }
+
+    // Check for path traversal attempts
+    if (
+      filePath.includes('..') ||
+      filePath.includes('../') ||
+      filePath.includes('..\\')
+    ) {
+      console.warn(`[PRELOAD] Path traversal attempt detected: ${filePath}`);
+      return false;
+    }
+
+    // Check for absolute paths that might be problematic
+    if (filePath.startsWith('/') || filePath.match(/^[A-Za-z]:/)) {
+      // Allow absolute paths but log them for monitoring
+      console.log(`[PRELOAD] Absolute path used: ${filePath}`);
+    }
+
+    return true;
+  }
+
+  /**
+   * Recursively validate file paths within objects and arrays
+   */
+  validateObjectPaths(obj) {
+    if (Array.isArray(obj)) {
+      return obj.forEach((item) => this.validateObjectPaths(item));
+    }
+
+    if (obj && typeof obj === 'object') {
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'string' && !this.validateFilePath(value)) {
+          throw new Error(
+            `Invalid file path detected in object property "${key}": ${value}`,
+          );
+        }
+        if (typeof value === 'object' && value !== null) {
+          this.validateObjectPaths(value);
+        }
+      }
+    }
+  }
+
+  /**
    * Sanitize arguments to prevent injection attacks
    */
   sanitizeArguments(args) {
@@ -226,6 +306,11 @@ class SecureIPCManager {
     // Channel-specific validation
     switch (channel) {
       case 'get-system-metrics':
+        // Handle both direct metrics and error responses
+        if (result && result.error) {
+          console.error('System metrics error:', result.error);
+          return null;
+        }
         return this.isValidSystemMetrics(result) ? result : null;
       case 'select-directory':
         // Main returns { success, folder } now
@@ -273,7 +358,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     normalizePath: (p) => {
       try {
         if (typeof p !== 'string') return p;
-        return path.normalize(p);
+        // Simple path normalization for sandbox compatibility
+        // Replace multiple slashes with single slash, remove trailing slash
+        return p.replace(/\/+/g, '/').replace(/\/$/, '');
       } catch {
         return p;
       }
@@ -471,6 +558,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
     onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
+    onAiStatusUpdate: (callback) =>
+      secureIPC.safeOn('ai-status-update', callback),
   },
 
   // Settings

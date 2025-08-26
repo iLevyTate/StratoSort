@@ -53,6 +53,23 @@ function WelcomePhase() {
         </div>
 
         <Button
+          onClick={() => {
+            actions.advancePhase(PHASES.AI_SETUP);
+          }}
+          variant="outline"
+          className="text-lg px-21 py-13"
+          aria-describedby="ai-setup-help"
+        >
+          <span role="img" aria-label="robot">
+            🤖
+          </span>{' '}
+          Setup AI locally
+        </Button>
+        <div id="ai-setup-help" className="text-xs text-system-gray-500 mt-3">
+          Configure AI models and settings.
+        </div>
+
+        <Button
           onClick={() => actions.advancePhase(PHASES.SETUP)}
           variant="secondary"
           className="text-lg px-21 py-13"

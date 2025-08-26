@@ -178,14 +178,24 @@ describe('createWindow', () => {
     // Check that the callback was called with modified headers
     expect(mockCallback).toHaveBeenCalledWith({
       responseHeaders: expect.objectContaining({
-        'Content-Security-Policy': [
+        'Content-Security-Policy': expect.arrayContaining([
           expect.stringContaining("default-src 'self'"),
-        ],
+        ]),
         'X-Content-Type-Options': ['nosniff'],
-        'Referrer-Policy': ['no-referrer'],
+        'X-Frame-Options': ['DENY'],
+        'X-XSS-Protection': ['1; mode=block'],
+        'Strict-Transport-Security': ['max-age=31536000; includeSubDomains'],
+        'Referrer-Policy': ['strict-origin-when-cross-origin'],
         'Cross-Origin-Opener-Policy': ['same-origin'],
         'Cross-Origin-Resource-Policy': ['same-origin'],
-        'Permissions-Policy': [expect.stringContaining('accelerometer=()')],
+        'Cross-Origin-Embedder-Policy': ['require-corp'],
+        'Permissions-Policy': expect.arrayContaining([
+          expect.stringContaining('accelerometer=()'),
+          expect.stringContaining('autoplay=(self)'),
+          expect.stringContaining('clipboard-read=(self)'),
+          expect.stringContaining('clipboard-write=(self)'),
+          expect.stringContaining('fullscreen=(self)'),
+        ]),
       }),
     });
     expect(result).toBeDefined();

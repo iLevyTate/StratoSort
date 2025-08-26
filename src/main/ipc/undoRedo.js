@@ -4,42 +4,51 @@ function registerUndoRedoIpc({
   ipcMain,
   IPC_CHANNELS,
   logger,
+  systemAnalytics,
   getServiceIntegration,
 }) {
   // Undo
   ipcMain.handle(
     IPC_CHANNELS.UNDO_REDO.UNDO,
-    withErrorLogging(logger, async () => {
-      try {
-        return (
-          (await getServiceIntegration()?.undoRedo?.undo()) || {
-            success: false,
-            message: 'Undo service unavailable',
-          }
-        );
-      } catch (error) {
-        logger.error('Failed to execute undo:', error);
-        return { success: false, message: error.message };
-      }
-    }),
+    withErrorLogging(
+      logger,
+      async () => {
+        try {
+          return (
+            (await getServiceIntegration()?.undoRedo?.undo()) || {
+              success: false,
+              message: 'Undo service unavailable',
+            }
+          );
+        } catch (error) {
+          logger.error('Failed to execute undo:', error);
+          return { success: false, message: error.message };
+        }
+      },
+      systemAnalytics,
+    ),
   );
 
   // Redo
   ipcMain.handle(
     IPC_CHANNELS.UNDO_REDO.REDO,
-    withErrorLogging(logger, async () => {
-      try {
-        return (
-          (await getServiceIntegration()?.undoRedo?.redo()) || {
-            success: false,
-            message: 'Redo service unavailable',
-          }
-        );
-      } catch (error) {
-        logger.error('Failed to execute redo:', error);
-        return { success: false, message: error.message };
-      }
-    }),
+    withErrorLogging(
+      logger,
+      async () => {
+        try {
+          return (
+            (await getServiceIntegration()?.undoRedo?.redo()) || {
+              success: false,
+              message: 'Redo service unavailable',
+            }
+          );
+        } catch (error) {
+          logger.error('Failed to execute redo:', error);
+          return { success: false, message: error.message };
+        }
+      },
+      systemAnalytics,
+    ),
   );
 
   // History

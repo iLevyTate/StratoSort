@@ -1,0 +1,63 @@
+
+=== Timestamp ===
+
+8/25/2025 6:30:33 PM
+
+=== System Info ===
+
+OS: Microsoft Windows NT 10.0.26100.0
+MachineName: ALIENBEAR
+User: benja
+CPU Count: 16
+
+
+=== Top CPU Processes ===
+
+
+   Id ProcessName             CPU         WS
+   -- -----------             ---         --
+13452 Cursor            5403.4375 1050787840
+30672 Cursor              4575.25  314142720
+18520 AWCC            2428.296875   46309376
+ 6280 AWCC.UCSubAgent 2077.515625   40382464
+ 3640 chrome          1386.703125  266399744
+15748 chrome           732.703125  293699584
+ 2840 AlienFXSubAgent       546.5   22249472
+22176 Cursor            507.53125  245075968
+10816 chrome           429.546875  394407936
+ 9212 iGoSwServer           402.5    3932160
+ 8776 ipf_helper        344.96875    1298432
+21396 Cursor             322.0625  131842048
+ 5576 chrome           288.171875   47063040
+ 1152 chrome            244.03125  156237824
+15236 Cursor             242.3125  577097728
+
+
+
+
+=== Electron / StratoSort Processes ===
+
+
+
+=== Memory / CPU Counters ===
+
+
+Path                                           InstanceName      CookedValue
+----                                           ------------      -----------
+\\alienbear\processor(_total)\% processor time _total       45.2706220049618
+\\alienbear\memory\available mbytes                                     2177
+
+
+
+
+=== nvidia-smi ===
+
+0, NVIDIA GeForce RTX 4050 Laptop GPU, 0, 6, 6141, 536
+
+=== Ollama /api/tags ===
+
+Status: OK, TimeMs: 150.2172\nResponse sample: @{models=System.Object[]}
+
+=== Ollama /api/models ===
+
+Request failed: The remote server returned an error: (404) Not Found.

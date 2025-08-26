@@ -6,6 +6,8 @@ import {
 } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import UpdateIndicator from './UpdateIndicator';
+import PerformanceDashboard from './PerformanceDashboard';
+import LogViewer from './LogViewer';
 
 // Phase Icons
 const HomeIcon = ({ className }) => (
@@ -59,6 +61,18 @@ const phaseIcons = {
   [PHASES.COMPLETE]: CheckCircleIcon,
 };
 
+// Performance Icon SVG Component
+const PerformanceIcon = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M15 3v2.5l4.5 4.5H17v2h6V9h-2v6h-2v-6h-2V3h-2zM3 9h2v6H3V9zm4 0h2v6H7V9zm4 0h2v6h-2V9z" />
+  </svg>
+);
+
 // Settings Icon SVG Component
 const SettingsIcon = ({ className }) => (
   <svg
@@ -75,6 +89,9 @@ function NavigationBar() {
   const { currentPhase, actions } = usePhase();
   const [isScrolled, setIsScrolled] = useState(false);
   const [hoveredTab, setHoveredTab] = useState(null);
+  const [showPerformanceDashboard, setShowPerformanceDashboard] =
+    useState(false);
+  const [showLogViewer, setShowLogViewer] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -82,6 +99,24 @@ function NavigationBar() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.ctrlKey && event.shiftKey) {
+        if (event.key === 'P') {
+          event.preventDefault();
+          setShowPerformanceDashboard(true);
+        } else if (event.key === 'L') {
+          event.preventDefault();
+          setShowLogViewer(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handlePhaseChange = (newPhase) => {
@@ -216,6 +251,28 @@ function NavigationBar() {
         >
           <UpdateIndicator />
           <button
+            onClick={() => setShowPerformanceDashboard(true)}
+            className="
+              w-10 h-10 rounded-xl
+              bg-white/70 backdrop-blur-sm
+              border border-border-light
+              text-system-gray-600
+              flex items-center justify-center
+              transition-all duration-200 ease-out
+              hover:bg-white
+              hover:text-gradient-primary-start
+              hover:border-gradient-primary-start/30
+              hover:shadow-md
+              hover:scale-105
+              active:scale-95
+              group
+            "
+            aria-label="Performance Dashboard"
+            title="Performance Dashboard (Ctrl+Shift+P)"
+          >
+            <PerformanceIcon className="w-5 h-5" />
+          </button>
+          <button
             onClick={actions.toggleSettings}
             className="
               w-10 h-10 rounded-xl
@@ -239,6 +296,22 @@ function NavigationBar() {
           </button>
         </div>
       </div>
+
+      {/* Performance Dashboard */}
+      <PerformanceDashboard
+        isOpen={showPerformanceDashboard}
+        onClose={() => setShowPerformanceDashboard(false)}
+        onOpenLogViewer={() => {
+          setShowPerformanceDashboard(false);
+          setShowLogViewer(true);
+        }}
+      />
+
+      {/* Log Viewer */}
+      <LogViewer
+        isOpen={showLogViewer}
+        onClose={() => setShowLogViewer(false)}
+      />
     </div>
   );
 }

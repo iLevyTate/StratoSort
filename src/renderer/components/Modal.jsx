@@ -9,6 +9,7 @@ const Modal = ({
   closeOnOverlayClick = true,
   showCloseButton = true,
   className = '',
+  backdropClass = '',
 }) => {
   const modalRef = useRef(null);
   const previousFocusRef = useRef(null);
@@ -119,7 +120,9 @@ const Modal = ({
       onClick={handleOverlayClick}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-modal-backdrop" />
+      <div
+        className={`absolute inset-0 bg-black/50 backdrop-blur-sm animate-modal-backdrop ${backdropClass}`}
+      />
 
       {/* Modal */}
       <div
@@ -179,6 +182,18 @@ export const ConfirmModal = ({
   variant = 'default', // default, danger, warning, info
   fileName = null, // For file operations
 }) => {
+  const getBackdropClass = () => {
+    switch (variant) {
+      case 'danger':
+        return 'bg-red-50/80';
+      case 'warning':
+        return 'bg-amber-50/80';
+      case 'info':
+        return 'bg-blue-50/80';
+      default:
+        return 'bg-gray-50/80';
+    }
+  };
   const getConfirmButtonClass = () => {
     const baseClass =
       'px-6 py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 transform hover:scale-105 active:scale-95';
@@ -276,19 +291,6 @@ export const ConfirmModal = ({
     }
   };
 
-  const getBackdropClass = () => {
-    switch (variant) {
-      case 'danger':
-        return 'bg-red-50/80';
-      case 'warning':
-        return 'bg-amber-50/80';
-      case 'info':
-        return 'bg-blue-50/80';
-      default:
-        return 'bg-gray-50/80';
-    }
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -297,6 +299,7 @@ export const ConfirmModal = ({
       closeOnOverlayClick={false}
       showCloseButton={false}
       className="card-glass-subtle"
+      backdropClass={getBackdropClass()}
     >
       <div className="p-8">
         {/* Icon and Content */}

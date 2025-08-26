@@ -1,6 +1,12 @@
 const { withErrorLogging } = require('./withErrorLogging');
 
-function registerWindowIpc({ ipcMain, IPC_CHANNELS, logger, getMainWindow }) {
+function registerWindowIpc({
+  ipcMain,
+  IPC_CHANNELS,
+  logger,
+  systemAnalytics,
+  getMainWindow,
+}) {
   ipcMain.handle(
     IPC_CHANNELS.WINDOW.MINIMIZE,
     withErrorLogging(logger, async () => {

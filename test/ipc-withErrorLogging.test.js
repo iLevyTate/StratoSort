@@ -42,8 +42,14 @@ describe('withErrorLogging', () => {
     await expect(wrappedFn()).rejects.toThrow('Test error');
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      '[IPC] Handler error:',
-      testError,
+      '[IPC] mockConstructor failed:',
+      expect.objectContaining({
+        error: 'Test error',
+        type: 'ipc_call_error',
+        actionId: expect.any(String),
+        duration: expect.any(String),
+        stack: expect.any(String),
+      }),
     );
   });
 
@@ -197,9 +203,21 @@ describe('withValidation', () => {
       'Validation wrapper error',
     );
 
+    // Expect both the simple error call and the enhanced error call
     expect(mockLogger.error).toHaveBeenCalledWith(
       '[IPC] Validation wrapper failed:',
       validationError,
+    );
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      '[IPC] anonymous_handler failed:',
+      expect.objectContaining({
+        error: 'Validation wrapper error',
+        type: 'ipc_call_error',
+        actionId: expect.any(String),
+        duration: expect.any(String),
+        stack: expect.any(String),
+      }),
     );
   });
 

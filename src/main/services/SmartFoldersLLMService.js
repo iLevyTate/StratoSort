@@ -1,4 +1,5 @@
 const { logger } = require('../../shared/logger');
+const { TIMEOUTS } = require('../../shared/constants');
 
 async function enhanceSmartFolderWithLLM(
   folderData,
@@ -43,9 +44,18 @@ Please provide a JSON response with the following enhancements:
     const modelToUse =
       (typeof getOllamaModel === 'function' && getOllamaModel()) ||
       require('../../shared/constants').DEFAULT_AI_MODELS.TEXT_ANALYSIS;
+
+    // Add timeout handling for LLM requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      TIMEOUTS.LLM_ENHANCEMENT,
+    );
+
     const response = await fetch(`${host}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         model: modelToUse,
         prompt,
@@ -55,21 +65,99 @@ Please provide a JSON response with the following enhancements:
       }),
     });
 
+    clearTimeout(timeoutId);
+
     if (response.ok) {
       const data = await response.json();
-      const enhancement = JSON.parse(data.response);
-      if (enhancement && typeof enhancement === 'object') {
-        logger.info('[LLM-ENHANCEMENT] Successfully enhanced smart folder');
-        return enhancement;
+      const rawResponse = data.response;
+
+      if (!rawResponse || typeof rawResponse !== 'string') {
+        logger.warn('[LLM-ENHANCEMENT] LLM returned empty or invalid response');
+        return { error: 'LLM returned empty response' };
+      }
+
+      try {
+        // First attempt: direct JSON parsing
+        const enhancement = JSON.parse(rawResponse.trim());
+        if (enhancement && typeof enhancement === 'object') {
+          logger.info('[LLM-ENHANCEMENT] Successfully enhanced smart folder');
+          return enhancement;
+        } else {
+          throw new Error('Parsed result is not a valid object');
+        }
+      } catch (parseError) {
+        logger.warn(
+          `[LLM-ENHANCEMENT] Direct JSON parsing failed: ${parseError.message}`,
+        );
+        logger.debug(`[LLM-ENHANCEMENT] Raw LLM response: ${rawResponse}`);
+
+        // Second attempt: try to extract JSON from markdown code blocks
+        try {
+          const jsonMatch = rawResponse.match(
+            /```(?:json)?\s*(\{[\s\S]*?\})\s*```/,
+          );
+          if (jsonMatch) {
+            const extractedJson = jsonMatch[1];
+            const enhancement = JSON.parse(extractedJson);
+            if (enhancement && typeof enhancement === 'object') {
+              logger.info(
+                '[LLM-ENHANCEMENT] Successfully parsed JSON from markdown code block',
+              );
+              return enhancement;
+            }
+          }
+        } catch (codeBlockError) {
+          logger.warn(
+            `[LLM-ENHANCEMENT] Code block extraction failed: ${codeBlockError.message}`,
+          );
+        }
+
+        // Third attempt: try to find and fix common JSON issues
+        try {
+          let cleanedResponse = rawResponse.trim();
+
+          // Remove common prefixes/suffixes that LLMs might add
+          cleanedResponse = cleanedResponse
+            .replace(/^[^[{]*/, '') // Remove text before first { or [
+            .replace(/[^}\]]*$/, ''); // Remove text after last } or ]
+
+          if (cleanedResponse) {
+            const enhancement = JSON.parse(cleanedResponse);
+            if (enhancement && typeof enhancement === 'object') {
+              logger.info('[LLM-ENHANCEMENT] Successfully parsed cleaned JSON');
+              return enhancement;
+            }
+          }
+        } catch (cleanupError) {
+          logger.warn(
+            `[LLM-ENHANCEMENT] Cleaned JSON parsing failed: ${cleanupError.message}`,
+          );
+        }
+
+        // If all parsing attempts fail, return error with details
+        logger.error(
+          `[LLM-ENHANCEMENT] Failed to parse LLM response after all attempts`,
+        );
+        return {
+          error: 'Invalid LLM response format',
+          details: `Could not parse JSON from response: ${parseError.message}`,
+          rawResponse:
+            rawResponse.substring(0, 200) +
+            (rawResponse.length > 200 ? '...' : ''),
+        };
       }
     }
     return { error: 'Invalid LLM response format' };
   } catch (error) {
+    const errorMessage =
+      error.name === 'AbortError'
+        ? 'Request timeout after 30 seconds'
+        : error.message;
     logger.error(
       '[LLM-ENHANCEMENT] Failed to enhance smart folder:',
-      error.message,
+      errorMessage,
     );
-    return { error: error.message };
+    return { error: errorMessage };
   }
 }
 
@@ -79,8 +167,8 @@ async function calculateFolderSimilarities(
   getOllamaModel,
 ) {
   try {
-    const similarities = [];
-    for (const folder of folderCategories) {
+    // Prepare an array of promises for all folders
+    const similarityPromises = folderCategories.map(async (folder) => {
       const prompt = `Compare these two categories for semantic similarity:
 Category 1: "${suggestedCategory}"
 Category 2: "${folder.name}" (Description: "${folder.description}")
@@ -102,9 +190,18 @@ Respond with only a number between 0.0 and 1.0:`;
         const modelToUse =
           (typeof getOllamaModel === 'function' && getOllamaModel()) ||
           require('../../shared/constants').DEFAULT_AI_MODELS.TEXT_ANALYSIS;
+
+        // Add timeout handling for similarity requests
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          TIMEOUTS.LLM_SIMILARITY,
+        );
+
         const response = await fetch(`${host}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             model: modelToUse,
             prompt,
@@ -112,37 +209,51 @@ Respond with only a number between 0.0 and 1.0:`;
             options: { temperature: 0.1, num_predict: 10 },
           }),
         });
+
+        clearTimeout(timeoutId);
         if (response.ok) {
           const data = await response.json();
           const similarity = parseFloat((data.response || '').trim());
           if (!isNaN(similarity) && similarity >= 0 && similarity <= 1) {
-            similarities.push({
+            return {
               name: folder.name,
               id: folder.id,
               confidence: similarity,
               description: folder.description,
-            });
+            };
           }
         }
       } catch (folderError) {
+        // On failure, use basic similarity fallback (as before)
+        const errorMessage =
+          folderError.name === 'AbortError'
+            ? 'Request timeout after 10 seconds'
+            : folderError.message;
         logger.warn(
           `[SEMANTIC] Failed to analyze folder ${folder.name}:`,
-          folderError.message,
+          errorMessage,
         );
         const basicSimilarity = calculateBasicSimilarity(
           suggestedCategory,
           folder.name,
         );
-        similarities.push({
+        return {
           name: folder.name,
           id: folder.id,
           confidence: basicSimilarity,
           description: folder.description,
           fallback: true,
-        });
+        };
       }
-    }
-    return similarities.sort((a, b) => b.confidence - a.confidence);
+      return null;
+    });
+
+    // Await all similarity checks in parallel
+    const results = await Promise.all(similarityPromises);
+    // Filter out any null results and sort by confidence
+    return results
+      .filter((res) => res)
+      .sort((a, b) => b.confidence - a.confidence);
   } catch (error) {
     logger.error('[SEMANTIC] Folder similarity calculation failed:', error);
     return [];

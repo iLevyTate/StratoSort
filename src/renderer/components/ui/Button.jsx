@@ -15,10 +15,21 @@ export default function Button({
   className = '',
   children,
   type = 'button',
+  href,
   ...rest
 }) {
   const variantClass = VARIANT_TO_CLASS[variant] || VARIANT_TO_CLASS.primary;
   const classes = `${variantClass} ${className}`.trim();
+
+  // Support href prop - render as anchor if href is provided
+  if (href) {
+    return (
+      <a href={href} className={classes} role="button" {...rest}>
+        {children}
+      </a>
+    );
+  }
+
   return (
     <button type={type} className={classes} {...rest}>
       {children}

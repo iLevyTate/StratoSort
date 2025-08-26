@@ -16,6 +16,7 @@ class SettingsService {
       autoOrganize: false,
       backgroundMode: false,
       // AI
+      skipAIModelVerification: false, // New setting to skip AI model verification
       ollamaHost: 'http://127.0.0.1:11434',
       textModel: 'llama3.2:latest',
       visionModel: 'llava:latest',

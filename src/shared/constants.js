@@ -8,6 +8,7 @@
 // Application phases - centralized for consistency
 const PHASES = {
   WELCOME: 'welcome',
+  AI_SETUP: 'ai_setup',
   SETUP: 'setup',
   DISCOVER: 'discover',
   ORGANIZE: 'organize',
@@ -16,7 +17,8 @@ const PHASES = {
 
 // Phase transition rules - defines valid navigation paths
 const PHASE_TRANSITIONS = {
-  [PHASES.WELCOME]: [PHASES.SETUP, PHASES.DISCOVER],
+  [PHASES.WELCOME]: [PHASES.AI_SETUP, PHASES.SETUP, PHASES.DISCOVER],
+  [PHASES.AI_SETUP]: [PHASES.SETUP, PHASES.DISCOVER, PHASES.WELCOME],
   [PHASES.SETUP]: [PHASES.DISCOVER, PHASES.WELCOME],
   [PHASES.DISCOVER]: [PHASES.ORGANIZE, PHASES.SETUP],
   [PHASES.ORGANIZE]: [PHASES.COMPLETE, PHASES.DISCOVER],
@@ -30,6 +32,12 @@ const PHASE_METADATA = {
     navLabel: 'Welcome',
     icon: '🚀',
     progress: 0,
+  },
+  [PHASES.AI_SETUP]: {
+    title: 'Setup AI Locally',
+    navLabel: 'AI Setup',
+    icon: '🤖',
+    progress: 10,
   },
   [PHASES.SETUP]: {
     title: 'Configure Smart Folders',
@@ -142,6 +150,14 @@ const IPC_CHANNELS = {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
     GET_METRICS: 'get-system-metrics',
     APPLY_UPDATE: 'apply-update',
+    GET_LOG_FILES: 'get-log-files',
+    READ_LOG_FILE: 'read-log-file',
+    GET_RECENT_LOGS: 'get-recent-logs',
+    GET_LOG_STATS: 'get-log-stats',
+    GET_SYSTEM_STATUS: 'get-system-status',
+    PERFORM_HEALTH_CHECK: 'perform-health-check',
+    LOG_USER_SESSION: 'log-user-session',
+    LOG_PERFORMANCE_ANOMALY: 'log-performance-anomaly',
   },
 
   // Window Controls
@@ -244,9 +260,35 @@ const LIMITS = {
 // Time constants - Optimized for faster models
 const TIMEOUTS = {
   AI_REQUEST: 60000, // 1 minute for faster models (llama3.2, whisper-tiny)
+  LLM_ENHANCEMENT: 30000, // 30 seconds for LLM smart folder enhancement
+  LLM_SIMILARITY: 10000, // 10 seconds for folder similarity checks
+  GPU_DETECTION: 3000, // 3 seconds for GPU subprocess detection
+  FILE_STABILITY_CHECK: 1000, // 1 second to verify file stability
+  SUBPROCESS_GRACE_KILL: 1000, // 1 second grace period before force kill
   FILE_OPERATION: 10000, // 10 seconds
   DEBOUNCE: 300,
   THROTTLE: 100,
+};
+
+// Service limits and thresholds
+const SERVICE_LIMITS = {
+  MAX_HISTORY_ENTRIES: 10000, // Analysis history retention limit
+  RETENTION_DAYS: 365, // Keep analysis data for 1 year
+  MAX_CONCURRENT_ANALYSIS: 2, // Maximum concurrent analysis operations
+  MAX_FILE_SCAN: 1000, // Maximum files to scan in directory
+  DEBOUNCE_DELAY: 2000, // 2 seconds for state save debouncing
+  GC_COOLDOWN: 300000, // 5 minutes between forced garbage collection
+  BATCH_SIZE: 10, // Embedding batch write size
+  MAX_CONSECUTIVE_FAILURES: 5, // Max failures before disabling persistence
+  FAILURE_BACKOFF_MS: 30000, // 30 seconds backoff for failures
+};
+
+// Memory thresholds
+const MEMORY_THRESHOLDS = {
+  MODERATE_MB: 1024, // 1GB - Moderate usage warning
+  HIGH_MB: 1536, // 1.5GB - High usage with GC
+  CRITICAL_MB: 2048, // 2GB - Critical usage alert
+  PERCENTAGE_WARNING: 80, // Warning when heap usage > 80%
 };
 
 // File type mappings
@@ -336,7 +378,7 @@ const ALL_SUPPORTED_EXTENSIONS = [
 // AI Model configurations - Optimized for speed with smallest available models
 const DEFAULT_AI_MODELS = {
   TEXT_ANALYSIS: 'llama3.2:latest', // 2.0GB - Fastest text model
-  IMAGE_ANALYSIS: 'llava:latest', // 4.7GB - Vision capable model
+  IMAGE_ANALYSIS: 'moondream:1.8b', // 1.7GB - Efficient vision model
   // AUDIO_ANALYSIS removed while audio features are disabled
   FALLBACK_MODELS: [
     'llama3.2:latest',
@@ -389,6 +431,7 @@ const UI_WORKFLOW = {
 const RENDERER_LIMITS = {
   FILE_STATS_BATCH_SIZE: 25,
   ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000, // 3 minutes
+  FILE_SIZE_WARNING: 50 * 1024 * 1024, // 50MB warning threshold
 };
 
 // CommonJS exports for Node.js compatibility (main process)
@@ -406,6 +449,8 @@ module.exports = {
   SHORTCUTS,
   LIMITS,
   TIMEOUTS,
+  SERVICE_LIMITS,
+  MEMORY_THRESHOLDS,
   SUPPORTED_TEXT_EXTENSIONS,
   SUPPORTED_DOCUMENT_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,

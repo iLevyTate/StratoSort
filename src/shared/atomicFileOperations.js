@@ -9,6 +9,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { isSafePath } = require('../main/ipc/pathValidation');
 
 /**
  * Transaction-based file operation manager
@@ -122,6 +123,14 @@ class AtomicFileOperations {
     }
 
     const { type, source, destination, data } = operation;
+
+    // Validate paths to prevent traversal or unsafe access
+    if (
+      (source && !isSafePath(source)) ||
+      (destination && !isSafePath(destination))
+    ) {
+      throw new Error(`Unsafe file path detected: ${source} or ${destination}`);
+    }
 
     try {
       let backupPath = null;

@@ -8,8 +8,11 @@ const path = require('path');
 const os = require('os');
 
 class FileLogger {
-  constructor() {
-    this.baseLogDir = path.join(process.cwd(), 'logs');
+  constructor(userDataPath = null) {
+    // Use userData path if provided (for main process), otherwise fallback to cwd
+    this.baseLogDir = userDataPath
+      ? path.join(userDataPath, 'logs')
+      : path.join(process.cwd(), 'logs');
     this.maxFileSize = 10 * 1024 * 1024; // 10MB per log file
     this.maxFilesPerType = 5; // Keep 5 files per log type
     this.enabled = true;
@@ -283,10 +286,14 @@ class FileLogger {
   }
 }
 
-// Create singleton instance
-const fileLogger = new FileLogger();
+// Create singleton instance - will be re-initialized in main process with userData path
+let fileLogger = new FileLogger();
 
 module.exports = {
   FileLogger,
   fileLogger,
+  // Function to reinitialize with userData path for main process
+  initializeForMainProcess: (userDataPath) => {
+    fileLogger = new FileLogger(userDataPath);
+  },
 };

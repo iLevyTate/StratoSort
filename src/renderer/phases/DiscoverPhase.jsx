@@ -407,7 +407,7 @@ function DiscoverPhase() {
           'All dropped files are already in the queue',
           'info',
           2000,
-          'duplicate-files',
+          'files-dropped-duplicate',
         );
         return;
       }
@@ -418,7 +418,7 @@ function DiscoverPhase() {
           `Skipped ${duplicateCount} duplicate files already in queue`,
           'info',
           2000,
-          'duplicate-files',
+          'files-dropped-skipped',
         );
       }
 
@@ -465,6 +465,10 @@ function DiscoverPhase() {
   const { isDragging, dragProps } = useDragAndDrop(handleFileDrop);
 
   const getFileType = useCallback((extension) => {
+    // Strip leading dot from extension for comparison
+    const ext = extension.startsWith('.')
+      ? extension.slice(1).toLowerCase()
+      : extension.toLowerCase();
     const imageExts = [
       'jpg',
       'jpeg',
@@ -491,11 +495,11 @@ function DiscoverPhase() {
       'xml',
     ];
     const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'];
-    if (imageExts.includes(extension)) return 'image';
-    if (videoExts.includes(extension)) return 'video';
-    if (docExts.includes(extension)) return 'document';
-    if (codeExts.includes(extension)) return 'code';
-    if (archiveExts.includes(extension)) return 'archive';
+    if (imageExts.includes(ext)) return 'image';
+    if (videoExts.includes(ext)) return 'video';
+    if (docExts.includes(ext)) return 'document';
+    if (codeExts.includes(ext)) return 'code';
+    if (archiveExts.includes(ext)) return 'archive';
     return 'file';
   }, []);
 
@@ -585,7 +589,7 @@ function DiscoverPhase() {
             'All selected files are already in the queue',
             'info',
             2000,
-            'duplicate-files',
+            'files-selected-duplicate',
           );
           return;
         }
@@ -596,7 +600,7 @@ function DiscoverPhase() {
             `Skipped ${duplicateCount} duplicate files already in queue`,
             'info',
             2000,
-            'duplicate-files',
+            'files-selected-skipped',
           );
         }
 
@@ -735,7 +739,7 @@ function DiscoverPhase() {
               'All files from this folder are already in the queue',
               'info',
               2000,
-              'duplicate-files',
+              'folder-files-duplicate',
             );
             return;
           }
@@ -746,7 +750,7 @@ function DiscoverPhase() {
               `Skipped ${duplicateCount} duplicate files already in queue`,
               'info',
               2000,
-              'duplicate-files',
+              'folder-files-skipped',
             );
           }
 

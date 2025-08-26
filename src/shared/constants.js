@@ -260,9 +260,35 @@ const LIMITS = {
 // Time constants - Optimized for faster models
 const TIMEOUTS = {
   AI_REQUEST: 60000, // 1 minute for faster models (llama3.2, whisper-tiny)
+  LLM_ENHANCEMENT: 30000, // 30 seconds for LLM smart folder enhancement
+  LLM_SIMILARITY: 10000, // 10 seconds for folder similarity checks
+  GPU_DETECTION: 3000, // 3 seconds for GPU subprocess detection
+  FILE_STABILITY_CHECK: 1000, // 1 second to verify file stability
+  SUBPROCESS_GRACE_KILL: 1000, // 1 second grace period before force kill
   FILE_OPERATION: 10000, // 10 seconds
   DEBOUNCE: 300,
   THROTTLE: 100,
+};
+
+// Service limits and thresholds
+const SERVICE_LIMITS = {
+  MAX_HISTORY_ENTRIES: 10000, // Analysis history retention limit
+  RETENTION_DAYS: 365, // Keep analysis data for 1 year
+  MAX_CONCURRENT_ANALYSIS: 2, // Maximum concurrent analysis operations
+  MAX_FILE_SCAN: 1000, // Maximum files to scan in directory
+  DEBOUNCE_DELAY: 2000, // 2 seconds for state save debouncing
+  GC_COOLDOWN: 300000, // 5 minutes between forced garbage collection
+  BATCH_SIZE: 10, // Embedding batch write size
+  MAX_CONSECUTIVE_FAILURES: 5, // Max failures before disabling persistence
+  FAILURE_BACKOFF_MS: 30000, // 30 seconds backoff for failures
+};
+
+// Memory thresholds
+const MEMORY_THRESHOLDS = {
+  MODERATE_MB: 1024, // 1GB - Moderate usage warning
+  HIGH_MB: 1536, // 1.5GB - High usage with GC
+  CRITICAL_MB: 2048, // 2GB - Critical usage alert
+  PERCENTAGE_WARNING: 80, // Warning when heap usage > 80%
 };
 
 // File type mappings
@@ -423,6 +449,8 @@ module.exports = {
   SHORTCUTS,
   LIMITS,
   TIMEOUTS,
+  SERVICE_LIMITS,
+  MEMORY_THRESHOLDS,
   SUPPORTED_TEXT_EXTENSIONS,
   SUPPORTED_DOCUMENT_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,

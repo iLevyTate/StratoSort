@@ -1,7 +1,7 @@
 const { logger } = require('../../shared/logger');
 
 const systemAnalytics = {
-  startTime: Date.now(),
+  startTime: process.uptime(),
   processedFiles: 0,
   successfulOperations: 0,
   failedOperations: 0,
@@ -174,7 +174,7 @@ const systemAnalytics = {
   },
 
   async collectMetrics() {
-    const uptime = Date.now() - this.startTime;
+    const uptime = process.uptime();
     const avgProcessingTime =
       this.processedFiles > 0
         ? this.totalProcessingTime / this.processedFiles
@@ -233,6 +233,8 @@ const systemAnalytics = {
           : 0,
       recentErrors: this.errors.slice(-10),
       ollamaHealth: this.ollamaHealth,
+      platform: process.platform,
+      arch: process.arch,
 
       // Enhanced metrics for dev tools
       actionMetrics: {

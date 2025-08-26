@@ -7,14 +7,13 @@ const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin'
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
 
-  return {
+  const rendererConfig = {
     mode: argv.mode || 'development',
     entry: ['./src/renderer/polyfills.js', './src/renderer/index.js'],
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'renderer.js',
       chunkFilename: '[id].renderer.js',
-      clean: true,
       publicPath: '',
       globalObject: 'globalThis',
     },
@@ -156,4 +155,30 @@ module.exports = (env, argv) => {
       },
     },
   };
+
+  const mainConfig = {
+    mode: argv.mode || 'development',
+    entry: './src/main/simple-main.js',
+    target: 'electron-main',
+    output: {
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'main.js',
+    },
+    node: {
+      __dirname: false,
+      __filename: false,
+    },
+    resolve: {
+      extensions: ['.js'],
+    },
+    plugins: [
+      new webpack.DefinePlugin({
+        'process.env.NODE_ENV': JSON.stringify(
+          isProduction ? 'production' : 'development',
+        ),
+      }),
+    ],
+  };
+
+  return [mainConfig, rendererConfig];
 };

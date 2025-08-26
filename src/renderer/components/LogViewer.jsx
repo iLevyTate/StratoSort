@@ -241,9 +241,9 @@ const LogViewer = ({ isOpen, onClose }) => {
                     Log Files ({logFiles.length})
                   </h4>
                   <div className="space-y-1 max-h-96 overflow-y-auto">
-                    {logFiles.map((file, index) => (
+                    {logFiles.map((file) => (
                       <button
-                        key={index}
+                        key={file.filename}
                         onClick={() => loadFileContent(file)}
                         className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
                           selectedFile?.filename === file.filename
@@ -321,29 +321,32 @@ const LogViewer = ({ isOpen, onClose }) => {
                       Recent {selectedType} Logs
                     </h3>
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {filteredLogs.map((log, index) => (
-                        <div
-                          key={index}
-                          className="bg-gray-50 dark:bg-gray-700 p-3 rounded border-l-4 border-blue-500"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {log.message || log.raw}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-500">
-                              {formatTimestamp(log.timestamp)}
-                            </span>
-                          </div>
-                          {log.data && Object.keys(log.data).length > 0 && (
-                            <div className="text-xs text-gray-600 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                              {JSON.stringify(log.data, null, 2)}
+                      {filteredLogs.map((log, index) => {
+                        const key = `${log.timestamp}-${index}`;
+                        return (
+                          <div
+                            key={key}
+                            className="bg-gray-50 dark:bg-gray-700 p-3 rounded border-l-4 border-blue-500"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {log.message || log.raw}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-500">
+                                {formatTimestamp(log.timestamp)}
+                              </span>
                             </div>
-                          )}
-                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            {log.hostname} • PID {log.pid}
+                            {log.data && Object.keys(log.data).length > 0 && (
+                              <div className="text-xs text-gray-600 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                {JSON.stringify(log.data, null, 2)}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                              {log.hostname} • PID {log.pid}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {filteredLogs.length === 0 && (
                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                           {searchTerm

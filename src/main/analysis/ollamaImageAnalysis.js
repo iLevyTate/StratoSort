@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
+const { logger } = require('../../shared/logger');
 const {
   getOllamaVisionModel,
   loadOllamaConfig,
@@ -75,8 +76,6 @@ async function analyzeImageWithOllama(
   smartFolders = [],
 ) {
   try {
-    const { logger } = require('../../shared/logger');
-
     // Get shared services for better performance
     const { embeddingIndex, folderMatcher } = await getSharedServices();
     logger.info(`Analyzing image content with Ollama`, {
@@ -204,10 +203,9 @@ Analyze this image:`;
       confidence: 60,
     };
   } catch (error) {
-    const { logger } = require('../../shared/logger');
-    logger.error('Error calling Ollama API for image', {
-      error: error.message,
-    });
+    logger.error(
+      `Error calling Ollama API for image ${originalFileName}: ${error.message}`,
+    );
 
     // Specific handling for zero-length image error
     if (error.message.includes('zero length image')) {
@@ -236,7 +234,6 @@ Analyze this image:`;
 }
 
 async function analyzeImageFile(filePath, smartFolders = []) {
-  const { logger } = require('../../shared/logger');
   logger.info(`Analyzing image file`, { path: filePath });
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
@@ -475,7 +472,9 @@ async function extractTextFromImage(filePath) {
 
     return null;
   } catch (error) {
-    console.error('Error extracting text from image:', error.message);
+    logger.error(
+      `Error extracting text from image ${filePath}: ${error.message}`,
+    );
     return null;
   }
 }

@@ -2,6 +2,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
 const crypto = require('crypto');
+const { logger } = require('../../shared/logger');
+const { SERVICE_LIMITS } = require('../../shared/constants');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 class AnalysisHistoryService {
   constructor() {
@@ -17,7 +20,7 @@ class AnalysisHistoryService {
 
     // Schema version for future migration support
     this.SCHEMA_VERSION = '1.0.0';
-    this.MAX_HISTORY_ENTRIES = 10000; // Configurable limit
+    this.MAX_HISTORY_ENTRIES = SERVICE_LIMITS.MAX_HISTORY_ENTRIES;
   }
 
   // Lazy initialize paths to avoid calling app.getPath before app is ready
@@ -41,10 +44,27 @@ class AnalysisHistoryService {
       await this.loadHistory();
       await this.loadIndex();
       this.initialized = true;
-      console.log('AnalysisHistoryService initialized successfully');
+      logger.info('AnalysisHistoryService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize AnalysisHistoryService:', error);
-      await this.createDefaultStructures();
+      logger.error('Failed to initialize AnalysisHistoryService:', error);
+      try {
+        await this.createDefaultStructures();
+        this.initialized = true;
+        logger.info(
+          'AnalysisHistoryService initialized with default structures after error',
+        );
+      } catch (fallbackError) {
+        logger.error(
+          'Failed to create default structures for AnalysisHistoryService:',
+          fallbackError,
+        );
+        // Set initialized to true but mark as degraded
+        this.initialized = true;
+        this.degradedMode = true;
+        logger.warn(
+          'AnalysisHistoryService running in degraded mode - history features may be limited',
+        );
+      }
     }
   }
 
@@ -62,7 +82,7 @@ class AnalysisHistoryService {
     return {
       schemaVersion: this.SCHEMA_VERSION,
       maxHistoryEntries: this.MAX_HISTORY_ENTRIES,
-      retentionDays: 365, // Keep analysis for 1 year
+      retentionDays: SERVICE_LIMITS.RETENTION_DAYS,
       enableRAG: true,
       enableFullTextSearch: true,
       compressionEnabled: false, // For future use
@@ -278,7 +298,7 @@ class AnalysisHistoryService {
     await this.initialize();
 
     const results = [];
-    const searchTerms = query.toLowerCase().split(' ');
+    // Removed unused searchTerms variable - performing full query match instead
 
     for (const [id, entry] of Object.entries(this.analysisHistory.entries)) {
       let score = 0;
@@ -363,22 +383,27 @@ class AnalysisHistoryService {
     await this.initialize();
 
     const entries = Object.values(this.analysisHistory.entries);
+    const count = entries.length;
     const categories = Object.keys(this.analysisIndex.categoryIndex);
     const tags = Object.keys(this.analysisIndex.tagIndex);
 
     return {
-      totalFiles: entries.length,
+      totalFiles: count,
       totalSize: this.analysisHistory.totalSize,
       categoriesCount: categories.length,
       tagsCount: tags.length,
       averageConfidence:
-        entries.reduce((sum, e) => sum + (e.analysis.confidence || 0), 0) /
-        entries.length,
+        count > 0
+          ? entries.reduce((sum, e) => sum + (e.analysis.confidence || 0), 0) /
+            count
+          : 0,
       averageProcessingTime:
-        entries.reduce(
-          (sum, e) => sum + (e.processing.processingTimeMs || 0),
-          0,
-        ) / entries.length,
+        count > 0
+          ? entries.reduce(
+              (sum, e) => sum + (e.processing.processingTimeMs || 0),
+              0,
+            ) / count
+          : 0,
       oldestAnalysis:
         entries.length > 0
           ? entries.reduce((oldest, e) =>
@@ -420,6 +445,7 @@ class AnalysisHistoryService {
 
     for (const [id, entry] of toRemove) {
       delete this.analysisHistory.entries[id];
+      this.analysisHistory.metadata.totalEntries--;
       await this.removeFromIndexes(entry);
     }
 
@@ -435,13 +461,14 @@ class AnalysisHistoryService {
     for (const [id, entry] of entries) {
       if (new Date(entry.timestamp) < cutoffDate) {
         delete this.analysisHistory.entries[id];
+        this.analysisHistory.metadata.totalEntries--;
         await this.removeFromIndexes(entry);
         removedCount++;
       }
     }
 
     if (removedCount > 0) {
-      console.log(`Removed ${removedCount} expired analysis entries`);
+      logger.info(`Removed ${removedCount} expired analysis entries`);
       await this.saveHistory();
       await this.saveIndex();
     }
@@ -477,11 +504,33 @@ class AnalysisHistoryService {
         delete this.analysisIndex.categoryIndex[entry.analysis.category];
       }
     }
+
+    // Remove from date index
+    const dateKey = entry.timestamp.slice(0, 7); // YYYY-MM format
+    if (this.analysisIndex.dateIndex[dateKey]) {
+      this.analysisIndex.dateIndex[dateKey] = this.analysisIndex.dateIndex[
+        dateKey
+      ].filter((id) => id !== entry.id);
+      if (this.analysisIndex.dateIndex[dateKey].length === 0) {
+        delete this.analysisIndex.dateIndex[dateKey];
+      }
+    }
+
+    // Remove from size index
+    const sizeKey = this.getSizeRange(entry.fileSize || 0);
+    if (this.analysisIndex.sizeIndex[sizeKey]) {
+      this.analysisIndex.sizeIndex[sizeKey] = this.analysisIndex.sizeIndex[
+        sizeKey
+      ].filter((id) => id !== entry.id);
+      if (this.analysisIndex.sizeIndex[sizeKey].length === 0) {
+        delete this.analysisIndex.sizeIndex[sizeKey];
+      }
+    }
   }
 
   async migrateHistory() {
     // Future migration logic for schema changes
-    console.log('Schema migration not yet implemented');
+    logger.debug('Schema migration not yet implemented');
   }
 
   async createDefaultStructures() {
@@ -500,12 +549,15 @@ class AnalysisHistoryService {
 
   async saveConfig() {
     this.config.updatedAt = new Date().toISOString();
-    await fs.writeFile(this.configPath, JSON.stringify(this.config, null, 2));
+    await backupAndReplace(
+      this.configPath,
+      JSON.stringify(this.config, null, 2),
+    );
   }
 
   async saveHistory() {
     this.analysisHistory.updatedAt = new Date().toISOString();
-    await fs.writeFile(
+    await backupAndReplace(
       this.historyPath,
       JSON.stringify(this.analysisHistory, null, 2),
     );
@@ -513,7 +565,7 @@ class AnalysisHistoryService {
 
   async saveIndex() {
     this.analysisIndex.updatedAt = new Date().toISOString();
-    await fs.writeFile(
+    await backupAndReplace(
       this.indexPath,
       JSON.stringify(this.analysisIndex, null, 2),
     );

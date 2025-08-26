@@ -6,8 +6,12 @@ const {
 const { buildOllamaOptions } = require('../services/PerformanceService');
 
 // Import shared analysis utilities
-const { validateAnalysisResult } = require('./analysisUtils');
+const {
+  validateAnalysisResult,
+  handleAnalysisError,
+} = require('./analysisUtils');
 const { AI_DEFAULTS } = require('../../shared/constants');
+const { logger } = require('../../shared/logger');
 
 const AppConfig = {
   ai: {
@@ -135,41 +139,39 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
           keywords: finalKeywords,
         };
       } catch (e) {
-        console.error(
-          'Failed to parse document analysis from Ollama:',
-          e.message,
+        logger.error(
+          `Failed to parse document analysis from Ollama for ${originalFileName}: ${e.message}`,
         );
-        return validateAnalysisResult(
-          {
-            error: 'Failed to parse document analysis from Ollama.',
-            keywords: [],
-            confidence: 65,
-            category: 'document',
-          },
-          { keywords: [], confidence: 65 },
-        );
+        return {
+          error: 'Failed to parse document analysis from Ollama.',
+          keywords: [],
+          confidence: 65,
+          extractionMethod: 'unknown',
+          category: 'document',
+          suggestedName: null,
+        };
       }
     }
-    return validateAnalysisResult(
-      {
-        error: 'No content in Ollama response for document',
-        keywords: [],
-        confidence: 60,
-        category: 'document',
-      },
-      { keywords: [], confidence: 60 },
-    );
+    return {
+      error: 'No content in Ollama response for document',
+      keywords: [],
+      confidence: 60,
+      extractionMethod: 'unknown',
+      category: 'document',
+      suggestedName: null,
+    };
   } catch (error) {
-    console.error(`Ollama API error for document: ${error.message}`);
-    return validateAnalysisResult(
-      {
-        error: `Ollama API error for document: ${error.message}`,
-        keywords: [],
-        confidence: 60,
-        category: 'document',
-      },
-      { keywords: [], confidence: 60 },
+    logger.error(
+      `Ollama API error for document ${originalFileName}: ${error.message}`,
     );
+    return {
+      error: `Ollama API error for document: ${error.message}`,
+      keywords: [],
+      confidence: 60,
+      extractionMethod: 'unknown',
+      category: 'document',
+      suggestedName: null,
+    };
   }
 }
 

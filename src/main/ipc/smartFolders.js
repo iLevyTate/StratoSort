@@ -4,7 +4,11 @@ const { getOllama: getOllamaClient } = require('../ollamaUtils');
 const {
   enhanceSmartFolderWithLLM,
 } = require('../services/SmartFoldersLLMService');
-const { withErrorLogging } = require('./withErrorLogging');
+const {
+  withErrorLogging,
+  withEnhancedValidation,
+  schemas,
+} = require('./withErrorLogging');
 
 function registerSmartFoldersIpc({
   ipcMain,
@@ -55,19 +59,21 @@ function registerSmartFoldersIpc({
   // Smart folder matching using embeddings/LLM with fallbacks
   ipcMain.handle(
     IPC_CHANNELS.SMART_FOLDERS.MATCH,
-    withErrorLogging(logger, async (event, payload) => {
-      try {
+    withEnhancedValidation(
+      logger,
+      schemas?.objectWithTextAndArray ||
+        ((event, payload) => {
+          const { text, smartFolders = [] } = payload || {};
+          if (!text || typeof text !== 'string' || text.trim().length === 0) {
+            return 'Text is required and must be a non-empty string';
+          }
+          if (!Array.isArray(smartFolders)) {
+            return 'smartFolders must be an array';
+          }
+          return true;
+        }),
+      async (event, payload) => {
         const { text, smartFolders = [] } = payload || {};
-        if (
-          !text ||
-          !Array.isArray(smartFolders) ||
-          smartFolders.length === 0
-        ) {
-          return {
-            success: false,
-            error: 'Invalid input for SMART_FOLDERS.MATCH',
-          };
-        }
 
         try {
           const ollama = getOllamaClient();
@@ -145,11 +151,8 @@ function registerSmartFoldersIpc({
             };
           }
         }
-      } catch (error) {
-        logger.error('[SMART_FOLDERS.MATCH] Failed:', error);
-        return { success: false, error: error.message };
-      }
-    }),
+      },
+    ),
   );
 
   ipcMain.handle(

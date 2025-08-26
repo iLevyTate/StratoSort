@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { PHASES } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { Collapsible, Button } from '../components/ui';
@@ -14,6 +14,7 @@ import { useOrganizePhase } from '../hooks/useOrganizePhase';
 
 function OrganizePhase() {
   const { actions, phaseData } = usePhase();
+  const [documentsPath, setDocumentsPath] = useState('');
   const {
     // State
     isOrganizing,
@@ -46,6 +47,13 @@ function OrganizePhase() {
     current: 0,
     total: 0,
   };
+
+  useEffect(() => {
+    window.electronAPI.files
+      .getDocumentsPath()
+      .then(setDocumentsPath)
+      .catch(console.error);
+  }, []);
 
   const failedCount = useMemo(
     () => (phaseData.analysisResults || []).filter((f) => !f.analysis).length,
@@ -87,7 +95,7 @@ function OrganizePhase() {
         >
           <TargetFolderList
             folders={smartFolders}
-            defaultLocation="Documents"
+            defaultLocation={documentsPath || 'Documents'}
           />
         </Collapsible>
       )}
@@ -208,7 +216,7 @@ function OrganizePhase() {
                 : 'No matching folder';
               return (
                 <ReadyFileItem
-                  key={index}
+                  key={file.path}
                   file={fileWithEdits}
                   index={index}
                   isSelected={isSelected}
@@ -235,7 +243,7 @@ function OrganizePhase() {
           <div className="space-y-5">
             {processedFiles.map((file, index) => (
               <div
-                key={index}
+                key={`${file.originalPath}-${file.organizedAt}`}
                 className="flex items-center justify-between p-8 bg-green-50 rounded-lg border border-green-200"
               >
                 <div className="flex items-center gap-8">
@@ -304,7 +312,8 @@ function OrganizePhase() {
         <Button
           onClick={() => actions.advancePhase(PHASES.COMPLETE)}
           disabled={processedFiles.length === 0 || isOrganizing}
-          className={`w-full sm:w-auto ${processedFiles.length === 0 || isOrganizing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          variant="primary"
+          className="w-full sm:w-auto"
         >
           View Results →
         </Button>

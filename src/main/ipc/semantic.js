@@ -15,6 +15,9 @@ function registerEmbeddingsIpc({
   const embeddingIndex = new EmbeddingIndexService();
   const folderMatcher = new FolderMatchingService(embeddingIndex);
 
+  // Return the embedding index for cleanup purposes
+  registerEmbeddingsIpc.embeddingIndex = embeddingIndex;
+
   ipcMain.handle(
     IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS,
     withErrorLogging(logger, async () => {

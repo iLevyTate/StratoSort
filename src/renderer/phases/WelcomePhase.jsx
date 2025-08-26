@@ -54,7 +54,6 @@ function WelcomePhase() {
 
         <Button
           onClick={() => {
-            console.log('[WelcomePhase] Advancing to AI_SETUP phase');
             actions.advancePhase(PHASES.AI_SETUP);
           }}
           variant="outline"

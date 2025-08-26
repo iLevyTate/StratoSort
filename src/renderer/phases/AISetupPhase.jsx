@@ -105,7 +105,7 @@ function AISetupPhase() {
       // Save user preference to skip AI verification
       if (window.electronAPI?.settings?.save) {
         const result = await window.electronAPI.settings.save({
-          skipAIModelVerification: true,
+          skipAIModelVerification: skipVerification,
         });
 
         setSkipVerification(true);

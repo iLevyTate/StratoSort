@@ -1,5 +1,54 @@
 const path = require('path');
 const fs = require('fs').promises;
+const { atomicFileOps } = require('../../shared/atomicFileOperations');
+
+/**
+ * Helper function to resolve naming collisions
+ * @param {string} originalPath - Original file path
+ * @param {number} maxAttempts - Maximum attempts to resolve collision
+ * @returns {string} - Unique path with no collision
+ */
+async function resolveNamingCollision(originalPath, maxAttempts = 1000) {
+  try {
+    await fs.access(originalPath);
+    let counter = 0;
+    let uniquePath = originalPath;
+    const ext = path.extname(originalPath);
+    const baseName = originalPath.slice(0, -ext.length);
+    const baseDelayMs = 10;
+
+    while (true) {
+      try {
+        await fs.access(uniquePath);
+        counter++;
+        uniquePath = `${baseName}_${counter}${ext}`;
+        if (counter > maxAttempts) {
+          throw new Error(
+            `Too many name collisions after ${maxAttempts} attempts`,
+          );
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(baseDelayMs * counter, 1000)),
+        );
+      } catch (accessError) {
+        if (accessError.message.includes('Too many name collisions')) {
+          throw accessError;
+        }
+        // File doesn't exist, we found a unique name
+        break;
+      }
+    }
+
+    return uniquePath;
+  } catch (initialError) {
+    if (initialError.code === 'ENOENT') {
+      // Original path doesn't exist, no collision
+      return originalPath;
+    }
+    throw initialError;
+  }
+}
 
 /**
  * Resume incomplete organize batches from a previous session.
@@ -47,53 +96,28 @@ async function resumeIncompleteBatches(
           const destDir = path.dirname(op.destination);
           await fs.mkdir(destDir, { recursive: true });
 
-          // Check destination collision and adjust
+          // Use atomic move with built-in collision resolution and EXDEV handling
           try {
-            await fs.access(op.destination);
-            let counter = 1;
-            let uniqueDestination = op.destination;
-            const ext = path.extname(op.destination);
-            const baseName = op.destination.slice(0, -ext.length);
-            // Bounded collision resolution with backoff to avoid busy-wait
-            const maxAttempts = 1000;
-            const baseDelayMs = 10;
-            while (true) {
-              try {
-                await fs.access(uniqueDestination);
-                counter++;
-                uniqueDestination = `${baseName}_${counter}${ext}`;
-                if (counter > maxAttempts)
-                  throw new Error('Too many name collisions');
-                // eslint-disable-next-line no-await-in-loop
-                await new Promise((resolve) =>
-                  setTimeout(resolve, Math.min(baseDelayMs * counter, 1000)),
-                );
-              } catch {
-                break;
-              }
-            }
-            if (uniqueDestination !== op.destination) {
-              op.destination = uniqueDestination;
-            }
-          } catch {}
-
-          // Move with EXDEV handling
-          try {
-            await fs.rename(op.source, op.destination);
-          } catch (renameError) {
-            if (renameError.code === 'EXDEV') {
-              await fs.copyFile(op.source, op.destination);
-              const sourceStats = await fs.stat(op.source);
-              const destStats = await fs.stat(op.destination);
-              if (sourceStats.size !== destStats.size) {
-                throw new Error(
-                  'File copy verification failed - size mismatch',
-                );
-              }
-              await fs.unlink(op.source);
-            } else {
-              throw renameError;
-            }
+            const actualDestination = await atomicFileOps.atomicMove(
+              op.source,
+              op.destination,
+            );
+            // Update the operation with the actual destination (may have been adjusted for collisions)
+            op.destination = actualDestination;
+          } catch (moveError) {
+            logger?.warn?.(
+              '[RESUME] Atomic move failed for',
+              path.basename(op.source),
+              ':',
+              moveError.message,
+            );
+            // Mark operation as failed and continue with next operation
+            await serviceIntegration.processingState.markOrganizeOpError(
+              batch.id,
+              i,
+              `File move failed: ${moveError.message}`,
+            );
+            continue;
           }
 
           await serviceIntegration.processingState.markOrganizeOpDone(

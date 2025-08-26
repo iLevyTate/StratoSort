@@ -25,14 +25,15 @@ class OllamaService {
   }
 
   async initialize() {
-    if (this.initialized) return;
+    if (this.initialized) return { success: true };
     try {
       await loadOllamaConfig();
       this.initialized = true;
       logger.info('[OllamaService] Initialized successfully');
+      return { success: true };
     } catch (error) {
       logger.error('[OllamaService] Failed to initialize:', error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 
@@ -40,12 +41,18 @@ class OllamaService {
    * Get the current Ollama configuration
    */
   async getConfig() {
-    await this.initialize();
+    const initResult = await this.initialize();
+    if (!initResult.success) {
+      return { success: false, error: initResult.error };
+    }
     return {
-      host: getOllamaHost(),
-      textModel: getOllamaModel(),
-      visionModel: getOllamaVisionModel(),
-      embeddingModel: getOllamaEmbeddingModel(),
+      success: true,
+      config: {
+        host: getOllamaHost(),
+        textModel: getOllamaModel(),
+        visionModel: getOllamaVisionModel(),
+        embeddingModel: getOllamaEmbeddingModel(),
+      },
     };
   }
 
@@ -53,7 +60,10 @@ class OllamaService {
    * Update Ollama configuration
    */
   async updateConfig(config) {
-    await this.initialize();
+    const initResult = await this.initialize();
+    if (!initResult.success) {
+      return { success: false, error: initResult.error };
+    }
     try {
       if (config.host) await setOllamaHost(config.host);
       if (config.textModel) await setOllamaModel(config.textModel);

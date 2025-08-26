@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('../../shared/logger');
 const {
   SUPPORTED_TEXT_EXTENSIONS,
   SUPPORTED_DOCUMENT_EXTENSIONS,
@@ -51,7 +52,8 @@ const { FileProcessingError } = require('../errors/AnalysisError');
 const analysisQueue = [];
 const isProcessing = { value: false };
 
-// Remove TODO and uncomment circuitBreaker
+// Circuit breaker for LLM service resilience
+// Protects against cascading failures with configurable thresholds
 const circuitBreaker = {
   failures: 0,
   lastFailureTime: 0,
@@ -235,7 +237,6 @@ async function streamAnalyzeLargeDocument(
   originalFileName,
   smartFolders = [],
 ) {
-  const { logger } = require('../../shared/logger');
   logger.info(`[STREAMING] Processing large document in chunks`, {
     totalLength: textContent.length,
     fileName: originalFileName,
@@ -338,7 +339,6 @@ async function queueDocumentAnalysis(filePath, smartFolders = []) {
 }
 
 async function analyzeDocumentFile(filePath, smartFolders = []) {
-  const { logger } = require('../../shared/logger');
   logger.info(`[DOC] Analyzing document file`, { path: filePath });
   const fileExtension = path.extname(filePath).toLowerCase();
 
@@ -377,7 +377,7 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
   try {
     const connectionCheck = await modelVerifier.checkOllamaConnection();
     if (!connectionCheck.connected) {
-      console.warn(
+      logger.warn(
         `[ANALYSIS-FALLBACK] Ollama unavailable (${connectionCheck.error}). Using filename-based analysis for ${fileName}.`,
       );
       const intelligentCategory = getIntelligentCategory(
@@ -401,7 +401,9 @@ async function analyzeDocumentFile(filePath, smartFolders = []) {
       };
     }
   } catch (error) {
-    console.error('Pre-flight verification failed:', error.message);
+    logger.error(
+      `Pre-flight verification failed for ${fileName}: ${error.message}`,
+    );
     const intelligentCategory = getIntelligentCategory(
       fileName,
       fileExtension,

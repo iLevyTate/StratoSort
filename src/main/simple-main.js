@@ -9,16 +9,16 @@ const {
   nativeImage,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
-// const { performance } = require('perf_hooks'); // no longer used
+
 const isDev = process.env.NODE_ENV === 'development';
 
 // Logging utility
 const { logger } = require('../shared/logger');
+const { MEMORY_THRESHOLDS, SERVICE_LIMITS } = require('../shared/constants');
 
 // Import error handling system (not needed directly in this file)
 
 const { scanDirectory } = require('./folderScanner');
-// const { getOrganizationSuggestions } = require('./llmService'); // not used currently
 const {
   getOllama,
   getOllamaModel,
@@ -31,7 +31,6 @@ const {
   setOllamaHost,
   loadOllamaConfig,
 } = require('./ollamaUtils');
-// const ModelManager = require('./services/ModelManager'); // not used currently
 const { buildOllamaOptions } = require('./services/PerformanceService');
 const { ensureOllamaWithGpu } = require('./ollamaStartup');
 const SettingsService = require('./services/SettingsService');
@@ -425,10 +424,22 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
-    // Someone tried to run a second instance, focus our window instead
+    // Someone tried to run a second instance, focus our window if present,
+    // otherwise attempt to create a new window (e.g., app running in tray)
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+      return;
+    }
+
+    try {
+      // If no window exists, create one so the user's launch actually shows UI
+      createWindow();
+    } catch (e) {
+      logger.warn(
+        '[SECOND-INSTANCE] Failed to create window on second-instance:',
+        e?.message,
+      );
     }
   });
 
@@ -440,7 +451,8 @@ if (!gotTheLock) {
       'enable-gpu-memory-buffer-compositor-resources',
     );
     app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-    app.commandLine.appendSwitch('ignore-gpu-blacklist');
+    // Use the modern, documented flag name consistently
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
     app.commandLine.appendSwitch('disable-software-rasterizer');
 
     // Performance optimizations
@@ -475,6 +487,14 @@ if (!gotTheLock) {
 
   // Initialize services after app is ready
   app.whenReady().then(async () => {
+    // Initialize file logger with userData path for consistent log locations
+    try {
+      const { initializeForMainProcess } = require('../shared/fileLogger');
+      initializeForMainProcess(app.getPath('userData'));
+    } catch (e) {
+      logger.warn('[STARTUP] File logger initialization failed:', e?.message);
+    }
+
     // Initialize comprehensive system monitoring
     try {
       await systemMonitor.initialize();
@@ -526,28 +546,80 @@ if (!gotTheLock) {
         }
       }, 1000);
 
-      // Add memory monitoring and cleanup
+      // Add memory monitoring and cleanup with progressive thresholds
+      let lastGcTime = 0;
+      const GC_COOLDOWN_MS = SERVICE_LIMITS.GC_COOLDOWN;
+
       setInterval(() => {
         try {
           const memUsage = process.memoryUsage();
-          if (memUsage.heapUsed > 1.5 * 1024 * 1024 * 1024) {
-            // 1.5GB threshold
-            logger.warn('[MEMORY] High memory usage detected:', {
-              heapUsed: `${(memUsage.heapUsed / 1024 / 1024).toFixed(2)}MB`,
-              heapTotal: `${(memUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`,
-              external: `${(memUsage.external / 1024 / 1024).toFixed(2)}MB`,
+          const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+          const heapTotalMB = memUsage.heapTotal / 1024 / 1024;
+          const heapUsagePercent =
+            (memUsage.heapUsed / memUsage.heapTotal) * 100;
+
+          // Progressive thresholds with different actions
+          if (heapUsedMB > MEMORY_THRESHOLDS.CRITICAL_MB) {
+            logger.error('[MEMORY] Critical memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              recommendation: 'Consider restarting the application',
             });
 
-            // Force garbage collection if available
-            if (global.gc) {
+            // Force GC only if cooldown period has passed
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
               global.gc();
-              logger.info('[MEMORY] Forced garbage collection');
+              lastGcTime = now;
+              logger.warn(
+                '[MEMORY] Forced garbage collection due to critical usage',
+              );
             }
+          } else if (heapUsedMB > MEMORY_THRESHOLDS.HIGH_MB) {
+            logger.warn('[MEMORY] High memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              recommendation: 'Monitor for potential memory leaks',
+            });
+
+            // Force GC only if cooldown period has passed
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
+              global.gc();
+              lastGcTime = now;
+              logger.info(
+                '[MEMORY] Forced garbage collection due to high usage',
+              );
+            }
+          } else if (heapUsedMB > 1024) {
+            // 1GB - Moderate
+            logger.info('[MEMORY] Moderate memory usage:', {
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+            });
+
+            // Only force GC for moderate usage if it's been very long
+            const now = Date.now();
+            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS * 2) {
+              global.gc();
+              lastGcTime = now;
+              logger.debug('[MEMORY] Periodic garbage collection');
+            }
+          } else if (heapUsagePercent > 80) {
+            // High percentage regardless of absolute size
+            logger.info('[MEMORY] High memory percentage:', {
+              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+            });
           }
         } catch (error) {
           logger.debug('[MEMORY] Memory monitoring failed:', error.message);
         }
-      }, 60000); // Check every minute
+      }, 120000); // Check every 2 minutes (reduced frequency)
       // Initialize settings service
       settingsService = new SettingsService();
       const initialSettings = await perfMonitor.measure(
@@ -574,8 +646,11 @@ if (!gotTheLock) {
         );
       }
 
-      // Skip AI model verification entirely for better startup performance
-      const skipVerification = currentSettings.skipAIModelVerification || true; // Force skip for performance
+      // Decide whether to skip AI model verification based on settings (default: false)
+      const skipVerification =
+        typeof currentSettings.skipAIModelVerification === 'boolean'
+          ? currentSettings.skipAIModelVerification
+          : false;
       // startupTimings.modelVerificationStarted = Date.now();
 
       if (skipVerification) {
@@ -882,7 +957,7 @@ logger.info(
 logger.info('[UI] Modern UI loaded with GPU acceleration');
 
 // App lifecycle
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   isQuitting = true;
   try {
     systemAnalytics.destroy();
@@ -891,6 +966,36 @@ app.on('before-quit', () => {
     logger.debug(
       '[ANALYTICS] Failed to destroy system analytics:',
       destroyError?.message,
+    );
+  }
+
+  // Cleanup embedding services
+  try {
+    // Cleanup embedding service from IPC registration
+    const registerEmbeddingsIpc = require('./ipc/semantic');
+    if (
+      registerEmbeddingsIpc.embeddingIndex &&
+      typeof registerEmbeddingsIpc.embeddingIndex.destroy === 'function'
+    ) {
+      await registerEmbeddingsIpc.embeddingIndex.destroy();
+    }
+  } catch (embeddingError) {
+    logger.debug(
+      '[EMBEDDINGS] Failed to destroy IPC embedding service:',
+      embeddingError?.message,
+    );
+  }
+
+  try {
+    // Cleanup shared services from analysis utils
+    const { cleanupSharedServices } = require('./analysis/analysisUtils');
+    if (typeof cleanupSharedServices === 'function') {
+      await cleanupSharedServices();
+    }
+  } catch (sharedServicesError) {
+    logger.debug(
+      '[SHARED-SERVICES] Failed to cleanup shared services:',
+      sharedServicesError?.message,
     );
   }
 });
@@ -954,47 +1059,6 @@ logger.debug(
 
 // All Analysis History and System metrics handlers are registered via ./ipc/* modules
 
-// Audio analysis handler REMOVED - audio analysis disabled
-// ipcMain.handle(IPC_CHANNELS.ANALYSIS.ANALYZE_AUDIO, async (event, filePath) => {
-//   try {
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Starting audio analysis for: ${filePath}`);
-//
-//     // Get current smart folders to pass to analysis
-//     const smartFolders = customFolders.filter(f => !f.isDefault || f.path);
-//     const folderCategories = smartFolders.map(f => ({
-//       name: f.name,
-//       description: f.description || '',
-//       id: f.id
-//     }));
-//
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Using ${folderCategories.length} smart folders for context:`, folderCategories.map(f => f.name).join(', '));
-//
-//     const result = await analyzeAudioFile(filePath, folderCategories);
-//
-//     logger.info(`[IPC-AUDIO-ANALYSIS] Result:`, {
-//       success: !result.error,
-//       category: result.category,
-//       keywords: result.keywords?.length || 0,
-//       confidence: result.confidence,
-//       has_transcription: result.has_transcription
-//     });
-//
-//     return result;
-//   } catch (error) {
-//     logger.error(`[IPC] Audio analysis failed for ${filePath}:`, error);
-//     return {
-//       error: error.message,
-//       suggestedName: path.basename(filePath, path.extname(filePath)),
-//       category: 'audio',
-//       keywords: [],
-//       confidence: 0,
-//       has_transcription: false
-//     };
-//   }
-// });
-
-// NOTE: Duplicate TRANSCRIBE_AUDIO handler removed to prevent registration error
-
 // ===== TRAY INTEGRATION =====
 let tray = null;
 function createSystemTray() {
@@ -1008,8 +1072,23 @@ function createSystemTray() {
           ? '../../assets/icons/icons/png/24x24.png'
           : '../../assets/icons/icons/png/16x16.png',
     );
-    const trayIcon = nativeImage.createFromPath(iconPath);
-    if (process.platform === 'darwin') {
+    let trayIcon = nativeImage.createFromPath(iconPath);
+    // If the icon is missing or empty, fallback to bundled logo
+    if (
+      !trayIcon ||
+      (typeof trayIcon.isEmpty === 'function' && trayIcon.isEmpty())
+    ) {
+      const fallback = path.join(
+        __dirname,
+        '../../../assets/stratosort-logo.png',
+      );
+      trayIcon = nativeImage.createFromPath(fallback);
+    }
+    if (
+      process.platform === 'darwin' &&
+      trayIcon &&
+      typeof trayIcon.setTemplateImage === 'function'
+    ) {
       trayIcon.setTemplateImage(true);
     }
     tray = new Tray(trayIcon);

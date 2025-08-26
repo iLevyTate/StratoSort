@@ -37,6 +37,17 @@ async function getSharedServices() {
   return { modelVerifier, embeddingIndex, folderMatcher };
 }
 
+// Cleanup function for shared services
+async function cleanupSharedServices() {
+  try {
+    if (embeddingIndex && typeof embeddingIndex.destroy === 'function') {
+      await embeddingIndex.destroy();
+    }
+  } catch (error) {
+    console.error('[ANALYSIS-UTILS] Failed to cleanup shared services:', error);
+  }
+}
+
 // Perform semantic folder matching with embeddings and caching
 async function performSemanticAnalysis(
   analysis,
@@ -189,7 +200,8 @@ function validateAnalysisResult(result, defaults = {}) {
         : result.date.toISOString().split('T')[0];
   }
 
-  return { ...result, ...validated };
+  // Return only validated fields to avoid including unexpected/unwanted data from result
+  return validated;
 }
 
 // Memory usage monitoring for analysis processes
@@ -268,6 +280,7 @@ module.exports = {
   performSemanticAnalysis,
   handleAnalysisError,
   validateAnalysisResult,
+  cleanupSharedServices,
   // Utility functions for memory management and batch processing
   getMemoryUsage,
   isResourceConstrained,

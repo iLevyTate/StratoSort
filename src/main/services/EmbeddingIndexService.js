@@ -1,6 +1,7 @@
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 class EmbeddingIndexService {
   constructor() {
@@ -12,6 +13,9 @@ class EmbeddingIndexService {
     this.initialized = false;
     this.persistDisabled = false;
     this.writeQueue = Promise.resolve();
+    this.consecutiveFailures = 0;
+    this.maxConsecutiveFailures = 5;
+    this.failureBackoffMs = 30000; // 30 seconds
 
     // Performance optimizations
     this.writeBuffer = [];
@@ -19,9 +23,12 @@ class EmbeddingIndexService {
     // Conditional flush interval - only flush when there's data
     this.flushInterval = setInterval(() => {
       if (this.writeBuffer.length > 0) {
-        this.flushWriteBuffer().catch((error) =>
-          console.error('Background flush failed:', error),
-        );
+        this.writeQueue = this.writeQueue
+          .then(() => this.flushWriteBuffer())
+          .catch((error) => {
+            console.error('Background flush failed:', error);
+            return Promise.resolve(); // Continue the chain
+          });
       }
     }, 10000); // Increased from 5s to 10s and made conditional
     // Prevent the interval from keeping the Node event loop alive in tests/runtime
@@ -34,17 +41,46 @@ class EmbeddingIndexService {
     }
   }
 
-  // Batch writing for performance
+  // Batch writing for performance with serialization
   async bufferWrite(filePath, obj) {
     this.writeBuffer.push({ filePath, obj });
 
     if (this.writeBuffer.length >= this.batchSize) {
-      await this.flushWriteBuffer();
+      // Use writeQueue to serialize flushes
+      this.writeQueue = this.writeQueue.then(() => this.flushWriteBuffer());
+      await this.writeQueue;
     }
   }
 
   async flushWriteBuffer() {
     if (this.writeBuffer.length === 0 || this.persistDisabled) return;
+
+    // Check if we're in back-off period due to consecutive failures
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      console.warn(
+        `[EMBEDDING] Persistence disabled after ${this.consecutiveFailures} consecutive failures. Will retry in ${this.failureBackoffMs}ms.`,
+      );
+      // Keep the buffer for retry instead of dropping data
+      this.persistDisabled = true;
+      // Reset failure counter and re-enable persistence after back-off period
+      setTimeout(() => {
+        this.consecutiveFailures = 0;
+        this.persistDisabled = false;
+        console.info(
+          '[EMBEDDING] Re-enabling persistence after back-off period',
+        );
+        // Trigger a flush if we have buffered data
+        if (this.writeBuffer.length > 0) {
+          this.writeQueue = this.writeQueue
+            .then(() => this.flushWriteBuffer())
+            .catch((error) => {
+              console.error('[EMBEDDING] Retry flush failed:', error);
+              return Promise.resolve();
+            });
+        }
+      }, this.failureBackoffMs);
+      return;
+    }
 
     const batch = [...this.writeBuffer];
     this.writeBuffer = [];
@@ -63,19 +99,36 @@ class EmbeddingIndexService {
           objects.map((obj) => JSON.stringify(obj)).join('\n') + '\n';
         await fs.appendFile(filePath, lines);
       }
+
+      // Reset consecutive failures on successful write
+      this.consecutiveFailures = 0;
     } catch (error) {
       console.error('[EMBEDDING] Batch write failed:', error);
-      // Re-add failed items to buffer
+      this.consecutiveFailures++;
+
+      // Re-add failed items to buffer for retry
       this.writeBuffer.unshift(...batch);
+
+      // If we've hit the failure limit, disable persistence temporarily
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        console.error(
+          `[EMBEDDING] Too many consecutive write failures (${this.consecutiveFailures}). Disabling persistence temporarily.`,
+        );
+      }
     }
   }
 
   // Cleanup method
-  destroy() {
+  async destroy() {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
     }
-    this.flushWriteBuffer(); // Final flush
+    // Ensure final flush completes
+    try {
+      await this.flushWriteBuffer();
+    } catch (error) {
+      console.error('[EMBEDDING] Final flush failed during destroy:', error);
+    }
   }
 
   async initialize() {
@@ -93,6 +146,9 @@ class EmbeddingIndexService {
   }
 
   async loadJsonl(filePath, targetMap) {
+    let skippedLines = 0;
+    let loadedLines = 0;
+
     try {
       // Stream the JSONL file to avoid loading large files into memory
       const stream = require('fs').createReadStream(filePath, {
@@ -107,13 +163,37 @@ class EmbeddingIndexService {
         if (!line || !line.trim()) continue;
         try {
           const obj = JSON.parse(line);
-          if (obj && obj.id) targetMap.set(obj.id, obj);
+          if (obj && obj.id) {
+            targetMap.set(obj.id, obj);
+            loadedLines++;
+          } else {
+            skippedLines++;
+            console.debug(
+              `[EMBEDDING] Skipping line without valid id in ${filePath}`,
+            );
+          }
         } catch (e) {
-          // ignore malformed lines
+          skippedLines++;
+          console.debug(
+            `[EMBEDDING] Skipping malformed JSON line in ${filePath}:`,
+            e.message,
+          );
         }
       }
+
+      if (skippedLines > 0) {
+        console.info(
+          `[EMBEDDING] Loaded ${loadedLines} entries, skipped ${skippedLines} malformed lines from ${filePath}`,
+        );
+      }
     } catch (e) {
-      if (e.code !== 'ENOENT') throw e;
+      if (e.code !== 'ENOENT') {
+        console.error(
+          `[EMBEDDING] Failed to load JSONL file ${filePath}:`,
+          e.message,
+        );
+        throw e;
+      }
     }
   }
 
@@ -185,7 +265,7 @@ class EmbeddingIndexService {
     await this.initialize();
     this.fileVectors.clear();
     try {
-      await fs.writeFile(this.filesPath, '');
+      await backupAndReplace(this.filesPath, '');
     } catch (e) {
       // If persisting fails, mark disabled but still function in-memory
       this.persistDisabled = true;
@@ -196,7 +276,7 @@ class EmbeddingIndexService {
     await this.initialize();
     this.folderVectors.clear();
     try {
-      await fs.writeFile(this.foldersPath, '');
+      await backupAndReplace(this.foldersPath, '');
     } catch (e) {
       this.persistDisabled = true;
     }

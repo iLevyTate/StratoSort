@@ -44,10 +44,11 @@ function registerSystemIpc({
     withErrorLogging(logger, async () => {
       try {
         const metrics = await systemAnalytics.collectMetrics();
-        return { success: true, metrics };
+        // Return metrics directly for preload validation compatibility
+        return metrics;
       } catch (error) {
         logger.error('Failed to collect system metrics:', error);
-        return { success: false, error: error.message };
+        return { error: error.message };
       }
     }),
   );
@@ -97,8 +98,15 @@ function registerSystemIpc({
         const fs = require('fs').promises;
         const path = require('path');
 
+        // Security: validate type parameter
+        const safeType = path.basename(type);
+        if (safeType !== type) {
+          return { success: false, error: 'Invalid log type' };
+        }
+
         // Security: only allow access to log directory
-        const logDir = path.join(process.cwd(), 'logs', type);
+        const { app } = require('electron');
+        const logDir = path.join(app.getPath('userData'), 'logs', safeType);
         const safePath = path.join(logDir, path.basename(filename));
 
         // Ensure the resolved path is within the log directory
@@ -124,7 +132,15 @@ function registerSystemIpc({
           return { success: false, error: 'File logger not available' };
         }
 
-        const logs = await fileLogger.getRecentLogs(type, lines);
+        const path = require('path');
+
+        // Security: validate type parameter
+        const safeType = path.basename(type);
+        if (safeType !== type) {
+          return { success: false, error: 'Invalid log type' };
+        }
+
+        const logs = await fileLogger.getRecentLogs(safeType, lines);
         return { success: true, logs };
       } catch (error) {
         logger.error('Failed to get recent logs:', error);

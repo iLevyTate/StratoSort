@@ -2,7 +2,7 @@
   "productName": "StratoSort",
   "appId": "com.stratosort.app",
   "asar": true,
-  "asarUnpack": "**\\*.{node,dll}",
+  "asarUnpack": ["**/*.node", "**/*.dll"],
   "files": [
     "dist/**/*",
     "src/main/**/*",

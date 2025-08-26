@@ -208,7 +208,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                   <div className="space-y-8">
                     {historyData.map((entry, index) => (
                       <div
-                        key={index}
+                        key={`${entry.fileName}-${entry.timestamp || index}`}
                         className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
                       >
                         <div className="flex items-start justify-between">

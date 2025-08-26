@@ -1,3 +1,21 @@
+// Mock electron first, before any other imports
+jest.mock('electron', () => ({
+  ipcMain: {
+    _handlers: new Map(),
+    _eventHandlers: new Map(),
+    handle: jest.fn(function (channel, handler) {
+      this._handlers.set(channel, handler);
+    }),
+    on: jest.fn(function (channel, handler) {
+      if (!this._eventHandlers.has(channel)) {
+        this._eventHandlers.set(channel, []);
+      }
+      this._eventHandlers.get(channel).push(handler);
+    }),
+    removeHandler: jest.fn(),
+  },
+}));
+
 // Mock all IPC registration functions at module level
 jest.mock('../src/main/ipc/files', () => jest.fn());
 jest.mock('../src/main/ipc/smartFolders', () => jest.fn());

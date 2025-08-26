@@ -54,6 +54,9 @@ describe('UndoRedoService', () => {
     expect(history.length).toBeGreaterThan(0);
     expect(history[history.length - 1].type).toBe('FILE_MOVE');
 
+    // Force save before creating new instance
+    await service.forceSave();
+
     // New instance should load persisted actions
     jest.resetModules();
     const electronReloaded = require('./mocks/electron');

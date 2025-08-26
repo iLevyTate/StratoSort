@@ -38,6 +38,12 @@ function registerAllIpc({
   setOllamaEmbeddingModel,
   onSettingsChanged,
 }) {
+  // Provide IPC channels to preload script (for sandbox compatibility)
+  if (ipcMain && ipcMain.on) {
+    ipcMain.on('get-ipc-channels', (event) => {
+      event.returnValue = IPC_CHANNELS;
+    });
+  }
   // Helper: safely register IPC modules without failing the entire setup
   const safeRegister = (fn, payload, label) => {
     try {

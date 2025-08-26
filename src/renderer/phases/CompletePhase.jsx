@@ -59,7 +59,7 @@ function CompletePhase() {
         >
           <div className="space-y-5">
             {organizedFiles.slice(0, 5).map((file, index) => (
-              <div key={index} className="text-sm">
+              <div key={file.path} className="text-sm">
                 <span className="text-system-gray-600">✓</span>{' '}
                 {file.originalName || `File ${index + 1}`} →{' '}
                 {file.path || file.newLocation || 'Organized'}

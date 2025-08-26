@@ -26,22 +26,25 @@ function registerAnalysisHistoryIpc({
     IPC_CHANNELS.ANALYSIS_HISTORY.GET,
     withErrorLogging(logger, async (event, options = {}) => {
       try {
-        const { all = false, limit, offset = 0 } = options || {};
-        if (all || limit === 'all') {
+        const { all = false } = options || {};
+        const limitNum = Number(options.limit);
+        const offsetNum = Number(options.offset) || 0;
+        if (all || options.limit === 'all') {
           const full =
             (await getServiceIntegration()?.analysisHistory?.getRecentAnalysis(
               Number.MAX_SAFE_INTEGER,
             )) || [];
-          if (offset > 0) return full.slice(offset);
+          if (offsetNum > 0) return full.slice(offsetNum);
           return full;
         }
-        const effLimit = typeof limit === 'number' && limit > 0 ? limit : 50;
-        if (offset > 0) {
+        const effLimit =
+          Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 50;
+        if (offsetNum > 0) {
           const interim =
             (await getServiceIntegration()?.analysisHistory?.getRecentAnalysis(
-              effLimit + offset,
+              effLimit + offsetNum,
             )) || [];
-          return interim.slice(offset, offset + effLimit);
+          return interim.slice(offsetNum, offsetNum + effLimit);
         }
         return (
           (await getServiceIntegration()?.analysisHistory?.getRecentAnalysis(

@@ -277,7 +277,7 @@ function registerFilesIpc({
     IPC_CHANNELS.FILES.SELECT,
     withErrorLogging(
       logger,
-      async () => {
+      async (event) => {
         logger.info(
           '[MAIN-FILE-SELECT] ===== FILE SELECTION HANDLER CALLED =====',
         );
@@ -346,29 +346,65 @@ function registerFilesIpc({
               '.rtf',
             ]),
           );
-          const scanFolder = async (folderPath, depth = 0, maxDepth = 3) => {
+          const scanFolder = async (
+            folderPath,
+            depth = 0,
+            maxDepth = 3,
+            maxFiles = 1000,
+          ) => {
             if (depth > maxDepth) return [];
             try {
               const items = await fs.readdir(folderPath, {
                 withFileTypes: true,
               });
               const foundFiles = [];
-              for (const item of items) {
-                const itemPath = path.join(folderPath, item.name);
-                if (item.isFile()) {
-                  const ext = path.extname(item.name).toLowerCase();
-                  if (supportedExts.includes(ext)) foundFiles.push(itemPath);
-                } else if (
-                  item.isDirectory() &&
-                  !item.name.startsWith('.') &&
-                  !item.name.startsWith('node_modules')
-                ) {
-                  const subFiles = await scanFolder(
-                    itemPath,
-                    depth + 1,
-                    maxDepth,
-                  );
-                  foundFiles.push(...subFiles);
+
+              // Process items in batches to yield to event loop
+              const batchSize = 50;
+              for (let i = 0; i < items.length; i += batchSize) {
+                const batch = items.slice(i, i + batchSize);
+
+                for (const item of batch) {
+                  // Early termination if we've found too many files
+                  if (foundFiles.length >= maxFiles) {
+                    logger.warn(
+                      `[FILE-SELECTION] Terminating scan early - found ${maxFiles} files limit`,
+                    );
+                    return foundFiles;
+                  }
+
+                  const itemPath = path.join(folderPath, item.name);
+                  if (item.isFile()) {
+                    const ext = path.extname(item.name).toLowerCase();
+                    if (supportedExts.includes(ext)) foundFiles.push(itemPath);
+                  } else if (
+                    item.isDirectory() &&
+                    !item.name.startsWith('.') &&
+                    !item.name.startsWith('node_modules') &&
+                    !item.name.includes('cache') &&
+                    !item.name.includes('temp')
+                  ) {
+                    // Yield to event loop between directory scans
+                    if (
+                      foundFiles.length > 0 &&
+                      foundFiles.length % 100 === 0
+                    ) {
+                      await new Promise((resolve) => setImmediate(resolve));
+                    }
+
+                    const subFiles = await scanFolder(
+                      itemPath,
+                      depth + 1,
+                      maxDepth,
+                      maxFiles - foundFiles.length,
+                    );
+                    foundFiles.push(...subFiles);
+                  }
+                }
+
+                // Yield to event loop between batches
+                if (i + batchSize < items.length) {
+                  await new Promise((resolve) => setImmediate(resolve));
                 }
               }
               return foundFiles;
@@ -392,14 +428,32 @@ function registerFilesIpc({
                   );
                 }
               } else if (stats.isDirectory()) {
-                logger.info(
-                  `[FILE-SELECTION] Scanning folder: ${selectedPath}`,
-                );
+                const folderName = path.basename(selectedPath);
+                logger.info(`[FILE-SELECTION] Scanning folder: ${folderName}`);
+
+                // Send progress update to renderer
+                if (event.sender && !event.sender.isDestroyed()) {
+                  event.sender.send('file-selection-progress', {
+                    type: 'scanning',
+                    folder: folderName,
+                    message: `Scanning ${folderName}...`,
+                  });
+                }
+
                 const folderFiles = await scanFolder(selectedPath);
                 allFiles.push(...folderFiles);
                 logger.info(
-                  `[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${path.basename(selectedPath)}`,
+                  `[FILE-SELECTION] Found ${folderFiles.length} files in folder: ${folderName}`,
                 );
+
+                // Send progress update
+                if (event.sender && !event.sender.isDestroyed()) {
+                  event.sender.send('file-selection-progress', {
+                    type: 'completed',
+                    folder: folderName,
+                    filesFound: folderFiles.length,
+                  });
+                }
               }
             } catch (error) {
               logger.warn(
@@ -545,62 +599,89 @@ function registerFilesIpc({
             };
           }
         })
-      : withErrorLogging(
-          logger,
-          async (event, fullPath) => {
+      : withValidation(logger, safePathSchema, async (event, fullPath) => {
+          try {
+            const normalizedPath = path.resolve(fullPath);
             try {
-              const normalizedPath = path.resolve(fullPath);
-              await fs.mkdir(normalizedPath, { recursive: true });
-              logger.info('[FILE-OPS] Created folder:', normalizedPath);
-              return { success: true, path: normalizedPath, existed: false };
+              const stats = await fs.stat(normalizedPath);
+              if (stats.isDirectory()) {
+                logger.info(
+                  '[FILE-OPS] Folder already exists:',
+                  normalizedPath,
+                );
+                return { success: true, path: normalizedPath, existed: true };
+              }
             } catch (error) {
-              logger.error('[FILE-OPS] Error creating folder:', error);
-              let userMessage = 'Failed to create folder';
-              if (error.code === 'EACCES' || error.code === 'EPERM')
-                userMessage = 'Permission denied - check folder permissions';
-              else if (error.code === 'ENOTDIR')
-                userMessage = 'Invalid path - parent is not a directory';
-              else if (error.code === 'EEXIST')
-                userMessage = 'Folder already exists';
-              return {
-                success: false,
-                error: userMessage,
-                details: error.message,
-                code: error.code,
-              };
+              // Silent catch for non-critical operations
             }
-          },
-          systemAnalytics,
-        ),
+            await fs.mkdir(normalizedPath, { recursive: true });
+            logger.info('[FILE-OPS] Created folder:', normalizedPath);
+            return { success: true, path: normalizedPath, existed: false };
+          } catch (error) {
+            logger.error('[FILE-OPS] Error creating folder:', error);
+            let userMessage = 'Failed to create folder';
+            if (error.code === 'EACCES' || error.code === 'EPERM')
+              userMessage = 'Permission denied - check folder permissions';
+            else if (error.code === 'ENOTDIR')
+              userMessage = 'Invalid path - parent is not a directory';
+            else if (error.code === 'EEXIST')
+              userMessage = 'Folder already exists';
+            return {
+              success: false,
+              error: userMessage,
+              details: error.message,
+              code: error.code,
+            };
+          }
+        }),
   );
 
   ipcMain.handle(
     IPC_CHANNELS.FILES.GET_FILES_IN_DIRECTORY,
-    withErrorLogging(
-      logger,
-      async (event, dirPath) => {
-        try {
-          const items = await fs.readdir(dirPath, { withFileTypes: true });
-          const result = items.map((item) => ({
-            name: item.name,
-            path: path.join(dirPath, item.name),
-            isDirectory: item.isDirectory(),
-            isFile: item.isFile(),
-          }));
-          logger.info(
-            '[FILE-OPS] Listed directory contents:',
-            dirPath,
-            result.length,
-            'items',
-          );
-          return result;
-        } catch (error) {
-          logger.error('[FILE-OPS] Error reading directory:', error);
-          return { error: error.message };
-        }
-      },
-      systemAnalytics,
-    ),
+    z && safePathSchema
+      ? withValidation(logger, safePathSchema, async (event, dirPath) => {
+          try {
+            const items = await fs.readdir(dirPath, { withFileTypes: true });
+            const result = items.map((item) => ({
+              name: item.name,
+              path: path.join(dirPath, item.name),
+              isDirectory: item.isDirectory(),
+              isFile: item.isFile(),
+            }));
+            logger.info(
+              '[FILE-OPS] Listed directory contents:',
+              dirPath,
+              result.length,
+              'items',
+            );
+            return result;
+          } catch (error) {
+            logger.error('[FILE-OPS] Error reading directory:', error);
+            return { error: error.message };
+          }
+        })
+      : withErrorLogging(logger, async (event, dirPath) => {
+          try {
+            const items = await fs.readdir(dirPath, { withFileTypes: true });
+            const result = items.map((item) => ({
+              name: item.name,
+              path: path.join(dirPath, item.name),
+              isDirectory: item.isDirectory(),
+              isFile: item.isFile(),
+            }));
+            logger.info(
+              '[FILE-OPS] Listed directory contents:',
+              dirPath,
+              result.length,
+              'items',
+            );
+            return result;
+          } catch (error) {
+            logger.error('[FILE-OPS] Error reading directory:', error);
+            return { error: error.message };
+          }
+        }),
+    systemAnalytics,
   );
 
   ipcMain.handle(
@@ -836,6 +917,24 @@ function registerFilesIpc({
                 JSON.stringify(operation, null, 2),
               );
               switch (operation.type) {
+                case 'move':
+                  await fs.rename(operation.source, operation.destination);
+                  return {
+                    success: true,
+                    message: `Moved ${operation.source} to ${operation.destination}`,
+                  };
+                case 'copy':
+                  await fs.copyFile(operation.source, operation.destination);
+                  return {
+                    success: true,
+                    message: `Copied ${operation.source} to ${operation.destination}`,
+                  };
+                case 'delete':
+                  await fs.unlink(operation.source);
+                  return {
+                    success: true,
+                    message: `Deleted ${operation.source}`,
+                  };
                 case 'batch_organize': {
                   return await executeBatchOrganize(
                     operation,

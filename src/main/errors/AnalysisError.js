@@ -27,6 +27,7 @@ class AnalysisError extends Error {
       OLLAMA_CONNECTION_FAILURE: 'Cannot connect to Ollama AI service',
       DOCUMENT_ANALYSIS_FAILURE: 'Document analysis failed',
       PDF_NO_TEXT_CONTENT: 'PDF contains no extractable text',
+      DOCX_NO_TEXT: 'No text content in DOCX',
       MODEL_VERIFICATION_FAILED: 'Failed to verify AI model availability',
       DEPENDENCY_MISSING: `Required dependency missing: ${this.metadata.dependency}`,
       FILE_TYPE_UNSUPPORTED: `Unsupported file type: ${this.metadata.fileType}`,

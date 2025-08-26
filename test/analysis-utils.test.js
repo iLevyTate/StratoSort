@@ -295,7 +295,7 @@ describe('analysis utils', () => {
       expect(result.purpose).toBe('Financial analysis');
       expect(result.date).toBe('2023-01-01'); // converted to string
       expect(result.extractionMethod).toBe('pdf-parser');
-      expect(result.invalidField).toBe('should be removed'); // function doesn't remove extra fields
+      expect(result.invalidField).toBeUndefined(); // function removes extra fields for security
     });
 
     test('applies fallback values for invalid data', () => {

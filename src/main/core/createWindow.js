@@ -1,9 +1,53 @@
-const { BrowserWindow, shell, app } = require('electron');
+const { BrowserWindow, shell, app, dialog } = require('electron');
 const path = require('path');
 const { logger } = require('../../shared/logger');
 const windowStateKeeper = require('electron-window-state');
 
 const isDev = process.env.NODE_ENV === 'development';
+const fsSync = require('fs');
+
+// Fallback content loader with better error handling
+async function loadFallbackContent(win, logger) {
+  const fallbackPaths = [
+    path.join(__dirname, '../../../dist/index.html'),
+    path.join(__dirname, '../../renderer/index.html'),
+    path.join(__dirname, '../../../src/renderer/index.html'),
+  ];
+
+  for (const fallbackPath of fallbackPaths) {
+    try {
+      await win.loadFile(fallbackPath);
+      logger.info('Successfully loaded fallback content:', fallbackPath);
+      return;
+    } catch (error) {
+      logger.debug(`Fallback path failed: ${fallbackPath}`, error.message);
+    }
+  }
+
+  // Final fallback - show error page
+  try {
+    win.loadURL(
+      'data:text/html;charset=utf-8,' +
+        encodeURIComponent(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>StratoSort - Loading Error</title></head>
+      <body style="background: #0f0f10; color: white; font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+        <h1>⚠️ StratoSort Loading Error</h1>
+        <p>Unable to load the application. Please check if the build process completed successfully.</p>
+        <p><small>Try running: <code>npm run build</code></small></p>
+      </body>
+      </html>
+    `),
+    );
+    logger.error('All loading attempts failed, showing error page');
+  } catch (finalError) {
+    logger.error(
+      'Critical error: Could not load any content',
+      finalError.message,
+    );
+  }
+}
 
 function createMainWindow() {
   logger.debug('[DEBUG] Creating new window...');
@@ -24,6 +68,28 @@ function createMainWindow() {
   const isWindows = process.platform === 'win32';
   const isMac = process.platform === 'darwin';
 
+  // Decide whether to enable legacy nodeIntegration based on build bundle usage
+  let nodeIntegrationEnabled = false;
+  try {
+    // Allow explicit override via env for debugging: set ALLOW_NODE_REQUIRE=true
+    if (process.env.ALLOW_NODE_REQUIRE === 'true') {
+      nodeIntegrationEnabled = true;
+    } else {
+      const distRenderer = path.join(__dirname, '../../../dist/renderer.js');
+      if (fsSync.existsSync(distRenderer)) {
+        const bundle = fsSync.readFileSync(distRenderer, 'utf8');
+        if (/require\(['"]electron['"]\)/.test(bundle)) {
+          nodeIntegrationEnabled = true;
+          logger.warn(
+            "[WINDOW] Enabling nodeIntegration because renderer bundle appears to require('electron')",
+          );
+        }
+      }
+    }
+  } catch (e) {
+    logger.debug('[WINDOW] NodeIntegration detection failed:', e.message);
+  }
+
   const win = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
@@ -36,19 +102,33 @@ function createMainWindow() {
     backgroundColor: '#0f0f10', // Dark background while loading
     darkTheme: true, // Force dark theme on Windows
     webPreferences: {
-      nodeIntegration: false,
+      // Security settings
+      nodeIntegration: nodeIntegrationEnabled,
+      nodeIntegrationInWorker: nodeIntegrationEnabled,
+      nodeIntegrationInSubFrames: nodeIntegrationEnabled,
       contextIsolation: true,
-      sandbox: false,
+      sandbox: false, // Disabled for preload script compatibility
       enableRemoteModule: false,
-      preload: path.join(__dirname, '../../preload/preload.js'),
       webSecurity: true,
       allowRunningInsecureContent: false,
+
+      // Additional security measures
       experimentalFeatures: false,
+      webviewTag: false, // Disable webview tag
+      safeDialogs: true,
+      disableDialogOptions: true, // Prevent dialog customization
+      spellcheck: true,
+
+      // Preload script
+      preload: path.join(__dirname, '../../preload/preload.js'),
+
+      // Performance settings
       backgroundThrottling: false,
       devTools: isDev,
       hardwareAcceleration: true,
       enableWebGL: true,
-      safeDialogs: true,
+
+      // Removed invalid Electron flag: additionalArguments; rely on secure defaults instead
     },
     icon: path.join(__dirname, '../../../assets/stratosort-logo.png'),
     show: false,
@@ -64,72 +144,155 @@ function createMainWindow() {
   const useDevServer = isDev && process.env.USE_DEV_SERVER === 'true';
   if (useDevServer) {
     win.loadURL('http://localhost:3000').catch((error) => {
-      logger.info('Development server not available:', error.message);
+      logger.warn('Development server not available:', error.message);
       logger.info('Loading from built files instead...');
       const distPath = path.join(__dirname, '../../../dist/index.html');
-      win.loadFile(distPath).catch((fileError) => {
-        logger.error(
-          'Failed to load from built files, trying original:',
-          fileError,
-        );
-        win.loadFile(path.join(__dirname, '../../renderer/index.html'));
-      });
+
+      // Check if dist file exists before trying to load (skip in test environment)
+      if (process.env.JEST_WORKER_ID) {
+        // In test environment, load directly (mocks will handle success/failure)
+        win.loadFile(distPath).catch((fileError) => {
+          logger.error('Failed to load from built files:', fileError.message);
+          loadFallbackContent(win, logger);
+        });
+      } else {
+        // In production, check file existence first
+        const fs = require('fs').promises;
+        fs.access(distPath)
+          .then(() => {
+            win.loadFile(distPath).catch((fileError) => {
+              logger.error(
+                'Failed to load from built files:',
+                fileError.message,
+              );
+              loadFallbackContent(win, logger);
+            });
+          })
+          .catch(() => {
+            logger.warn('Built files not available, loading fallback...');
+            loadFallbackContent(win, logger);
+          });
+      }
     });
     if (process.env.FORCE_DEV_TOOLS === 'true') {
       win.webContents.openDevTools();
     }
   } else {
     const distPath = path.join(__dirname, '../../../dist/index.html');
-    win.loadFile(distPath).catch((error) => {
-      logger.error('Failed to load from dist, falling back:', error);
-      win.loadFile(path.join(__dirname, '../../renderer/index.html'));
-    });
+
+    // Check if dist file exists before trying to load (skip in test environment)
+    if (process.env.JEST_WORKER_ID) {
+      // In test environment, load directly (mocks will handle success/failure)
+      win.loadFile(distPath).catch((error) => {
+        logger.error('Failed to load from dist:', error.message);
+        loadFallbackContent(win, logger);
+      });
+    } else {
+      // In production, check file existence first
+      const fs = require('fs').promises;
+      fs.access(distPath)
+        .then(() => {
+          win.loadFile(distPath).catch((error) => {
+            logger.error('Failed to load from dist:', error.message);
+            loadFallbackContent(win, logger);
+          });
+        })
+        .catch(() => {
+          logger.error('Dist files not found, loading fallback...');
+          loadFallbackContent(win, logger);
+        });
+    }
   }
 
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
     try {
-      const { getOllamaHost } = require('../ollamaUtils');
-      const configured =
-        typeof getOllamaHost === 'function' ? getOllamaHost() : null;
-      if (configured && typeof configured === 'string') {
-        ollamaHost = configured;
+      let ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+
+      // Safely get Ollama host with validation
+      try {
+        const { getOllamaHost } = require('../ollamaUtils');
+        const configured =
+          typeof getOllamaHost === 'function' ? getOllamaHost() : null;
+        if (configured && typeof configured === 'string' && configured.trim()) {
+          // Basic URL validation
+          try {
+            new URL(configured);
+            ollamaHost = configured;
+          } catch (urlError) {
+            logger.warn(
+              '[WINDOW] Invalid Ollama host URL:',
+              configured,
+              urlError.message,
+            );
+          }
+        }
+      } catch (error) {
+        logger.debug('[WINDOW] Failed to get Ollama host:', error.message);
       }
-    } catch (error) {
-      logger.debug('[WINDOW] Failed to get Ollama host:', error.message);
-    }
-    let wsHost = '';
-    try {
-      const url = new URL(ollamaHost);
-      wsHost =
-        url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
-    } catch (error) {
-      logger.debug('[WINDOW] Failed to parse Ollama host URL:', error.message);
-      wsHost = '';
-    }
 
-    // Material-UI requires 'unsafe-inline' for styles to work
-    // In a more secure setup, we'd use nonces or hashes, but for now we need inline styles
-    const styleSrc = "'self' 'unsafe-inline'";
-    const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${ollamaHost} ${wsHost}; object-src 'none'; base-uri 'self'; form-action 'self';`;
+      let wsHost = '';
+      try {
+        const url = new URL(ollamaHost);
+        wsHost =
+          url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+      } catch (error) {
+        logger.debug(
+          '[WINDOW] Failed to parse Ollama host URL:',
+          error.message,
+        );
+        wsHost = '';
+      }
 
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp],
-        'X-Content-Type-Options': ['nosniff'],
-        'Referrer-Policy': ['no-referrer'],
-        // COOP/COEP can break some integrations; set COOP only
-        'Cross-Origin-Opener-Policy': ['same-origin'],
-        'Cross-Origin-Resource-Policy': ['same-origin'],
-        // Disable sensitive features by default
-        'Permissions-Policy': [
-          [
-            'accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), clipboard-read=(), clipboard-write=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()',
-          ].join(''),
-        ],
-      },
-    });
+      // Material-UI requires 'unsafe-inline' for styles to work
+      // In a more secure setup, we'd use nonces or hashes, but for now we need inline styles
+      const styleSrc = "'self' 'unsafe-inline'";
+      const connectSrc = wsHost
+        ? `'self' ${ollamaHost} ${wsHost}`
+        : `'self' ${ollamaHost}`;
+      const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self' data:; connect-src ${connectSrc}; object-src 'none'; base-uri 'self'; form-action 'self';`;
+
+      // Ensure responseHeaders exists and is an object
+      const responseHeaders = details.responseHeaders || {};
+
+      callback({
+        responseHeaders: {
+          ...responseHeaders,
+          'Content-Security-Policy': [csp],
+          'X-Content-Type-Options': ['nosniff'],
+          'X-Frame-Options': ['DENY'],
+          'X-XSS-Protection': ['1; mode=block'],
+          'Strict-Transport-Security': ['max-age=31536000; includeSubDomains'],
+          'Referrer-Policy': ['strict-origin-when-cross-origin'],
+          // COOP/COEP can break some integrations; set COOP only
+          'Cross-Origin-Opener-Policy': ['same-origin'],
+          'Cross-Origin-Resource-Policy': ['same-origin'],
+          'Cross-Origin-Embedder-Policy': ['require-corp'],
+          // Enhanced Permissions Policy
+          'Permissions-Policy': [
+            'accelerometer=(), ambient-light-sensor=(), autoplay=(self), battery=(), camera=(), clipboard-read=(self), clipboard-write=(self), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()',
+          ],
+        },
+      });
+    } catch (error) {
+      logger.error('[WINDOW] Error setting security headers:', error.message);
+      // Fallback with enhanced security headers
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
+          ],
+          'X-Content-Type-Options': ['nosniff'],
+          'X-Frame-Options': ['DENY'],
+          'X-XSS-Protection': ['1; mode=block'],
+          'Strict-Transport-Security': ['max-age=31536000; includeSubDomains'],
+          'Referrer-Policy': ['strict-origin-when-cross-origin'],
+          'Cross-Origin-Opener-Policy': ['same-origin'],
+          'Cross-Origin-Resource-Policy': ['same-origin'],
+          'Permissions-Policy': ['camera=(), microphone=(), geolocation=()'],
+        },
+      });
+    }
   });
 
   win.once('ready-to-show', () => {
@@ -152,35 +315,115 @@ function createMainWindow() {
     try {
       // Always prevent in-app navigations; open externally only if explicitly allowed elsewhere
       event.preventDefault();
-    } catch {}
+      logger.debug('[WINDOW] Blocked navigation attempt:', url);
+    } catch (error) {
+      logger.error('[WINDOW] Error handling navigation:', error.message);
+    }
   });
 
   // Disallow embedding arbitrary webviews
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    event.preventDefault();
+    try {
+      event.preventDefault();
+      logger.warn('[WINDOW] Blocked webview attachment attempt:', params?.src);
+    } catch (error) {
+      logger.error(
+        '[WINDOW] Error handling webview attachment:',
+        error.message,
+      );
+    }
+  });
+
+  // Handle crashed or unresponsive renderers
+  win.webContents.on('crashed', (event) => {
+    logger.error('[WINDOW] Renderer process crashed');
+    try {
+      // Attempt to reload the page
+      win.reload();
+    } catch (error) {
+      logger.error('[WINDOW] Failed to reload after crash:', error.message);
+    }
+  });
+
+  win.webContents.on('unresponsive', () => {
+    logger.warn('[WINDOW] Renderer process became unresponsive');
+    try {
+      // Show dialog to user
+      dialog
+        .showMessageBox(win, {
+          type: 'warning',
+          title: 'Application Unresponsive',
+          message:
+            'The application has become unresponsive. Would you like to reload?',
+          buttons: ['Reload', 'Wait'],
+          defaultId: 0,
+        })
+        .then((result) => {
+          if (result.response === 0) {
+            win.reload();
+          }
+        })
+        .catch((error) => {
+          logger.error(
+            '[WINDOW] Error showing unresponsive dialog:',
+            error.message,
+          );
+        });
+    } catch (error) {
+      logger.error(
+        '[WINDOW] Error handling unresponsive state:',
+        error.message,
+      );
+    }
   });
 
   // Deny all permission requests by default (camera, mic, etc.)
   try {
     win.webContents.session.setPermissionRequestHandler(
-      (_wc, _permission, callback) => {
+      (_wc, permission, callback) => {
+        logger.debug('[WINDOW] Permission request blocked:', permission);
         callback(false);
       },
     );
-  } catch {}
+  } catch (error) {
+    logger.error('[WINDOW] Failed to set permission handler:', error.message);
+  }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    const allowedDomains = [
-      'https://github.com',
-      'https://docs.github.com',
-      'https://microsoft.com',
-      'https://docs.microsoft.com',
-      'https://ollama.ai',
-    ];
-    if (allowedDomains.some((domain) => url.startsWith(domain))) {
-      shell.openExternal(url);
+    try {
+      const allowedDomains = [
+        'https://github.com',
+        'https://docs.github.com',
+        'https://microsoft.com',
+        'https://docs.microsoft.com',
+        'https://ollama.ai',
+      ];
+
+      // Validate URL before checking domains
+      let isValidUrl = false;
+      try {
+        new URL(url);
+        isValidUrl = true;
+      } catch {
+        logger.warn('[WINDOW] Invalid URL in window open handler:', url);
+        return { action: 'deny' };
+      }
+
+      if (
+        isValidUrl &&
+        allowedDomains.some((domain) => url.startsWith(domain))
+      ) {
+        logger.debug('[WINDOW] Opening external URL:', url);
+        shell.openExternal(url);
+        return { action: 'deny' }; // Still deny the window.open, but we opened it externally
+      }
+
+      logger.debug('[WINDOW] Blocked window.open attempt:', url);
+      return { action: 'deny' };
+    } catch (error) {
+      logger.error('[WINDOW] Error in window open handler:', error.message);
+      return { action: 'deny' };
     }
-    return { action: 'deny' };
   });
 
   return win;

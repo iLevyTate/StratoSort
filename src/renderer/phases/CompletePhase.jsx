@@ -23,9 +23,9 @@ function CompletePhase() {
             onClick={() => {
               try {
                 const keys = ['complete-summary', 'complete-next-steps'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'true'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'true');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -38,9 +38,9 @@ function CompletePhase() {
             onClick={() => {
               try {
                 const keys = ['complete-summary', 'complete-next-steps'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'false'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'false');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}

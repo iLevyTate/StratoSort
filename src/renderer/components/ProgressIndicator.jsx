@@ -40,12 +40,12 @@ function ProgressIndicator() {
     try {
       const keys = getPersistKeysForPhase();
       if (!keys.length) return;
-      keys.forEach((k) =>
+      keys.forEach((k) => {
         window.localStorage.setItem(
           `collapsible:${k}`,
           expand ? 'true' : 'false',
-        ),
-      );
+        );
+      });
       window.dispatchEvent(new Event('storage'));
     } catch (error) {
       // eslint-disable-next-line no-console

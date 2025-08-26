@@ -33,3 +33,16 @@ export default function Card({
     </Component>
   );
 }
+
+// Additional small layout primitives used by some phases
+export const CardHeader = ({ children, className = '', ...rest }) => (
+  <div className={`card-header ${className}`} {...rest}>
+    {children}
+  </div>
+);
+
+export const CardBody = ({ children, className = '', ...rest }) => (
+  <div className={`card-body ${className}`} {...rest}>
+    {children}
+  </div>
+);

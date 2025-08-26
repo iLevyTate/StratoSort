@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { PHASES } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
-import { useNotification } from '../contexts/NotificationContext';
-import { Collapsible, Button, Input, Select } from '../components/ui';
+import { Collapsible, Button } from '../components/ui';
 import {
   StatusOverview,
   TargetFolderList,
@@ -10,156 +9,37 @@ import {
   BulkOperations,
   OrganizeProgress,
 } from '../components/organize';
-import { UndoRedoToolbar, useUndoRedo } from '../components/UndoRedoSystem';
-import { createOrganizeBatchAction } from '../components/UndoRedoSystem';
+import { UndoRedoToolbar } from '../components/UndoRedoSystem';
+import { useOrganizePhase } from '../hooks/useOrganizePhase';
 
 function OrganizePhase() {
   const { actions, phaseData } = usePhase();
-  const { addNotification } = useNotification();
-  const { executeAction } = useUndoRedo();
-  const [organizedFiles, setOrganizedFiles] = useState([]);
-  const [isOrganizing, setIsOrganizing] = useState(false);
-  const [batchProgress, setBatchProgress] = useState({
-    current: 0,
-    total: 0,
-    currentFile: '',
-  });
-  const [organizePreview, setOrganizePreview] = useState([]);
-  const [documentsPath, setDocumentsPath] = useState('');
-  const [editingFiles, setEditingFiles] = useState({});
-  const [selectedFiles, setSelectedFiles] = useState(new Set());
-  const [bulkEditMode, setBulkEditMode] = useState(false);
-  const [bulkCategory, setBulkCategory] = useState('');
-  const [defaultLocation, setDefaultLocation] = useState('Documents');
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
+  const {
+    // State
+    isOrganizing,
+    batchProgress,
+    organizePreview,
+    editingFiles,
+    selectedFiles,
+    bulkEditMode,
+    bulkCategory,
+    smartFolders,
+    unprocessedFiles,
+    processedFiles,
+    findSmartFolderForCategory,
 
-  const [fileStates, setFileStates] = useState({});
-  const [processedFileIds, setProcessedFileIds] = useState(new Set());
-
-  const analysisResults =
-    phaseData.analysisResults && Array.isArray(phaseData.analysisResults)
-      ? phaseData.analysisResults
-      : [];
-  const smartFolders = phaseData.smartFolders || [];
-
-  // Ensure smart folders are available even if user skipped Setup
-  useEffect(() => {
-    const loadSmartFoldersIfMissing = async () => {
-      try {
-        if (!Array.isArray(smartFolders) || smartFolders.length === 0) {
-          const folders = await window.electronAPI.smartFolders.get();
-          if (Array.isArray(folders) && folders.length > 0) {
-            actions.setPhaseData('smartFolders', folders);
-            addNotification(
-              `Loaded ${folders.length} smart folder${folders.length > 1 ? 's' : ''}`,
-              'info',
-            );
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load smart folders in Organize phase:', error);
-      }
-    };
-    loadSmartFoldersIfMissing();
-  }, []);
-
-  useEffect(() => {
-    // Resolve a real default destination base (Documents folder) from main process
-    (async () => {
-      try {
-        const docsPath = await window.electronAPI?.files?.getDocumentsPath?.();
-        if (docsPath && typeof docsPath === 'string') {
-          setDefaultLocation(docsPath);
-        }
-      } catch {}
-    })();
-
-    const loadPersistedData = () => {
-      const persistedStates = phaseData.fileStates || {};
-      setFileStates(persistedStates);
-      if (
-        (phaseData.analysisResults || []).length === 0 &&
-        Object.keys(persistedStates).length > 0
-      ) {
-        const reconstructedResults = Object.entries(persistedStates).map(
-          ([filePath, stateObj]) => ({
-            name: filePath.split(/[\\/]/).pop(),
-            path: filePath,
-            size: 0,
-            type: 'file',
-            source: 'reconstructed',
-            analysis: stateObj.analysis || null,
-            error: stateObj.error,
-            analyzedAt: stateObj.analyzedAt,
-            status:
-              stateObj.state === 'ready'
-                ? 'analyzed'
-                : stateObj.state === 'error'
-                  ? 'failed'
-                  : 'unknown',
-          }),
-        );
-        actions.setPhaseData('analysisResults', reconstructedResults);
-      }
-      if (
-        Object.keys(persistedStates).length === 0 &&
-        analysisResults.length > 0
-      ) {
-        const reconstructedStates = {};
-        analysisResults.forEach((file) => {
-          if (file.analysis && !file.error)
-            reconstructedStates[file.path] = {
-              state: 'ready',
-              timestamp: file.analyzedAt || new Date().toISOString(),
-              analysis: file.analysis,
-              analyzedAt: file.analyzedAt,
-            };
-          else if (file.error)
-            reconstructedStates[file.path] = {
-              state: 'error',
-              timestamp: file.analyzedAt || new Date().toISOString(),
-              error: file.error,
-              analyzedAt: file.analyzedAt,
-            };
-          else
-            reconstructedStates[file.path] = {
-              state: 'pending',
-              timestamp: new Date().toISOString(),
-            };
-        });
-        setFileStates(reconstructedStates);
-        actions.setPhaseData('fileStates', reconstructedStates);
-      }
-      const previouslyOrganized = phaseData.organizedFiles || [];
-      const processedIds = new Set(
-        previouslyOrganized.map((file) => file.originalPath || file.path),
-      );
-      setProcessedFileIds(processedIds);
-      if (previouslyOrganized.length > 0)
-        setOrganizedFiles(previouslyOrganized);
-    };
-    loadPersistedData();
-  }, [phaseData, analysisResults, actions]);
-
-  // Subscribe to progress events from main for batch organize
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.events?.onOperationProgress?.(
-      (payload) => {
-        try {
-          if (!payload || payload.type !== 'batch_organize') return;
-          setBatchProgress({
-            current: Number(payload.current) || 0,
-            total: Number(payload.total) || 0,
-            currentFile: payload.currentFile || '',
-          });
-        } catch {}
-      },
-    );
-    return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, []);
+    // Actions
+    setBulkEditMode,
+    setBulkCategory,
+    selectAllFiles,
+    applyBulkCategoryChange,
+    approveSelectedFiles,
+    handleEditFile,
+    getFileWithEdits,
+    handleOrganizeFiles,
+    getFileStateDisplay,
+    toggleFileSelection,
+  } = useOrganizePhase();
 
   const isAnalysisRunning = phaseData.isAnalyzing || false;
   const analysisProgressFromDiscover = phaseData.analysisProgress || {
@@ -167,353 +47,10 @@ function OrganizePhase() {
     total: 0,
   };
 
-  const getFileState = (filePath) => fileStates[filePath]?.state || 'pending';
-  const getFileStateDisplay = (filePath, hasAnalysis, isProcessed = false) => {
-    if (isProcessed)
-      return {
-        icon: '✅',
-        label: 'Organized',
-        color: 'text-green-600',
-        spinning: false,
-      };
-    const state = getFileState(filePath);
-    if (state === 'analyzing')
-      return {
-        icon: '🔄',
-        label: 'Analyzing...',
-        color: 'text-blue-600',
-        spinning: true,
-      };
-    if (state === 'error')
-      return {
-        icon: '❌',
-        label: 'Error',
-        color: 'text-red-600',
-        spinning: false,
-      };
-    if (hasAnalysis && state === 'ready')
-      return {
-        icon: '📂',
-        label: 'Ready',
-        color: 'text-stratosort-blue',
-        spinning: false,
-      };
-    if (state === 'pending')
-      return {
-        icon: '⏳',
-        label: 'Pending',
-        color: 'text-yellow-600',
-        spinning: false,
-      };
-    return {
-      icon: '❌',
-      label: 'Failed',
-      color: 'text-red-600',
-      spinning: false,
-    };
-  };
-
-  const unprocessedFiles = Array.isArray(analysisResults)
-    ? analysisResults.filter(
-        (file) => !processedFileIds.has(file.path) && file && file.analysis,
-      )
-    : [];
-  const processedFiles = Array.isArray(organizedFiles)
-    ? organizedFiles.filter((file) =>
-        processedFileIds.has(file?.originalPath || file?.path),
-      )
-    : [];
-
-  const findSmartFolderForCategory = useMemo(() => {
-    const folderCache = new Map();
-    return (category) => {
-      if (!category) return null;
-      if (folderCache.has(category)) return folderCache.get(category);
-      const normalizedCategory = category.toLowerCase().trim();
-      let folder = smartFolders.find(
-        (f) => f?.name?.toLowerCase()?.trim() === normalizedCategory,
-      );
-      if (folder) {
-        folderCache.set(category, folder);
-        return folder;
-      }
-      const variants = [
-        normalizedCategory,
-        normalizedCategory.replace(/s$/, ''),
-        normalizedCategory + 's',
-        normalizedCategory.replace(/\s+/g, ''),
-        normalizedCategory.replace(/\s+/g, '-'),
-        normalizedCategory.replace(/\s+/g, '_'),
-      ];
-      for (const v of variants) {
-        folder = smartFolders.find(
-          (f) =>
-            f.name.toLowerCase().trim() === v ||
-            f.name.toLowerCase().replace(/\s+/g, '') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '-') === v ||
-            f.name.toLowerCase().replace(/\s+/g, '_') === v,
-        );
-        if (folder) {
-          folderCache.set(category, folder);
-          return folder;
-        }
-      }
-      folderCache.set(category, null);
-      return null;
-    };
-  }, [smartFolders]);
-
-  const handleEditFile = (fileIndex, field, value) => {
-    setEditingFiles((prev) => ({
-      ...prev,
-      [fileIndex]: { ...prev[fileIndex], [field]: value },
-    }));
-  };
-
-  const getFileWithEdits = (file, index) => {
-    const edits = editingFiles[index];
-    if (!edits) return file;
-    const updatedCategory = edits.category || file.analysis?.category;
-    return {
-      ...file,
-      analysis: {
-        ...file.analysis,
-        suggestedName: edits.suggestedName || file.analysis?.suggestedName,
-        category: updatedCategory,
-      },
-    };
-  };
-
-  const markFilesAsProcessed = (filePaths) =>
-    setProcessedFileIds((prev) => {
-      const next = new Set(prev);
-      filePaths.forEach((path) => next.add(path));
-      return next;
-    });
-  const unmarkFilesAsProcessed = (filePaths) =>
-    setProcessedFileIds((prev) => {
-      const next = new Set(prev);
-      filePaths.forEach((path) => next.delete(path));
-      return next;
-    });
-
-  const toggleFileSelection = (index) => {
-    const next = new Set(selectedFiles);
-    next.has(index) ? next.delete(index) : next.add(index);
-    setSelectedFiles(next);
-  };
-  const selectAllFiles = () => {
-    selectedFiles.size === unprocessedFiles.length
-      ? setSelectedFiles(new Set())
-      : setSelectedFiles(
-          new Set(Array.from({ length: unprocessedFiles.length }, (_, i) => i)),
-        );
-  };
-  const applyBulkCategoryChange = () => {
-    if (!bulkCategory) return;
-    const newEdits = {};
-    selectedFiles.forEach(
-      (i) => (newEdits[i] = { ...editingFiles[i], category: bulkCategory }),
-    );
-    setEditingFiles((prev) => ({ ...prev, ...newEdits }));
-    setBulkEditMode(false);
-    setBulkCategory('');
-    setSelectedFiles(new Set());
-    addNotification(
-      `Applied category "${bulkCategory}" to ${selectedFiles.size} files`,
-      'success',
-    );
-  };
-  const approveSelectedFiles = () => {
-    if (selectedFiles.size === 0) return;
-    addNotification(
-      `Approved ${selectedFiles.size} files for organization`,
-      'success',
-    );
-    setSelectedFiles(new Set());
-  };
-
-  const handleOrganizeFiles = async () => {
-    try {
-      setIsOrganizing(true);
-      const filesToProcess = unprocessedFiles.filter((f) => f.analysis);
-      if (filesToProcess.length === 0) return;
-      setBatchProgress({
-        current: 0,
-        total: filesToProcess.length,
-        currentFile: '',
-      });
-
-      // Build operations for main process
-      const operations = filesToProcess.map((file, i) => {
-        const edits = editingFiles[i] || {};
-        const fileWithEdits = getFileWithEdits(file, i);
-        const currentCategory =
-          edits.category || fileWithEdits.analysis?.category;
-        const smartFolder = findSmartFolderForCategory(currentCategory);
-        const destinationDir = smartFolder
-          ? smartFolder.path || `${defaultLocation}/${smartFolder.name}`
-          : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
-        const newName =
-          edits.suggestedName ||
-          fileWithEdits.analysis?.suggestedName ||
-          file.name;
-        const dest = `${destinationDir}/${newName}`;
-        const normalized =
-          window.electronAPI?.files?.normalizePath?.(dest) || dest;
-
-        // Debug logging
-        console.log('DEBUG: File operation', {
-          fileName: file.name,
-          sourcePath: file.path,
-          destinationDir,
-          newName,
-          destination: normalized,
-          defaultLocation,
-        });
-
-        return { type: 'move', source: file.path, destination: normalized };
-      });
-
-      // Prepare a lightweight preview list for the progress UI
-      try {
-        const preview = filesToProcess.map((file, i) => {
-          const edits = editingFiles[i] || {};
-          const fileWithEdits = getFileWithEdits(file, i);
-          const currentCategory =
-            edits.category || fileWithEdits.analysis?.category;
-          const smartFolder = findSmartFolderForCategory(currentCategory);
-          const destinationDir = smartFolder
-            ? smartFolder.path || `${defaultLocation}/${smartFolder.name}`
-            : `${defaultLocation}/${currentCategory || 'Uncategorized'}`;
-          const newName =
-            edits.suggestedName ||
-            fileWithEdits.analysis?.suggestedName ||
-            file.name;
-          const dest = `${destinationDir}/${newName}`;
-          const normalized =
-            window.electronAPI?.files?.normalizePath?.(dest) || dest;
-          return { fileName: newName, destination: normalized };
-        });
-        setOrganizePreview(preview);
-      } catch {}
-
-      const sourcePathsSet = new Set(operations.map((op) => op.source));
-
-      const stateCallbacks = {
-        onExecute: (result) => {
-          try {
-            const resArray = Array.isArray(result?.results)
-              ? result.results
-              : [];
-            const uiResults = resArray
-              .filter((r) => r.success)
-              .map((r) => {
-                const original =
-                  analysisResults.find((a) => a.path === r.source) || {};
-                return {
-                  originalPath: r.source,
-                  path: r.destination,
-                  originalName:
-                    original.name ||
-                    (original.path ? original.path.split(/[\\/]/).pop() : ''),
-                  newName: r.destination
-                    ? r.destination.split(/[\\/]/).pop()
-                    : '',
-                  smartFolder: 'Organized',
-                  organizedAt: new Date().toISOString(),
-                };
-              });
-            if (uiResults.length > 0) {
-              setOrganizedFiles((prev) => [...prev, ...uiResults]);
-              markFilesAsProcessed(uiResults.map((r) => r.originalPath));
-              actions.setPhaseData('organizedFiles', [
-                ...(phaseData.organizedFiles || []),
-                ...uiResults,
-              ]);
-              addNotification(`Organized ${uiResults.length} files`, 'success');
-              // Mark visual progress complete
-              setBatchProgress({
-                current: filesToProcess.length,
-                total: filesToProcess.length,
-                currentFile: '',
-              });
-            }
-          } catch {}
-        },
-        onUndo: () => {
-          try {
-            // Remove any organized entries that belong to this batch
-            setOrganizedFiles((prev) =>
-              prev.filter((of) => !sourcePathsSet.has(of.originalPath)),
-            );
-            unmarkFilesAsProcessed(Array.from(sourcePathsSet));
-            actions.setPhaseData(
-              'organizedFiles',
-              (phaseData.organizedFiles || []).filter(
-                (of) => !sourcePathsSet.has(of.originalPath),
-              ),
-            );
-            addNotification(
-              'Undo complete. Restored files to original locations.',
-              'info',
-            );
-          } catch {}
-        },
-        onRedo: () => {
-          try {
-            // Best-effort: re-add based on operations
-            const uiResults = operations.map((op) => ({
-              originalPath: op.source,
-              path: op.destination,
-              originalName: op.source.split(/[\\/]/).pop(),
-              newName: op.destination.split(/[\\/]/).pop(),
-              smartFolder: 'Organized',
-              organizedAt: new Date().toISOString(),
-            }));
-            setOrganizedFiles((prev) => [...prev, ...uiResults]);
-            markFilesAsProcessed(uiResults.map((r) => r.originalPath));
-            actions.setPhaseData('organizedFiles', [
-              ...(phaseData.organizedFiles || []),
-              ...uiResults,
-            ]);
-            addNotification('Redo complete. Files re-organized.', 'info');
-          } catch {}
-        },
-      };
-
-      console.log(
-        'DEBUG: About to execute organize batch with',
-        operations.length,
-        'operations',
-      );
-      console.log('DEBUG: Operations array:', operations);
-
-      // Execute as a single undoable action
-      const result = await executeAction(
-        createOrganizeBatchAction(
-          `Organize ${operations.length} files`,
-          operations,
-          stateCallbacks,
-        ),
-      );
-
-      console.log('DEBUG: Organize result:', result);
-
-      // Only advance if at least one file organized successfully
-      const successCount = Array.isArray(result?.results)
-        ? result.results.filter((r) => r.success).length
-        : 0;
-      console.log('DEBUG: Success count:', successCount);
-
-      if (successCount > 0) actions.advancePhase(PHASES.COMPLETE);
-    } catch (error) {
-      addNotification(`Organization failed: ${error.message}`, 'error');
-    } finally {
-      setIsOrganizing(false);
-      setBatchProgress({ current: 0, total: 0, currentFile: '' });
-    }
-  };
+  const failedCount = useMemo(
+    () => (phaseData.analysisResults || []).filter((f) => !f.analysis).length,
+    [phaseData.analysisResults],
+  );
 
   // The rest of Organize UI (lists, bulk ops, progress) should be moved here as needed.
   return (
@@ -550,7 +87,7 @@ function OrganizePhase() {
         >
           <TargetFolderList
             folders={smartFolders}
-            defaultLocation={defaultLocation}
+            defaultLocation="Documents"
           />
         </Collapsible>
       )}
@@ -563,8 +100,48 @@ function OrganizePhase() {
           <StatusOverview
             unprocessedCount={unprocessedFiles.length}
             processedCount={processedFiles.length}
-            failedCount={analysisResults.filter((f) => !f.analysis).length}
+            failedCount={failedCount}
           />
+          {unprocessedFiles.length > 0 && (
+            <div className="mt-5 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">
+                Organization Readiness
+              </h4>
+              <div className="text-sm text-blue-700 space-y-1">
+                <div>
+                  ✅{' '}
+                  <strong>
+                    {unprocessedFiles.filter((f) => f.analysis).length}
+                  </strong>{' '}
+                  files ready to organize
+                </div>
+                {unprocessedFiles.filter((f) => !f.analysis).length > 0 && (
+                  <div>
+                    ⚠️{' '}
+                    <strong>
+                      {unprocessedFiles.filter((f) => !f.analysis).length}
+                    </strong>{' '}
+                    files need analysis
+                  </div>
+                )}
+                {unprocessedFiles.filter(
+                  (f) => f.analysis && !f.analysis.category,
+                ).length > 0 && (
+                  <div>
+                    ⚠️{' '}
+                    <strong>
+                      {
+                        unprocessedFiles.filter(
+                          (f) => f.analysis && !f.analysis.category,
+                        ).length
+                      }
+                    </strong>{' '}
+                    files missing category
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </Collapsible>
       )}
       {unprocessedFiles.length > 0 && (
@@ -627,7 +204,7 @@ function OrganizePhase() {
                 !!file.analysis,
               );
               const destination = smartFolder
-                ? smartFolder.path || `${defaultLocation}/${smartFolder.name}`
+                ? smartFolder.path || `Documents/${smartFolder.name}`
                 : 'No matching folder';
               return (
                 <ReadyFileItem

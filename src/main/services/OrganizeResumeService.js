@@ -54,12 +54,20 @@ async function resumeIncompleteBatches(
             let uniqueDestination = op.destination;
             const ext = path.extname(op.destination);
             const baseName = op.destination.slice(0, -ext.length);
+            // Bounded collision resolution with backoff to avoid busy-wait
+            const maxAttempts = 1000;
+            const baseDelayMs = 10;
             while (true) {
               try {
                 await fs.access(uniqueDestination);
                 counter++;
                 uniqueDestination = `${baseName}_${counter}${ext}`;
-                if (counter > 1000) throw new Error('Too many name collisions');
+                if (counter > maxAttempts)
+                  throw new Error('Too many name collisions');
+                // eslint-disable-next-line no-await-in-loop
+                await new Promise((resolve) =>
+                  setTimeout(resolve, Math.min(baseDelayMs * counter, 1000)),
+                );
               } catch {
                 break;
               }

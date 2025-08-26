@@ -3,6 +3,8 @@
  * Provides operational error handling with actionable user guidance
  */
 
+const path = require('path');
+
 class AnalysisError extends Error {
   constructor(code, metadata = {}) {
     super();
@@ -120,7 +122,7 @@ class FileProcessingError extends AnalysisError {
   constructor(code, fileName, additionalMetadata = {}) {
     super(code, {
       fileName,
-      fileExtension: require('path').extname(fileName),
+      fileExtension: path.extname(fileName),
       ...additionalMetadata,
     });
   }

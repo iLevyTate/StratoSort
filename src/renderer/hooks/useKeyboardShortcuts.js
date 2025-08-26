@@ -12,7 +12,7 @@ export function useKeyboardShortcuts() {
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const handleKeyDown = async (event) => {
       // Ctrl/Cmd + Z for Undo
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -21,7 +21,10 @@ export function useKeyboardShortcuts() {
       ) {
         event.preventDefault();
         try {
-          window.electronAPI?.undoRedo?.undo?.();
+          // Prefer calling renderer undo hook when available to keep UI state in sync
+          if (window.electronAPI?.undoRedo?.undo)
+            await window.electronAPI.undoRedo.undo();
+          else window.electronAPI?.undoRedo?.undo?.();
         } catch (error) {
           console.error('Undo shortcut failed:', error);
         }
@@ -35,7 +38,9 @@ export function useKeyboardShortcuts() {
       ) {
         event.preventDefault();
         try {
-          window.electronAPI?.undoRedo?.redo?.();
+          if (window.electronAPI?.undoRedo?.redo)
+            await window.electronAPI.undoRedo.redo();
+          else window.electronAPI?.undoRedo?.redo?.();
         } catch (error) {
           console.error('Redo shortcut failed:', error);
         }

@@ -1,36 +1,67 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useMemo, useCallback } from 'react';
 import { useKeyboardShortcuts } from '../hooks';
 import { usePhase } from '../contexts/PhaseContext';
 
 const WelcomePhase = lazy(() => import('../phases/WelcomePhase'));
+const AISetupPhase = lazy(() => import('../phases/AISetupPhase'));
 const SetupPhase = lazy(() => import('../phases/SetupPhase'));
 const DiscoverPhase = lazy(() => import('../phases/DiscoverPhase'));
 const OrganizePhase = lazy(() => import('../phases/OrganizePhase'));
 const CompletePhase = lazy(() => import('../phases/CompletePhase'));
 import SettingsPanel from './SettingsPanel';
-
-const { PHASES } = require('../../shared/constants');
+import ErrorBoundary from './ErrorBoundary';
+import { PHASES } from '../../shared/constants';
 
 function PhaseRenderer() {
   const { currentPhase, showSettings } = usePhase();
   useKeyboardShortcuts();
 
-  const renderCurrentPhase = () => {
+  const renderCurrentPhase = useCallback(() => {
     switch (currentPhase) {
       case PHASES.WELCOME:
-        return <WelcomePhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Welcome Phase Error">
+            <WelcomePhase />
+          </ErrorBoundary>
+        );
+      case PHASES.AI_SETUP:
+        return (
+          <ErrorBoundary fallbackTitle="AI Setup Phase Error">
+            <AISetupPhase />
+          </ErrorBoundary>
+        );
       case PHASES.SETUP:
-        return <SetupPhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Setup Phase Error">
+            <SetupPhase />
+          </ErrorBoundary>
+        );
       case PHASES.DISCOVER:
-        return <DiscoverPhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Discover Phase Error">
+            <DiscoverPhase />
+          </ErrorBoundary>
+        );
       case PHASES.ORGANIZE:
-        return <OrganizePhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Organize Phase Error">
+            <OrganizePhase />
+          </ErrorBoundary>
+        );
       case PHASES.COMPLETE:
-        return <CompletePhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Complete Phase Error">
+            <CompletePhase />
+          </ErrorBoundary>
+        );
       default:
-        return <WelcomePhase />;
+        return (
+          <ErrorBoundary fallbackTitle="Welcome Phase Error">
+            <WelcomePhase />
+          </ErrorBoundary>
+        );
     }
-  };
+  }, [currentPhase]);
 
   return (
     <>
@@ -44,4 +75,4 @@ function PhaseRenderer() {
   );
 }
 
-export default PhaseRenderer;
+export default React.memo(PhaseRenderer);

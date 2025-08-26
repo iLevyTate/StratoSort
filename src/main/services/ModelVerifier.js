@@ -24,12 +24,32 @@ class ModelVerifier {
 
   async checkOllamaConnection() {
     try {
-      const response = await fetch(`${this.ollamaHost}/api/tags`);
+      // Create AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${this.ollamaHost}/api/tags`, {
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         return { connected: true };
       }
       return { connected: false, error: 'HTTP error: ' + response.status };
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return {
+          connected: false,
+          error: 'Connection timeout after 5 seconds',
+          suggestion:
+            'Ollama is not responding. Make sure Ollama is running with: ollama serve',
+        };
+      }
       return {
         connected: false,
         error: error.message,
@@ -40,7 +60,18 @@ class ModelVerifier {
 
   async getInstalledModels() {
     try {
-      const models = await this.ollama.list();
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () =>
+            reject(new Error('Model list request timeout after 10 seconds')),
+          10000,
+        );
+      });
+
+      // Race between the actual request and timeout
+      const models = await Promise.race([this.ollama.list(), timeoutPromise]);
+
       return {
         success: true,
         models: models.models || [],

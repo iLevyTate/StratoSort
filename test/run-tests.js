@@ -32,17 +32,36 @@ if (catIndex !== -1) {
       performance: 'performance',
     };
     const pattern = map[String(value)] || String(value);
-    jestArgs.push('--testPathPattern', pattern);
+    // Updated to modern Jest CLI flag name
+    jestArgs.push('--testPathPatterns', pattern);
   }
 }
 
 const child = spawn(
-  process.platform === 'win32' ? 'npm.cmd' : 'npm',
-  ['test', '--', ...jestArgs],
+  process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  ['jest', ...jestArgs],
   {
     stdio: 'inherit',
     env: process.env,
+    shell: process.platform === 'win32',
   },
 );
 
-child.on('close', (code) => process.exit(code ?? 0));
+// Handle child process events to ensure proper cleanup
+child.on('close', (code) => {
+  process.exit(code ?? 0);
+});
+
+child.on('error', (error) => {
+  console.error('Failed to start jest:', error);
+  process.exit(1);
+});
+
+// Ensure cleanup on process termination
+process.on('SIGINT', () => {
+  child.kill('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  child.kill('SIGTERM');
+});

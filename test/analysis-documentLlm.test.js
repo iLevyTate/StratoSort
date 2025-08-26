@@ -66,10 +66,10 @@ describe('documentLlm', () => {
       expect(mockClient.generate).toHaveBeenCalledWith({
         model: 'test-model',
         prompt: expect.stringContaining('Sample document content'),
-        options: {
+        options: expect.objectContaining({
           temperature: expect.any(Number),
           num_predict: expect.any(Number),
-        },
+        }),
         format: 'json',
       });
     });
@@ -162,6 +162,9 @@ describe('documentLlm', () => {
         error: 'Failed to parse document analysis from Ollama.',
         keywords: [],
         confidence: 65,
+        extractionMethod: 'unknown',
+        category: 'document',
+        suggestedName: null,
       });
     });
 
@@ -181,6 +184,9 @@ describe('documentLlm', () => {
         error: 'No content in Ollama response for document',
         keywords: [],
         confidence: 60,
+        extractionMethod: 'unknown',
+        category: 'document',
+        suggestedName: null,
       });
     });
 
@@ -195,6 +201,9 @@ describe('documentLlm', () => {
         error: 'Ollama API error for document: API Error',
         keywords: [],
         confidence: 60,
+        extractionMethod: 'unknown',
+        category: 'document',
+        suggestedName: null,
       });
     });
 

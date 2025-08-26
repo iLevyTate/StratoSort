@@ -54,6 +54,10 @@ async function scanDirectory(
       items.push(itemInfo);
     }
   } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      // Directory no longer exists; skip gracefully
+      return [];
+    }
     console.error(`Error scanning directory ${dirPath}:`, error);
     // Optionally, rethrow or return a specific error structure
     if (error.code === 'EACCES' || error.code === 'EPERM') {

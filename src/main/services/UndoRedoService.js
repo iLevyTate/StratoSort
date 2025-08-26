@@ -4,13 +4,21 @@ const { app } = require('electron');
 
 class UndoRedoService {
   constructor() {
-    this.userDataPath = app.getPath('userData');
-    this.actionsPath = path.join(this.userDataPath, 'undo-actions.json');
+    this.userDataPath = null;
+    this.actionsPath = null;
     this.maxActions = 100; // Maximum number of actions to keep
 
     this.actions = [];
     this.currentIndex = -1; // Points to the last executed action
     this.initialized = false;
+  }
+
+  // Lazy initialize paths to avoid calling app.getPath before app is ready
+  _initPaths() {
+    if (!this.userDataPath) {
+      this.userDataPath = app.getPath('userData');
+      this.actionsPath = path.join(this.userDataPath, 'undo-actions.json');
+    }
   }
 
   async ensureParentDirectory(filePath) {
@@ -43,6 +51,9 @@ class UndoRedoService {
 
   async initialize() {
     if (this.initialized) return;
+
+    // Initialize paths first
+    this._initPaths();
 
     try {
       await this.loadActions();

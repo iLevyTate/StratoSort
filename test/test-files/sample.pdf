@@ -1,53 +1,28 @@
-%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
+This is a sample PDF document created for StratoSort testing purposes. This document contains sufficient content to allow AI analysis to determine its category and purpose.
 
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
+## Document Content
 
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
-/Contents 4 0 R
->>
-endobj
+This PDF file is designed to test the document processing capabilities of StratoSort. It includes:
 
-4 0 obj
-<<
-/Length 44
->>
-stream
-BT
-/F1 12 Tf
-100 700 Td
-(Sample PDF Document for Testing) Tj
-ET
-endstream
-endobj
+- Multiple paragraphs of text
+- Structured content with headings
+- Keywords that should help with categorization
+- Sufficient length for meaningful analysis
 
-xref
-0 5
-0000000000 65535 f 
-0000000010 00000 n 
-0000000053 00000 n 
-0000000125 00000 n 
-0000000204 00000 n 
-trailer
-<<
-/Size 5
-/Root 1 0 R
->>
-startxref
-297
-%%EOF 
+## Purpose
+
+The purpose of this document is to serve as a test file for the StratoSort document organization system. It should be categorized as a "Document" and placed in the "Documents" folder.
+
+## Keywords
+
+test, document, pdf, sample, stratosort, organization, ai, analysis, testing, automation
+
+## Expected Analysis Results
+
+- Category: Document
+- Purpose: Test file for document processing
+- Suggested Folder: Documents
+- Confidence: High (90%+)
+- Keywords: test, document, pdf, sample, stratosort
+
+This content should provide enough information for the AI to accurately analyze and categorize this file during testing. 

@@ -12,6 +12,70 @@ class EmbeddingIndexService {
     this.initialized = false;
     this.persistDisabled = false;
     this.writeQueue = Promise.resolve();
+
+    // Performance optimizations
+    this.writeBuffer = [];
+    this.batchSize = 10; // Batch write operations
+    // Conditional flush interval - only flush when there's data
+    this.flushInterval = setInterval(() => {
+      if (this.writeBuffer.length > 0) {
+        this.flushWriteBuffer().catch((error) =>
+          console.error('Background flush failed:', error),
+        );
+      }
+    }, 10000); // Increased from 5s to 10s and made conditional
+    // Prevent the interval from keeping the Node event loop alive in tests/runtime
+    if (this.flushInterval && typeof this.flushInterval.unref === 'function') {
+      try {
+        this.flushInterval.unref();
+      } catch (e) {
+        // ignore unref failures
+      }
+    }
+  }
+
+  // Batch writing for performance
+  async bufferWrite(filePath, obj) {
+    this.writeBuffer.push({ filePath, obj });
+
+    if (this.writeBuffer.length >= this.batchSize) {
+      await this.flushWriteBuffer();
+    }
+  }
+
+  async flushWriteBuffer() {
+    if (this.writeBuffer.length === 0 || this.persistDisabled) return;
+
+    const batch = [...this.writeBuffer];
+    this.writeBuffer = [];
+
+    try {
+      // Group by file path for efficiency
+      const grouped = batch.reduce((acc, item) => {
+        if (!acc[item.filePath]) acc[item.filePath] = [];
+        acc[item.filePath].push(item.obj);
+        return acc;
+      }, {});
+
+      // Write each group
+      for (const [filePath, objects] of Object.entries(grouped)) {
+        const lines =
+          objects.map((obj) => JSON.stringify(obj)).join('\n') + '\n';
+        await fs.appendFile(filePath, lines);
+      }
+    } catch (error) {
+      console.error('[EMBEDDING] Batch write failed:', error);
+      // Re-add failed items to buffer
+      this.writeBuffer.unshift(...batch);
+    }
+  }
+
+  // Cleanup method
+  destroy() {
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+    }
+    this.flushWriteBuffer(); // Final flush
   }
 
   async initialize() {
@@ -30,16 +94,24 @@ class EmbeddingIndexService {
 
   async loadJsonl(filePath, targetMap) {
     try {
-      const data = await fs.readFile(filePath, 'utf8');
-      data
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .forEach((line) => {
-          try {
-            const obj = JSON.parse(line);
-            if (obj && obj.id) targetMap.set(obj.id, obj);
-          } catch {}
-        });
+      // Stream the JSONL file to avoid loading large files into memory
+      const stream = require('fs').createReadStream(filePath, {
+        encoding: 'utf8',
+      });
+      const readline = require('readline');
+      const rl = readline.createInterface({
+        input: stream,
+        crlfDelay: Infinity,
+      });
+      for await (const line of rl) {
+        if (!line || !line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj && obj.id) targetMap.set(obj.id, obj);
+        } catch (e) {
+          // ignore malformed lines
+        }
+      }
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
     }
@@ -47,15 +119,26 @@ class EmbeddingIndexService {
 
   async appendJsonl(filePath, obj) {
     if (this.persistDisabled) return;
-    // Queue writes so concurrent appends don't corrupt JSONL entries
-    this.writeQueue = this.writeQueue.then(async () => {
+
+    // Use batch writing for better performance
+    try {
+      await this.bufferWrite(filePath, obj);
+      return Promise.resolve();
+    } catch (error) {
+      console.error(
+        '[EMBEDDING] Batch buffer failed, falling back to direct write:',
+        error,
+      );
+      // Fallback to direct write if batch fails
       try {
         await fs.appendFile(filePath, JSON.stringify(obj) + '\n');
-      } catch {
+        return Promise.resolve();
+      } catch (fallbackError) {
+        console.error('[EMBEDDING] Direct write also failed:', fallbackError);
         this.persistDisabled = true;
+        return Promise.resolve();
       }
-    });
-    return this.writeQueue;
+    }
   }
 
   async upsertFolder(folder) {

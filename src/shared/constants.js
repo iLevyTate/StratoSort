@@ -8,6 +8,7 @@
 // Application phases - centralized for consistency
 const PHASES = {
   WELCOME: 'welcome',
+  AI_SETUP: 'ai_setup',
   SETUP: 'setup',
   DISCOVER: 'discover',
   ORGANIZE: 'organize',
@@ -16,7 +17,8 @@ const PHASES = {
 
 // Phase transition rules - defines valid navigation paths
 const PHASE_TRANSITIONS = {
-  [PHASES.WELCOME]: [PHASES.SETUP, PHASES.DISCOVER],
+  [PHASES.WELCOME]: [PHASES.AI_SETUP, PHASES.SETUP, PHASES.DISCOVER],
+  [PHASES.AI_SETUP]: [PHASES.SETUP, PHASES.DISCOVER, PHASES.WELCOME],
   [PHASES.SETUP]: [PHASES.DISCOVER, PHASES.WELCOME],
   [PHASES.DISCOVER]: [PHASES.ORGANIZE, PHASES.SETUP],
   [PHASES.ORGANIZE]: [PHASES.COMPLETE, PHASES.DISCOVER],
@@ -30,6 +32,12 @@ const PHASE_METADATA = {
     navLabel: 'Welcome',
     icon: '🚀',
     progress: 0,
+  },
+  [PHASES.AI_SETUP]: {
+    title: 'Setup AI Locally',
+    navLabel: 'AI Setup',
+    icon: '🤖',
+    progress: 10,
   },
   [PHASES.SETUP]: {
     title: 'Configure Smart Folders',
@@ -142,6 +150,14 @@ const IPC_CHANNELS = {
     GET_APPLICATION_STATISTICS: 'get-application-statistics',
     GET_METRICS: 'get-system-metrics',
     APPLY_UPDATE: 'apply-update',
+    GET_LOG_FILES: 'get-log-files',
+    READ_LOG_FILE: 'read-log-file',
+    GET_RECENT_LOGS: 'get-recent-logs',
+    GET_LOG_STATS: 'get-log-stats',
+    GET_SYSTEM_STATUS: 'get-system-status',
+    PERFORM_HEALTH_CHECK: 'perform-health-check',
+    LOG_USER_SESSION: 'log-user-session',
+    LOG_PERFORMANCE_ANOMALY: 'log-performance-anomaly',
   },
 
   // Window Controls
@@ -336,7 +352,7 @@ const ALL_SUPPORTED_EXTENSIONS = [
 // AI Model configurations - Optimized for speed with smallest available models
 const DEFAULT_AI_MODELS = {
   TEXT_ANALYSIS: 'llama3.2:latest', // 2.0GB - Fastest text model
-  IMAGE_ANALYSIS: 'llava:latest', // 4.7GB - Vision capable model
+  IMAGE_ANALYSIS: 'moondream:1.8b', // 1.7GB - Efficient vision model
   // AUDIO_ANALYSIS removed while audio features are disabled
   FALLBACK_MODELS: [
     'llama3.2:latest',
@@ -389,6 +405,7 @@ const UI_WORKFLOW = {
 const RENDERER_LIMITS = {
   FILE_STATS_BATCH_SIZE: 25,
   ANALYSIS_TIMEOUT_MS: 3 * 60 * 1000, // 3 minutes
+  FILE_SIZE_WARNING: 50 * 1024 * 1024, // 50MB warning threshold
 };
 
 // CommonJS exports for Node.js compatibility (main process)

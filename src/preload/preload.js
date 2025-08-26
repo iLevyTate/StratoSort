@@ -22,15 +22,22 @@ const ALLOWED_CHANNELS = {
   WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
 };
 
-const ALLOWED_RECEIVE_CHANNELS = [
+// Fast-path receive channels (Set-based for quick lookups)
+const ALLOWED_RECEIVE_CHANNELS_SET = new Set([
   'system-metrics',
   'operation-progress',
   'app:error',
   'app:update',
-];
+  'ai-status-update',
+]);
+// Flatten allowed send channels for validation into a Set for O(1) lookups
+const ALL_SEND_CHANNELS_SET = new Set(
+  [].concat(...Object.values(ALLOWED_CHANNELS)),
+);
 
-// Flatten allowed send channels for validation
-const ALL_SEND_CHANNELS = Object.values(ALLOWED_CHANNELS).flat();
+// Backwards-compatible aliases: some code paths expect arrays, others Sets
+const ALL_SEND_CHANNELS = Array.from(ALL_SEND_CHANNELS_SET);
+const ALLOWED_RECEIVE_CHANNELS = Array.from(ALLOWED_RECEIVE_CHANNELS_SET);
 
 /**
  * Enhanced IPC validation with security checks
@@ -471,6 +478,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       secureIPC.safeOn('operation-progress', callback),
     onAppError: (callback) => secureIPC.safeOn('app:error', callback),
     onAppUpdate: (callback) => secureIPC.safeOn('app:update', callback),
+    onAiStatusUpdate: (callback) =>
+      secureIPC.safeOn('ai-status-update', callback),
   },
 
   // Settings

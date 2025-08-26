@@ -4,6 +4,12 @@ const os = require('os');
 
 const { scanDirectory } = require('../src/main/folderScanner');
 
+test('scanDirectory returns [] for non-existent directory', async () => {
+  const result = await scanDirectory('/path/that/does/not/exist');
+  expect(Array.isArray(result)).toBe(true);
+  expect(result.length).toBe(0);
+});
+
 describe('scanDirectory symlink handling', () => {
   test('ignores symbolic links', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'scan-'));

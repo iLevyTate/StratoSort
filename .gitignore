@@ -32,8 +32,9 @@ Thumbs.db
 .AppleDouble
 .LSOverride
 
-# Logs
+# Logs and profiling
 logs/
+profile-output/
 *.log
 
 # Runtime data
@@ -90,3 +91,35 @@ temp_*.txt
 
 # Windows specific
 *.stackdump
+
+# Electron specific
+.electron/
+app/dist/
+asar/
+
+# Analysis and debug files
+analysis-results/
+debug-*.js
+temp-analysis/
+performance-data/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Webpack build cache
+.cache/
+.parcel-cache/
+
+# Testing artifacts
+.nyc_output/
+test-results/
+playwright-report/
+test-results.xml
+
+# IDE and editor files
+.vscode/settings.json
+.idea/workspace.xml
+*.sublime-project
+*.sublime-workspace

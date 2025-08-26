@@ -331,9 +331,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'true'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'true');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -346,9 +346,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'false'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'false');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}

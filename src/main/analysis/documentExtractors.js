@@ -171,7 +171,11 @@ async function extractTextFromMsg(filePath) {
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
     return text || '';
-  } catch {
+  } catch (error) {
+    // Log the error but don't throw - MSG files are often problematic
+    console.warn(
+      `[MSG-EXTRACT] Failed to extract text from ${path.basename(filePath)}: ${error.message}`,
+    );
     return '';
   }
 }
@@ -197,8 +201,17 @@ async function extractTextFromXls(filePath) {
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
     if (text && text.trim()) return text;
-  } catch {}
-  return '';
+    throw new Error('No text content found in XLS file');
+  } catch (error) {
+    throw new FileProcessingError(
+      'XLS_PROCESSING_FAILURE',
+      path.basename(filePath),
+      {
+        originalError: error.message,
+        suggestion: 'File may be corrupted or password-protected',
+      },
+    );
+  }
 }
 
 async function extractTextFromPpt(filePath) {
@@ -206,9 +219,17 @@ async function extractTextFromPpt(filePath) {
     const result = await officeParser.parseOfficeAsync(filePath);
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
-    return text || '';
-  } catch {
-    return '';
+    if (text && text.trim()) return text;
+    throw new Error('No text content found in PPT file');
+  } catch (error) {
+    throw new FileProcessingError(
+      'PPT_PROCESSING_FAILURE',
+      path.basename(filePath),
+      {
+        originalError: error.message,
+        suggestion: 'File may be corrupted or password-protected',
+      },
+    );
   }
 }
 
@@ -229,4 +250,5 @@ module.exports = {
   extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
+  FileProcessingError,
 };

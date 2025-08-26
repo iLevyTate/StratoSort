@@ -4,6 +4,7 @@ function registerAnalysisHistoryIpc({
   ipcMain,
   IPC_CHANNELS,
   logger,
+  systemAnalytics,
   getServiceIntegration,
 }) {
   ipcMain.handle(

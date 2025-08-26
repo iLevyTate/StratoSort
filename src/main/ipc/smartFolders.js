@@ -10,6 +10,7 @@ function registerSmartFoldersIpc({
   ipcMain,
   IPC_CHANNELS,
   logger,
+  systemAnalytics,
   getCustomFolders,
   setCustomFolders,
   saveCustomFolders,

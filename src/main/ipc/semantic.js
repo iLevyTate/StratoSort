@@ -8,6 +8,7 @@ function registerEmbeddingsIpc({
   ipcMain,
   IPC_CHANNELS,
   logger,
+  systemAnalytics,
   getCustomFolders,
   getServiceIntegration,
 }) {

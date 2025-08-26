@@ -8,15 +8,27 @@ const { app } = require('electron');
  */
 class ProcessingStateService {
   constructor() {
-    this.userDataPath = app.getPath('userData');
-    this.statePath = path.join(this.userDataPath, 'processing-state.json');
+    this.userDataPath = null;
+    this.statePath = null;
     this.state = null;
     this.initialized = false;
     this.SCHEMA_VERSION = '1.0.0';
   }
 
+  // Lazy initialize paths to avoid calling app.getPath before app is ready
+  _initPaths() {
+    if (!this.userDataPath) {
+      this.userDataPath = app.getPath('userData');
+      this.statePath = path.join(this.userDataPath, 'processing-state.json');
+    }
+  }
+
   async initialize() {
     if (this.initialized) return;
+
+    // Initialize paths first
+    this._initPaths();
+
     try {
       await this.loadState();
       this.initialized = true;

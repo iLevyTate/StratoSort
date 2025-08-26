@@ -103,6 +103,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       dialog: mockDependencies.dialog,
       shell: mockDependencies.shell,
       getMainWindow: mockDependencies.getMainWindow,
@@ -113,6 +114,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getCustomFolders: mockDependencies.getCustomFolders,
       setCustomFolders: mockDependencies.setCustomFolders,
       saveCustomFolders: mockDependencies.saveCustomFolders,
@@ -125,6 +127,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
 
@@ -132,6 +135,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
 
@@ -171,6 +175,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       settingsService: mockDependencies.settingsService,
       setOllamaHost: mockDependencies.setOllamaHost,
       setOllamaModel: mockDependencies.setOllamaModel,
@@ -183,6 +188,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getCustomFolders: mockDependencies.getCustomFolders,
       getServiceIntegration: mockDependencies.getServiceIntegration,
     });
@@ -191,6 +197,7 @@ describe('IPC registration', () => {
       ipcMain: mockIpcMain,
       IPC_CHANNELS: mockDependencies.IPC_CHANNELS,
       logger: mockLogger,
+      systemAnalytics: mockDependencies.systemAnalytics,
       getMainWindow: mockDependencies.getMainWindow,
     });
   });

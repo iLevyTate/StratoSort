@@ -5,10 +5,10 @@ const crypto = require('crypto');
 
 class AnalysisHistoryService {
   constructor() {
-    this.userDataPath = app.getPath('userData');
-    this.historyPath = path.join(this.userDataPath, 'analysis-history.json');
-    this.indexPath = path.join(this.userDataPath, 'analysis-index.json');
-    this.configPath = path.join(this.userDataPath, 'analysis-config.json');
+    this.userDataPath = null;
+    this.historyPath = null;
+    this.indexPath = null;
+    this.configPath = null;
 
     this.analysisHistory = null;
     this.analysisIndex = null;
@@ -20,8 +20,21 @@ class AnalysisHistoryService {
     this.MAX_HISTORY_ENTRIES = 10000; // Configurable limit
   }
 
+  // Lazy initialize paths to avoid calling app.getPath before app is ready
+  _initPaths() {
+    if (!this.userDataPath) {
+      this.userDataPath = app.getPath('userData');
+      this.historyPath = path.join(this.userDataPath, 'analysis-history.json');
+      this.indexPath = path.join(this.userDataPath, 'analysis-index.json');
+      this.configPath = path.join(this.userDataPath, 'analysis-config.json');
+    }
+  }
+
   async initialize() {
     if (this.initialized) return;
+
+    // Initialize paths first
+    this._initPaths();
 
     try {
       await this.loadConfig();

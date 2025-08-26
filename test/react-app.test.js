@@ -53,7 +53,7 @@ describe('StratoSort React App', () => {
 
     test('system components are wired', () => {
       const appContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/App.js'),
+        path.join(__dirname, '../src/renderer/App.jsx'),
         'utf8',
       );
       // These should appear in App.js wiring (providers now wrapped by AppProviders). SystemMonitoring removed per UX.

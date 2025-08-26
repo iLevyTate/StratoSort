@@ -24,6 +24,13 @@ function SystemMonitoring() {
             console.warn('Failed to update system metrics:', error);
           }
         }, 5000);
+        if (intervalId && typeof intervalId.unref === 'function') {
+          try {
+            intervalId.unref();
+          } catch (e) {
+            /* ignore */
+          }
+        }
       } catch (error) {
         console.error('Failed to start system monitoring:', error);
         setIsMonitoring(false);

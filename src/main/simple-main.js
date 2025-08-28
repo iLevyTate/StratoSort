@@ -127,8 +127,9 @@ const perfMonitor = require('./utils/perfMonitor')(logger);
 
 // ===== GPU PREFERENCES (Windows rendering stability) =====
 try {
-  // Try OpenGL backend first as it's more stable on Windows
-  const angleBackend = process.env.ANGLE_BACKEND || 'gl'; // alternatives: 'd3d11', 'd3d9'
+  // Try OpenGL/ANGLE backend. On Windows use 'egl-angle' when available to match allowed implementations
+  const defaultAngle = process.platform === 'win32' ? 'egl-angle' : 'gl';
+  const angleBackend = process.env.ANGLE_BACKEND || defaultAngle; // alternatives: 'd3d11', 'd3d9'
   app.commandLine.appendSwitch('use-angle', angleBackend);
 
   // Disable problematic GPU features that cause command buffer errors
@@ -142,10 +143,7 @@ try {
   // Disable features that commonly cause issues
   app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 
-  // Add fallback for WebGL
-  app.commandLine.appendSwitch('use-gl', 'swiftshader');
-
-  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}, WebGL fallback enabled`);
+  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}`);
 } catch (e) {
   try {
     logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
@@ -156,6 +154,43 @@ try {
       logError?.message || logError,
     );
   }
+}
+
+// --- GPU Manager: initialize early to select discrete GPU where available ---
+try {
+  const { initializeGpuEnvironment } = require('./services/gpuManager');
+
+  (async () => {
+    try {
+      await initializeGpuEnvironment();
+    } catch (e) {
+      logger.error('[GPU] GPU initialization failed:', e?.message || e);
+      // Defer user dialog until app is ready, then show and exit
+      app.on('ready', () => {
+        try {
+          const { dialog } = require('electron');
+          dialog.showErrorBox(
+            'GPU Configuration Error',
+            `A critical error occurred while configuring the GPU environment. The application cannot continue.\n\nDetails: ${e?.message || e}`,
+          );
+        } catch (dialogErr) {
+          // fallback
+          console.error(
+            '[GPU] Failed to show error dialog:',
+            dialogErr?.message || dialogErr,
+          );
+        } finally {
+          try {
+            app.quit();
+          } catch (qErr) {
+            /* ignore */
+          }
+        }
+      });
+    }
+  })();
+} catch (err) {
+  logger.debug('[GPU] GPU manager not available:', err?.message || err);
 }
 
 // Custom folders helpers
@@ -465,8 +500,6 @@ if (!gotTheLock) {
 
     // Memory optimization
     app.commandLine.appendSwitch('--expose-gc');
-    app.commandLine.appendSwitch('--optimize-for-size');
-    app.commandLine.appendSwitch('--memory-reducer');
 
     logger.info('[PRODUCTION] GPU acceleration optimizations enabled');
   } else {
@@ -480,7 +513,6 @@ if (!gotTheLock) {
 
     // Memory optimization for development
     app.commandLine.appendSwitch('--expose-gc');
-    app.commandLine.appendSwitch('--optimize-for-size');
 
     logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
   }

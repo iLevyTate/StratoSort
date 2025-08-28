@@ -12,6 +12,21 @@ const { autoUpdater } = require('electron-updater');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Disable hardware acceleration for the renderer to avoid Chromium GPU-process
+// initialization failures on systems with problematic ANGLE/driver combinations.
+// Ollama/CUDA remains unaffected since we set CUDA_VISIBLE_DEVICES separately.
+try {
+  app.disableHardwareAcceleration();
+  logger.info(
+    '[GPU] Hardware acceleration disabled for renderer (app.disableHardwareAcceleration)',
+  );
+} catch (e) {
+  logger.debug(
+    '[GPU] Failed to disable hardware acceleration:',
+    e?.message || e,
+  );
+}
+
 // Logging utility
 const { logger } = require('../shared/logger');
 const { MEMORY_THRESHOLDS, SERVICE_LIMITS } = require('../shared/constants');
@@ -127,10 +142,8 @@ const perfMonitor = require('./utils/perfMonitor')(logger);
 
 // ===== GPU PREFERENCES (Windows rendering stability) =====
 try {
-  // Try OpenGL/ANGLE backend. On Windows prefer 'd3d11' which is broadly compatible
-  const defaultAngle = process.platform === 'win32' ? 'd3d11' : 'gl';
-  const angleBackend = process.env.ANGLE_BACKEND || defaultAngle; // alternatives: 'd3d11', 'd3d9'
-  app.commandLine.appendSwitch('use-angle', angleBackend);
+  // Do not force a specific ANGLE backend here; allow Electron/Chromium to
+  // select the most compatible implementation for the host environment.
 
   // Disable problematic GPU features that cause command buffer errors
   app.commandLine.appendSwitch('disable-gpu-sandbox');
@@ -143,7 +156,7 @@ try {
   // Disable features that commonly cause issues
   app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 
-  logger.info(`[GPU] Flags set: ANGLE=${angleBackend}`);
+  logger.info('[GPU] Applied GPU flags');
 } catch (e) {
   try {
     logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
@@ -156,25 +169,40 @@ try {
   }
 }
 
-// --- GPU Manager: initialize early to select discrete GPU where available ---
+// --- GPU checks split: App (Electron) vs Ollama (CUDA) ---
 try {
-  const { initializeGpuEnvironment } = require('./services/gpuManager');
+  const {
+    assertAppGraphics,
+    configureOllamaCuda,
+  } = require('./services/gpuAssertions');
 
+  // App-level check (non-fatal): verify Electron's GPU pipeline
+  try {
+    const appGpuOk = assertAppGraphics();
+    if (!appGpuOk) {
+      logger.warn(
+        '[GPU] Electron GPU pipeline appears degraded. Some UI features may fall back to software.',
+      );
+    }
+  } catch (err) {
+    logger.debug('[GPU] App-level GPU assertion failed:', err?.message || err);
+  }
+
+  // Ollama/CUDA setup: this is critical for model acceleration and may throw
   (async () => {
     try {
-      await initializeGpuEnvironment();
+      await configureOllamaCuda();
     } catch (e) {
-      logger.error('[GPU] GPU initialization failed:', e?.message || e);
+      logger.error('[GPU] Ollama CUDA initialization failed:', e?.message || e);
       // Defer user dialog until app is ready, then show and exit
       app.on('ready', () => {
         try {
           const { dialog } = require('electron');
           dialog.showErrorBox(
             'GPU Configuration Error',
-            `A critical error occurred while configuring the GPU environment. The application cannot continue.\n\nDetails: ${e?.message || e}`,
+            `A critical error occurred while configuring the Ollama GPU environment. The application cannot continue.\n\nDetails: ${e?.message || e}`,
           );
         } catch (dialogErr) {
-          // fallback
           console.error(
             '[GPU] Failed to show error dialog:',
             dialogErr?.message || dialogErr,
@@ -190,7 +218,10 @@ try {
     }
   })();
 } catch (err) {
-  logger.debug('[GPU] GPU manager not available:', err?.message || err);
+  logger.debug(
+    '[GPU] Failed to perform split GPU checks:',
+    err?.message || err,
+  );
 }
 
 // Custom folders helpers

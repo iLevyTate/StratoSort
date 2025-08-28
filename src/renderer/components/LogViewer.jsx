@@ -32,8 +32,9 @@ const LogViewer = ({ isOpen, onClose }) => {
   const fetchLogFiles = async (type = selectedType) => {
     try {
       const result = await window.electronAPI.system.getLogFiles(type);
-      if (result.success) {
-        setLogFiles(result.files);
+      if (result && result.success) {
+        // Defensive: ensure files is an array
+        setLogFiles(Array.isArray(result.files) ? result.files : []);
       }
     } catch (error) {
       console.error('Failed to fetch log files:', error);

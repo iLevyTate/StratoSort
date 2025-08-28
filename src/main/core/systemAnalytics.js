@@ -271,47 +271,72 @@ const systemAnalytics = {
         Date.now() - (this._gpuCache.timestamp || 0) > 60000
       ) {
         // Cache for 1 minute
-        const { spawnSync } = require('child_process');
+        const { execFile } = require('child_process');
+        // promisified wrapper to avoid using exec/spawnSync
+        const execFilePromise = (cmd, args = [], opts = {}) =>
+          new Promise((resolve, reject) => {
+            try {
+              execFile(cmd, args, opts, (err, stdout, stderr) => {
+                if (err) return reject(err);
+                resolve({ stdout: stdout || '', stderr: stderr || '' });
+              });
+            } catch (e) {
+              reject(e);
+            }
+          });
+
         const cmd =
           process.platform === 'win32' ? 'nvidia-smi.exe' : 'nvidia-smi';
-        const out = spawnSync(
-          cmd,
-          [
-            '--query-gpu=utilization.gpu,utilization.memory,memory.total,memory.used',
-            '--format=csv,noheader,nounits',
-          ],
-          { timeout: 2000 },
-        );
-        if (out && out.status === 0 && out.stdout) {
-          const gpuLines = out.stdout
-            .toString()
-            .trim()
-            .split(/\r?\n/)
-            .filter(Boolean);
-          this._gpuCache = {
-            timestamp: Date.now(),
-            data: gpuLines.map((line) => {
-              const parts = line.split(',').map((p) => p && p.trim());
-              return {
-                utilizationGpuPct: Number(parts[0]) || 0,
-                utilizationMemoryPct: Number(parts[1]) || 0,
-                memoryTotalMB: Number(parts[2]) || null,
-                memoryUsedMB: Number(parts[3]) || null,
-              };
-            }),
-          };
-        } else {
+        try {
+          const { stdout } = await execFilePromise(
+            cmd,
+            [
+              '--query-gpu=utilization.gpu,utilization.memory,memory.total,memory.used',
+              '--format=csv,noheader,nounits',
+            ],
+            { timeout: 2000 },
+          );
+          if (stdout) {
+            const gpuLines = stdout
+              .toString()
+              .trim()
+              .split(/\r?\n/)
+              .filter(Boolean);
+            this._gpuCache = {
+              timestamp: Date.now(),
+              data: gpuLines.map((line) => {
+                const parts = line.split(',').map((p) => p && p.trim());
+                return {
+                  utilizationGpuPct: Number(parts[0]) || 0,
+                  utilizationMemoryPct: Number(parts[1]) || 0,
+                  memoryTotalMB: Number(parts[2]) || null,
+                  memoryUsedMB: Number(parts[3]) || null,
+                };
+              }),
+            };
+          } else {
+            this._gpuCache = { timestamp: Date.now(), data: [] };
+          }
+        } catch (err) {
+          // nvidia-smi failed or timed out; cache an empty result to avoid repeated slow attempts
           this._gpuCache = { timestamp: Date.now(), data: [] };
+          logger.debug(
+            '[METRICS] GPU metrics not available:',
+            err && err.message ? err.message : err,
+          );
         }
       }
       metrics.gpus = this._gpuCache.data;
     } catch (gpuErr) {
-      // Non-fatal - nvidia-smi may not exist on all systems
+      // Non-fatal - ensure metrics.gpus is set and continue
       if (!this._gpuCache) {
         this._gpuCache = { timestamp: Date.now(), data: [] };
       }
       metrics.gpus = this._gpuCache.data;
-      logger.debug('[METRICS] GPU metrics not available:', gpuErr.message);
+      logger.debug(
+        '[METRICS] GPU metrics not available:',
+        gpuErr && gpuErr.message ? gpuErr.message : gpuErr,
+      );
     }
 
     return metrics;

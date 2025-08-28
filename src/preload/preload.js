@@ -1,5 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const sanitizeHtml = require('sanitize-html');
+let sanitizeHtml;
+try {
+  sanitizeHtml = require('sanitize-html');
+} catch (e) {
+  // Fallback minimal sanitizer if the module isn't available in the preload bundle
+  console.warn(
+    '[PRELOAD] sanitize-html not available, using minimal fallback sanitizer',
+  );
+  sanitizeHtml = function (input) {
+    if (typeof input !== 'string') return input;
+    return input.replace(/<[^>]*>?/gm, '');
+  };
+}
 
 // Import centralized IPC channel map - simplified for sandbox compatibility
 // The main process will provide the IPC channels via a synchronous IPC call

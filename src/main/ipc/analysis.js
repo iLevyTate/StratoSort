@@ -101,7 +101,40 @@ function registerAnalysisIpc({
                   filePath,
                 );
               } catch {}
-              return result;
+              // Ensure the returned analysis result is structured-cloneable for IPC
+              try {
+                const {
+                  validateAnalysisResult,
+                } = require('../analysis/analysisUtils');
+                const safe = validateAnalysisResult(result, {
+                  category: 'document',
+                  keywords: [],
+                  confidence: 0,
+                });
+                return safe;
+              } catch (e) {
+                logger.debug(
+                  '[IPC-ANALYSIS] Failed to validate result for IPC, returning minimal payload:',
+                  e?.message || e,
+                );
+                return {
+                  subject:
+                    result && result.suggestedName
+                      ? result.suggestedName
+                      : path.basename(filePath),
+                  category:
+                    result && result.category
+                      ? result.category
+                      : 'uncategorized',
+                  keywords: Array.isArray(result && result.keywords)
+                    ? result.keywords
+                    : [],
+                  confidence:
+                    typeof result?.confidence === 'number'
+                      ? result.confidence
+                      : 0,
+                };
+              }
             } catch (error) {
               logger.error(
                 `[IPC] Document analysis failed for ${filePath}:`,
@@ -194,7 +227,38 @@ function registerAnalysisIpc({
                 filePath,
               );
             } catch {}
-            return result;
+            // Ensure the returned analysis result is structured-cloneable for IPC
+            try {
+              const {
+                validateAnalysisResult,
+              } = require('../analysis/analysisUtils');
+              const safe = validateAnalysisResult(result, {
+                category: 'document',
+                keywords: [],
+                confidence: 0,
+              });
+              return safe;
+            } catch (e) {
+              logger.debug(
+                '[IPC-ANALYSIS] Failed to validate result for IPC, returning minimal payload:',
+                e?.message || e,
+              );
+              return {
+                subject:
+                  result && result.suggestedName
+                    ? result.suggestedName
+                    : path.basename(filePath),
+                category:
+                  result && result.category ? result.category : 'uncategorized',
+                keywords: Array.isArray(result && result.keywords)
+                  ? result.keywords
+                  : [],
+                confidence:
+                  typeof result?.confidence === 'number'
+                    ? result.confidence
+                    : 0,
+              };
+            }
           } catch (error) {
             logger.error(
               `[IPC] Document analysis failed for ${filePath}:`,

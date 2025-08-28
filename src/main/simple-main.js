@@ -127,8 +127,8 @@ const perfMonitor = require('./utils/perfMonitor')(logger);
 
 // ===== GPU PREFERENCES (Windows rendering stability) =====
 try {
-  // Try OpenGL/ANGLE backend. On Windows use 'egl-angle' when available to match allowed implementations
-  const defaultAngle = process.platform === 'win32' ? 'egl-angle' : 'gl';
+  // Try OpenGL/ANGLE backend. On Windows prefer 'd3d11' which is broadly compatible
+  const defaultAngle = process.platform === 'win32' ? 'd3d11' : 'gl';
   const angleBackend = process.env.ANGLE_BACKEND || defaultAngle; // alternatives: 'd3d11', 'd3d9'
   app.commandLine.appendSwitch('use-angle', angleBackend);
 

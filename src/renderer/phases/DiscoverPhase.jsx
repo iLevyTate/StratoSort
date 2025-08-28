@@ -101,7 +101,38 @@ function DiscoverPhase() {
     setDateFormat(persistedNaming.dateFormat || 'YYYY-MM-DD');
     setCaseConvention(persistedNaming.caseConvention || 'kebab-case');
     setSeparator(persistedNaming.separator || '-');
-    if (persistedResults.length > 0) setAnalysisResults(persistedResults);
+
+    // Reconstruct analysis results from file states if no persisted results exist
+    let finalResults = persistedResults;
+    if (
+      persistedResults.length === 0 &&
+      Object.keys(persistedStates).length > 0
+    ) {
+      // Reconstruct analysis results from file states that have analysis data
+      const reconstructedResults = persistedFiles
+        .map((file) => {
+          const state = persistedStates[file.path];
+          if (state && state.state === 'ready' && state.analysis) {
+            return {
+              ...file,
+              analysis: state.analysis,
+              status: 'analyzed',
+              analyzedAt: state.analyzedAt || new Date().toISOString(),
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (reconstructedResults.length > 0) {
+        console.log(
+          `[DISCOVER] Reconstructed ${reconstructedResults.length} analysis results from file states`,
+        );
+        finalResults = reconstructedResults;
+      }
+    }
+
+    if (finalResults.length > 0) setAnalysisResults(finalResults);
     if (persistedIsAnalyzing) {
       // Check if analysis state is actually valid (not stuck)
       const lastActivity = persistedProgress.lastActivity || Date.now();

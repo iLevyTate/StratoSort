@@ -12,6 +12,10 @@ const { autoUpdater } = require('electron-updater');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Logging utility
+const { logger } = require('../shared/logger');
+const { MEMORY_THRESHOLDS, SERVICE_LIMITS } = require('../shared/constants');
+
 // Disable hardware acceleration for the renderer to avoid Chromium GPU-process
 // initialization failures on systems with problematic ANGLE/driver combinations.
 // Ollama/CUDA remains unaffected since we set CUDA_VISIBLE_DEVICES separately.
@@ -26,10 +30,6 @@ try {
     e?.message || e,
   );
 }
-
-// Logging utility
-const { logger } = require('../shared/logger');
-const { MEMORY_THRESHOLDS, SERVICE_LIMITS } = require('../shared/constants');
 
 // Import error handling system (not needed directly in this file)
 

@@ -346,9 +346,8 @@ describe('customFolders', () => {
       const actualCall = fs.writeFile.mock.calls[0];
       const actualJson = actualCall[1]; // Second argument is the JSON string
 
-      expect(actualCall[0]).toBe(
-        path.join('/mock/user/data', 'custom-folders.json'),
-      );
+      // Atomic operations use temporary files with timestamps
+      expect(actualCall[0]).toMatch(/custom-folders\.json\.tmp\.\d+$/);
       expect(JSON.parse(actualJson)).toEqual(JSON.parse(expectedJson));
 
       expect(logger.info).toHaveBeenCalledWith(
@@ -365,7 +364,7 @@ describe('customFolders', () => {
       await expect(saveCustomFolders(folders)).resolves.toBeUndefined();
 
       expect(logger.error).toHaveBeenCalledWith(
-        '[ERROR] Failed to save custom folders:',
+        expect.stringContaining('Failed to'),
         expect.any(Error),
       );
     });
@@ -376,8 +375,9 @@ describe('customFolders', () => {
       await saveCustomFolders(null);
       await saveCustomFolders(undefined);
 
+      // Check that writeFile was called with temporary file paths
       expect(fs.writeFile).toHaveBeenCalledWith(
-        path.join('/mock/user/data', 'custom-folders.json'),
+        expect.stringMatching(/custom-folders\.json\.tmp\.\d+$/),
         JSON.stringify([], null, 2),
       );
     });

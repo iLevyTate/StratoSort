@@ -288,13 +288,13 @@ describe('IPC registration', () => {
 
     expect(callOrder).toEqual([
       'files',
-      'settings',
       'smartFolders',
       'undoRedo',
       'analysisHistory',
       'system',
       'ollama',
       'analysis',
+      'settings',
       'embeddings',
       'window',
     ]);

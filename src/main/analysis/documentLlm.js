@@ -44,10 +44,18 @@ async function analyzeTextWithOllama(
       };
     }
     let folderCategoriesStr = '';
-    if (smartFolders && smartFolders.length > 0) {
+    if (
+      smartFolders &&
+      Array.isArray(smartFolders) &&
+      smartFolders.length > 0
+    ) {
       const validFolders = smartFolders
         .filter(
-          (f) => f && typeof f.name === 'string' && f.name.trim().length > 0,
+          (f) =>
+            f &&
+            typeof f === 'object' &&
+            typeof f.name === 'string' &&
+            f.name.trim().length > 0,
         )
         .slice(0, 10)
         .map((f) => ({
@@ -95,7 +103,15 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       cfg.selectedTextModel ||
       cfg.selectedModel ||
       AppConfig.ai.textAnalysis.defaultModel;
+
+    if (!modelToUse) {
+      throw new Error('No Ollama model configured for text analysis');
+    }
+
     const client = await getOllamaClient();
+    if (!client) {
+      throw new Error('Failed to initialize Ollama client');
+    }
 
     // Get GPU-optimized performance options and ensure we always prefer GPU when available
     const perfOptions = await buildOllamaOptions('text');
@@ -116,6 +132,10 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       3,
       500,
     );
+
+    if (!response) {
+      throw new Error('No response received from Ollama API');
+    }
 
     if (response.response) {
       try {

@@ -4,6 +4,7 @@ const { getOllama: getOllamaClient } = require('../ollamaUtils');
 const {
   enhanceSmartFolderWithLLM,
 } = require('../services/SmartFoldersLLMService');
+const { getServiceIntegration } = require('../services/ServiceIntegration');
 const {
   withErrorLogging,
   withEnhancedValidation,
@@ -245,27 +246,50 @@ function registerSmartFoldersIpc({
             errorCode: 'FOLDER_NOT_FOUND',
           };
         if (updatedFolder.name) {
-          const illegalChars = /[<>:"|?*\x00-\x1F]/g;
-          if (illegalChars.test(updatedFolder.name)) {
+          // Enhanced input sanitization for name
+          const sanitizedName = updatedFolder.name
+            .trim()
+            .replace(/[<>:"|?*\x00-\x1f]/g, '')
+            .substring(0, 100);
+          if (!sanitizedName) {
             return {
               success: false,
-              error:
-                'Folder name contains invalid characters. Please avoid: < > : " | ? *',
-              errorCode: 'INVALID_FOLDER_NAME_CHARS',
+              error: 'Folder name cannot be empty after sanitization',
+              errorCode: 'INVALID_FOLDER_NAME_EMPTY',
             };
           }
-          const existingFolder = customFolders.find(
-            (f) =>
-              f.id !== folderId &&
-              f.name.toLowerCase() === updatedFolder.name.trim().toLowerCase(),
-          );
-          if (existingFolder)
-            return {
-              success: false,
-              error: `A smart folder with name "${updatedFolder.name}" already exists`,
-              errorCode: 'FOLDER_NAME_EXISTS',
-            };
+          updatedFolder.name = sanitizedName;
         }
+
+        if (updatedFolder.description) {
+          // Sanitize description
+          updatedFolder.description = updatedFolder.description
+            .trim()
+            .substring(0, 500)
+            .replace(/[\x00-\x1f]/g, '');
+        }
+
+        // Check for illegal characters (legacy validation - now redundant but kept for compatibility)
+        const illegalChars = /[<>:"|?*\x00-\x1F]/g;
+        if (illegalChars.test(updatedFolder.name)) {
+          return {
+            success: false,
+            error:
+              'Folder name contains invalid characters. Please avoid: < > : " | ? *',
+            errorCode: 'INVALID_FOLDER_NAME_CHARS',
+          };
+        }
+        const existingFolder = customFolders.find(
+          (f) =>
+            f.id !== folderId &&
+            f.name.toLowerCase() === updatedFolder.name.trim().toLowerCase(),
+        );
+        if (existingFolder)
+          return {
+            success: false,
+            error: `A smart folder with name "${updatedFolder.name}" already exists`,
+            errorCode: 'FOLDER_NAME_EXISTS',
+          };
         if (updatedFolder.path) {
           try {
             const normalizedPath = path.resolve(updatedFolder.path.trim());
@@ -449,14 +473,30 @@ function registerSmartFoldersIpc({
             errorCode: 'INVALID_FOLDER_PATH',
           };
 
-        const illegalChars = /[<>:"|?*\x00-\x1f]/g;
-        if (illegalChars.test(folder.name))
+        // Enhanced input sanitization
+        const sanitizedName = folder.name
+          .trim()
+          .replace(/[<>:"|?*\x00-\x1f]/g, '')
+          .substring(0, 100);
+        if (!sanitizedName) {
           return {
             success: false,
-            error:
-              'Folder name contains invalid characters. Please avoid: < > : " | ? *',
-            errorCode: 'INVALID_FOLDER_NAME_CHARS',
+            error: 'Folder name cannot be empty after sanitization',
+            errorCode: 'INVALID_FOLDER_NAME_EMPTY',
           };
+        }
+
+        // Sanitize description
+        const sanitizedDescription = folder.description
+          ? folder.description
+              .trim()
+              .substring(0, 500)
+              .replace(/[\x00-\x1f]/g, '')
+          : '';
+
+        // Update folder with sanitized data
+        folder.name = sanitizedName;
+        folder.description = sanitizedDescription;
 
         const customFolders = getCustomFolders();
         const existingFolder = customFolders.find(

@@ -7,6 +7,7 @@ const {
   SUPPORTED_IMAGE_EXTENSIONS,
   SUPPORTED_ARCHIVE_EXTENSIONS,
   ACTION_TYPES,
+  IPC_CHANNELS,
 } = require('../../shared/constants');
 const { withErrorLogging, withValidation } = require('./withErrorLogging');
 let z;
@@ -151,14 +152,21 @@ async function executeBatchOrganize(
         });
         successCount++;
 
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('operation-progress', {
-            type: 'batch_organize',
-            current: i + 1,
-            total: batch.operations.length,
-            currentFile: path.basename(op.source),
-          });
+        try {
+          const win = getMainWindow();
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('operation-progress', {
+              type: 'batch_organize',
+              current: i + 1,
+              total: batch.operations.length,
+              currentFile: path.basename(op.source),
+            });
+          }
+        } catch (windowError) {
+          logger.debug(
+            '[FILES] Failed to send progress update:',
+            windowError.message,
+          );
         }
       } catch (error) {
         await getServiceIntegration()?.processingState?.markOrganizeOpError(
@@ -318,7 +326,7 @@ function registerFilesIpc({
             logger.info('[MAIN-FILE-SELECT] Focusing window before dialog...');
             mainWindow.focus();
           }
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             if (!mainWindow.isVisible()) mainWindow.show();
             if (!mainWindow.isFocused()) mainWindow.focus();
@@ -440,6 +448,25 @@ function registerFilesIpc({
           };
           for (const selectedPath of result.filePaths) {
             try {
+              // Validate path before processing to prevent security issues
+              if (!selectedPath || typeof selectedPath !== 'string') {
+                logger.warn(
+                  `[FILE-SELECTION] Invalid path type: ${typeof selectedPath}`,
+                );
+                continue;
+              }
+
+              // Use the existing path validation
+              if (
+                safePathSchema &&
+                !safePathSchema.safeParse(selectedPath).success
+              ) {
+                logger.warn(
+                  `[FILE-SELECTION] Path failed validation: ${selectedPath}`,
+                );
+                continue;
+              }
+
               const stats = await fs.stat(selectedPath);
               if (stats.isFile()) {
                 const ext = path.extname(selectedPath).toLowerCase();

@@ -12,6 +12,7 @@ const os = require('os');
 jest.mock('electron', () => ({
   app: {
     getPath: jest.fn(() => '/tmp/test-user-data'),
+    isReady: jest.fn(() => true),
   },
 }));
 

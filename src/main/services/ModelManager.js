@@ -264,7 +264,7 @@ class ModelManager {
 
       const { buildOllamaOptions } = require('./PerformanceService');
       const perfOptions = await buildOllamaOptions('text');
-      const testPromise = this.ollamaClient.generate({
+      const testPromise = await this.ollamaClient.generate({
         model: modelName,
         prompt: 'Hello',
         options: {
@@ -408,9 +408,32 @@ class ModelManager {
           };
         }
       } catch (error) {
-        console.log(
-          `[MODEL-MANAGER] Model ${modelName} failed: ${error.message}`,
-        );
+        const errorDetails = {
+          model: modelName,
+          error: error.message,
+          code: error.code,
+          isTimeout:
+            error.message?.includes('timeout') || error.code === 'ETIMEDOUT',
+          isConnectionError:
+            error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND',
+          isModelError:
+            error.message?.includes('model') ||
+            error.message?.includes('not found'),
+        };
+
+        logger.error('[MODEL-MANAGER] Model generation failed:', errorDetails);
+
+        // Mark model as problematic if it's a persistent issue
+        if (errorDetails.isModelError || errorDetails.isConnectionError) {
+          this.modelCapabilities.set(modelName, {
+            ...this.modelCapabilities.get(modelName),
+            lastError: error.message,
+            errorCount:
+              (this.modelCapabilities.get(modelName)?.errorCount || 0) + 1,
+            lastErrorTime: Date.now(),
+          });
+        }
+
         continue;
       }
     }

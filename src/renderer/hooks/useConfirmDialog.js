@@ -45,11 +45,14 @@ export function useConfirmDialog() {
   );
 
   const hideConfirm = React.useCallback(() => {
-    if (typeof resolverRef.current === 'function') {
+    const resolver = resolverRef.current;
+    resolverRef.current = null;
+    if (typeof resolver === 'function') {
       try {
-        resolverRef.current(false);
-      } catch {}
-      resolverRef.current = null;
+        resolver(false);
+      } catch (e) {
+        console.error('Confirm resolver failed:', e);
+      }
     }
     setConfirmState((prev) => ({ ...prev, isOpen: false }));
   }, []);

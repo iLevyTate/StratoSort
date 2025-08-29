@@ -7,6 +7,7 @@ jest.mock('electron', () => ({
   app: {
     getPath: jest.fn(() => '/mock/user/data'),
     on: jest.fn(),
+    removeAllListeners: jest.fn(),
     getVersion: jest.fn(() => '1.0.0'),
     getName: jest.fn(() => 'StratoSort'),
     relaunch: jest.fn(),
@@ -97,6 +98,11 @@ describe('ErrorHandler', () => {
     });
 
     test('sets up global error handlers', async () => {
+      // Remove any existing listeners to ensure our spies capture the calls
+      process.removeAllListeners('uncaughtException');
+      process.removeAllListeners('unhandledRejection');
+      // Note: app mock doesn't have removeAllListeners, so we skip that
+
       const processOnSpy = jest.spyOn(process, 'on');
       const appOnSpy = jest.spyOn(app, 'on');
 

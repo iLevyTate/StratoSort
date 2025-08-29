@@ -84,7 +84,8 @@ function simplifyDirectoryStructure(structure, maxDepth = 3, currentDepth = 0) {
  * @param {Array<Object>} directoryStructure - The output from scanDirectory.
  * @returns {Promise<Object>} An object containing the LLM's suggestions.
  */
-async function getOrganizationSuggestions(directoryStructure) {
+async function getOrganizationSuggestions(directoryStructure, retryCount = 0) {
+  const maxRetries = 2;
   const ollama = getOllamaClient();
   const model = getOllamaModel();
 
@@ -148,10 +149,38 @@ async function getOrganizationSuggestions(directoryStructure) {
     logger.error('Error getting suggestions from LLM', {
       error: error.message,
       model,
+      retryCount,
     });
 
-    return {
+    // Retry logic for transient errors
+    const isRetryableError =
+      error.message?.includes('timeout') ||
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('ENOTFOUND') ||
+      error.code === 'ECONNRESET' ||
+      error.code === 'ETIMEDOUT';
+
+    if (isRetryableError && retryCount < maxRetries) {
+      logger.info(`Retrying LLM request (${retryCount + 1}/${maxRetries})`);
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000 * (retryCount + 1)),
+      ); // Exponential backoff
+      return getOrganizationSuggestions(directoryStructure, retryCount + 1);
+    }
+
+    // Enhanced error recovery with more context
+    const errorDetails = {
       error: error.message || 'Failed to get suggestions from LLM',
+      errorType: error.code || 'UNKNOWN_ERROR',
+      model,
+      retryCount,
+      isRetryable: isRetryableError,
+    };
+
+    logger.error('LLM request failed after retries', errorDetails);
+
+    return {
+      ...errorDetails,
       suggestions: [],
       fallbackSuggestions: getFallbackSuggestions(directoryStructure),
     };

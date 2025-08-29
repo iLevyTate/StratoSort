@@ -120,20 +120,34 @@ async function resumeIncompleteBatches(
             continue;
           }
 
-          await serviceIntegration.processingState.markOrganizeOpDone(
-            batch.id,
-            i,
-            { destination: op.destination },
-          );
+          try {
+            await serviceIntegration.processingState.markOrganizeOpDone(
+              batch.id,
+              i,
+              { destination: op.destination },
+            );
+          } catch (doneError) {
+            logger?.warn?.(
+              '[RESUME] Failed to mark operation as done:',
+              doneError.message,
+            );
+          }
 
-          const win = getMainWindow?.();
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('operation-progress', {
-              type: 'batch_organize',
-              current: i + 1,
-              total,
-              currentFile: path.basename(op.source),
-            });
+          try {
+            const win = getMainWindow?.();
+            if (win && !win.isDestroyed()) {
+              win.webContents.send('operation-progress', {
+                type: 'batch_organize',
+                current: i + 1,
+                total,
+                currentFile: path.basename(op.source),
+              });
+            }
+          } catch (progressError) {
+            logger?.debug?.(
+              '[RESUME] Failed to send progress update:',
+              progressError.message,
+            );
           }
         } catch (err) {
           logger?.warn?.(
@@ -150,14 +164,24 @@ async function resumeIncompleteBatches(
               i,
               err.message,
             );
-          } catch {}
+          } catch (error) {
+            logger?.warn?.(
+              `[RESUME] Failed to mark op error for batch ${batch.id}:`,
+              error.message,
+            );
+          }
         }
       }
       try {
         await serviceIntegration.processingState.completeOrganizeBatch(
           batch.id,
         );
-      } catch {}
+      } catch (error) {
+        logger?.warn?.(
+          `[RESUME] Failed to complete batch ${batch.id}:`,
+          error.message,
+        );
+      }
       logger?.info?.('[RESUME] Completed batch resume:', batch.id);
     }
   } catch (e) {

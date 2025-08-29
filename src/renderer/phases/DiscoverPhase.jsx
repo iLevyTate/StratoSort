@@ -97,6 +97,26 @@ function DiscoverPhase() {
   const [separator, setSeparator] = useState('-');
 
   const [fileStates, setFileStates] = useState({});
+
+  // Debounce utility
+  const debounce = (func, delay) => {
+    let timeoutId;
+    const debounced = (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+    debounced.cancel = () => clearTimeout(timeoutId);
+    return debounced;
+  };
+
+  // Debounced analysis with cleanup
+  useEffect(() => {
+    const debouncedAnalysis = debounce(analyzeFiles, 500);
+
+    return () => {
+      debouncedAnalysis.cancel();
+    };
+  }, []);
   // Lightweight render instrumentation for performance troubleshooting
   const renderCountRef = useRef(0);
   useEffect(() => {
@@ -565,6 +585,7 @@ function DiscoverPhase() {
 
   const getFileType = useCallback((extension) => {
     // Strip leading dot from extension for comparison
+    if (!extension) return 'unknown';
     const ext = extension.startsWith('.')
       ? extension.slice(1).toLowerCase()
       : extension.toLowerCase();
@@ -616,7 +637,7 @@ function DiscoverPhase() {
             const stats = await window.electronAPI.files.getStats(filePath);
             const fileName = filePath.split(/[\\/]/).pop();
             const extension = fileName.includes('.')
-              ? '.' + fileName.split('.').pop().toLowerCase()
+              ? '.' + (fileName.split('.').pop() || '').toLowerCase()
               : '';
             return {
               name: fileName,
@@ -634,7 +655,7 @@ function DiscoverPhase() {
               name: fileName,
               path: filePath,
               extension: fileName.includes('.')
-                ? '.' + fileName.split('.').pop().toLowerCase()
+                ? '.' + (fileName.split('.').pop() || '').toLowerCase()
                 : '',
               size: 0,
               type: 'file',
@@ -653,7 +674,7 @@ function DiscoverPhase() {
             name: fileName,
             path: filePath,
             extension: fileName.includes('.')
-              ? '.' + fileName.split('.').pop().toLowerCase()
+              ? '.' + (fileName.split('.').pop() || '').toLowerCase()
               : '',
             size: 0,
             type: 'file',
@@ -673,7 +694,7 @@ function DiscoverPhase() {
       setIsScanning(true);
       const result = await window.electronAPI.files.select();
       if (result?.success && result?.files?.length > 0) {
-        const { files, summary } = result;
+        const { files = [], summary = {} } = result || {};
 
         // Get existing file paths to prevent duplicates
         const existingPaths = new Set(selectedFiles.map((f) => f.path));
@@ -810,7 +831,7 @@ function DiscoverPhase() {
           ];
           const supportedFiles = scanResult.files.filter((file) => {
             const ext = file.name.includes('.')
-              ? '.' + file.name.split('.').pop().toLowerCase()
+              ? '.' + (file.name.split('.').pop() || '').toLowerCase()
               : '';
             return supportedExts.includes(ext);
           });

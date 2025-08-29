@@ -25,8 +25,31 @@ async function detectNvidiaGpu() {
       proc.stderr.on('data', (d) => {
         stderr += d.toString();
       });
-      proc.on('error', () => resolve({ hasNvidiaGpu: false }));
+
+      const cleanup = () => {
+        // Ensure process is killed if still running
+        if (!proc.killed) {
+          proc.kill('SIGTERM');
+        }
+        // Remove all listeners to prevent memory leaks
+        proc.stdout.removeAllListeners();
+        proc.stderr.removeAllListeners();
+        proc.removeAllListeners();
+      };
+
+      proc.on('error', () => {
+        cleanup();
+        resolve({ hasNvidiaGpu: false });
+      });
+      // Add timeout to prevent hanging processes
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        resolve({ hasNvidiaGpu: false });
+      }, 5000);
+
       proc.on('close', (code) => {
+        clearTimeout(timeoutId);
+        cleanup();
         if (code === 0 && stdout.trim()) {
           const lines = stdout.trim().split(/\r?\n/);
           const first = lines[0] || '';
@@ -125,8 +148,36 @@ async function buildOllamaOptions(task = 'text') {
   };
 }
 
+/**
+ * Cleanup function to clear cached capabilities and any running processes
+ */
+function clearCache() {
+  cachedCapabilities = null;
+}
+
+/**
+ * Comprehensive cleanup for the PerformanceService
+ */
+function destroy() {
+  clearCache();
+
+  // Clear any module-level state that might need cleanup
+  // Note: No active observers or intervals in this service currently
+}
+
+/**
+ * Reset and re-detect capabilities (useful for testing or after system changes)
+ */
+async function resetCapabilities() {
+  clearCache();
+  return await detectSystemCapabilities();
+}
+
 module.exports = {
   detectSystemCapabilities,
   buildOllamaOptions,
   detectNvidiaGpu, // Export for testing
+  clearCache, // Export for testing/manual cache clearing
+  destroy, // Export for comprehensive cleanup
+  resetCapabilities, // Export for resetting capabilities
 };

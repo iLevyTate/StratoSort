@@ -198,12 +198,12 @@ const systemAnalytics = {
     // Ollama metrics summary
     for (const [key, data] of this.actionMetrics.ollamaCalls.entries()) {
       const avgQueueWait =
-        data.queueWaitTimes.length > 0
+        Array.isArray(data.queueWaitTimes) && data.queueWaitTimes.length > 0
           ? data.queueWaitTimes.reduce((a, b) => a + b, 0) /
             data.queueWaitTimes.length
           : 0;
       const avgApiDuration =
-        data.apiDurations.length > 0
+        Array.isArray(data.apiDurations) && data.apiDurations.length > 0
           ? data.apiDurations.reduce((a, b) => a + b, 0) /
             data.apiDurations.length
           : 0;
@@ -243,12 +243,12 @@ const systemAnalytics = {
         recentActions: this.actionMetrics.recentActions.slice(0, 20), // Last 20 actions
         performanceData: this.actionMetrics.performanceData.slice(-100), // Last 100 data points
         totalIpcCalls: Array.from(this.actionMetrics.ipcCalls.values()).reduce(
-          (sum, data) => sum + data.count,
+          (sum, data) => sum + (data?.count || 0),
           0,
         ),
         totalOllamaCalls: Array.from(
           this.actionMetrics.ollamaCalls.values(),
-        ).reduce((sum, data) => sum + data.count, 0),
+        ).reduce((sum, data) => sum + (data?.count || 0), 0),
       },
     };
 

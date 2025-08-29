@@ -7,24 +7,11 @@ const isDev = process.env.NODE_ENV === 'development';
 const fsSync = require('fs');
 
 async function loadContent(win, logger) {
-  const attempts = [];
-
-  // Only try dev server in development mode
-  if (isDev) {
-    attempts.push({ type: 'dev-server', url: 'http://localhost:3000' });
-  }
-
-  // Always try built files first, then fallback to source files
-  attempts.push(
-    {
-      type: 'dist-file',
-      path: path.join(__dirname, '../../../dist/index.html'),
-    },
-    {
-      type: 'src-file',
-      path: path.join(__dirname, '../../renderer/index.html'),
-    },
-  );
+  const attempts = [
+    { type: 'dev-server', url: 'http://localhost:3000' },
+    { type: 'dist-file', path: path.join(__dirname, '../../../dist/index.html') },
+    { type: 'src-file', path: path.join(__dirname, '../../renderer/index.html') },
+  ];
 
   for (const attempt of attempts) {
     try {
@@ -376,26 +363,17 @@ function createMainWindow() {
 
     // Handle page load failures with null checks
     if (win && !win.isDestroyed()) {
-      win.webContents.on(
-        'did-fail-load',
-        (event, errorCode, errorDescription) => {
-          logger.error('[WINDOW] Page failed to load:', {
-            errorCode,
-            errorDescription,
-          });
-          if (win && !win.isDestroyed()) {
-            try {
-              // Simple fallback - could be expanded to loadFallbackContent
-              win.loadFile('src/renderer/index.html');
-            } catch (error) {
-              logger.error(
-                '[WINDOW] Failed to load fallback content:',
-                error.message,
-              );
-            }
+      win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        logger.error('[WINDOW] Page failed to load:', { errorCode, errorDescription });
+        if (win && !win.isDestroyed()) {
+          try {
+            // Simple fallback - could be expanded to loadFallbackContent
+            win.loadFile('src/renderer/index.html');
+          } catch (error) {
+            logger.error('[WINDOW] Failed to load fallback content:', error.message);
           }
-        },
-      );
+        }
+      });
     }
 
     // Deny all permission requests by default (camera, mic, etc.)
@@ -457,10 +435,7 @@ function createMainWindow() {
         try {
           return createMainWindow();
         } catch (retryError) {
-          dialog.showErrorBox(
-            'Fatal Error',
-            `Window creation failed: ${retryError.message}`,
-          );
+          dialog.showErrorBox('Fatal Error', `Window creation failed: ${retryError.message}`);
           app.quit();
         }
       }, 1000);

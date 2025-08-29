@@ -88,6 +88,16 @@ global.createTestTempDir = async (prefix = 'test-') => {
   const fs = require('fs').promises;
   const path = require('path');
   const os = require('os');
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-  return global.normalizePath(tempDir);
+  let tempDir;
+  try {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    return global.normalizePath(tempDir);
+  } catch (error) {
+    throw error;
+  } finally {
+    // Register cleanup
+    if (tempDir && global.__tempDirs) {
+      global.__tempDirs.push(tempDir);
+    }
+  }
 };

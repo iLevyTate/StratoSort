@@ -23,7 +23,14 @@ function registerOllamaIpc({
     withErrorLogging(logger, async () => {
       try {
         const ollama = getOllama();
-        const response = await ollama.list();
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Ollama list timeout after 30 seconds')),
+            30000,
+          ),
+        );
+        const response = await Promise.race([ollama.list(), timeoutPromise]);
         const models = response.models || [];
         const categories = { text: [], vision: [], embedding: [] };
         for (const m of models) {
@@ -95,7 +102,22 @@ function registerOllamaIpc({
           try {
             const testUrl = hostUrl || 'http://127.0.0.1:11434';
             const testOllama = new Ollama({ host: testUrl });
-            const response = await testOllama.list();
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      'Ollama connection test timeout after 15 seconds',
+                    ),
+                  ),
+                15000,
+              ),
+            );
+            const response = await Promise.race([
+              testOllama.list(),
+              timeoutPromise,
+            ]);
             systemAnalytics.ollamaHealth = {
               status: 'healthy',
               host: testUrl,
@@ -129,7 +151,22 @@ function registerOllamaIpc({
           try {
             const testUrl = hostUrl || 'http://127.0.0.1:11434';
             const testOllama = new Ollama({ host: testUrl });
-            const response = await testOllama.list();
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      'Ollama connection test timeout after 15 seconds',
+                    ),
+                  ),
+                15000,
+              ),
+            );
+            const response = await Promise.race([
+              testOllama.list(),
+              timeoutPromise,
+            ]);
             systemAnalytics.ollamaHealth = {
               status: 'healthy',
               host: testUrl,
@@ -170,7 +207,18 @@ function registerOllamaIpc({
         const results = [];
         for (const model of Array.isArray(models) ? models : []) {
           try {
-            await ollama.pull({ model });
+            // Add timeout to prevent hanging on model pulls
+            const pullPromise = ollama.pull({ model });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(`Model pull timeout after 5 minutes: ${model}`),
+                  ),
+                300000,
+              ),
+            );
+            await Promise.race([pullPromise, timeoutPromise]);
             results.push({ model, success: true });
           } catch (e) {
             results.push({ model, success: false, error: e.message });

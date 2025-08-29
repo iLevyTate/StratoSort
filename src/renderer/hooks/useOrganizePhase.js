@@ -238,7 +238,9 @@ export function useOrganizePhase() {
 
       const previouslyOrganized = phaseData.organizedFiles || [];
       const processedIds = new Set(
-        previouslyOrganized.map((file) => file.originalPath || file.path),
+        previouslyOrganized
+          .filter((f) => f && (f.originalPath || f.path))
+          .map((file) => file.originalPath || file.path),
       );
       setProcessedFileIds(processedIds);
 

@@ -279,7 +279,9 @@ describe('IPC registration', () => {
     registerOllamaIpc.mockImplementation(() => callOrder.push('ollama'));
     registerAnalysisIpc.mockImplementation(() => callOrder.push('analysis'));
     registerSettingsIpc.mockImplementation(() => callOrder.push('settings'));
-    registerEmbeddingsIpc.mockImplementation(() => callOrder.push('semantic'));
+    registerEmbeddingsIpc.mockImplementation(() =>
+      callOrder.push('embeddings'),
+    );
     registerWindowIpc.mockImplementation(() => callOrder.push('window'));
 
     registerAllIpc(mockDependencies);
@@ -293,7 +295,7 @@ describe('IPC registration', () => {
       'ollama',
       'analysis',
       'settings',
-      'semantic',
+      'embeddings',
       'window',
     ]);
   });

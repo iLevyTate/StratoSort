@@ -1,5 +1,5 @@
-const { getServiceIntegration } = require('../services/ServiceIntegration');
 const { withErrorLogging } = require('./withErrorLogging');
+const { getServiceIntegration } = require('../services/ServiceIntegration');
 
 function registerUndoRedoIpc({
   ipcMain,

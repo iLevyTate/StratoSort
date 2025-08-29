@@ -7,9 +7,9 @@ const AnalysisDetails = React.memo(function AnalysisDetails({
   if (!analysis) return null;
   const { showName = true, showCategory = true } = options;
   const hasKeywords =
-    Array.isArray(analysis.keywords) && analysis.keywords.length > 0;
+    Array.isArray(analysis?.keywords) && analysis.keywords.length > 0;
   const hasColors =
-    Array.isArray(analysis.colors) && analysis.colors.length > 0;
+    Array.isArray(analysis?.colors) && analysis.colors.length > 0;
   const displayDate = analysis.date;
   const displayProject = analysis.project;
   const displayPurpose = analysis.purpose;

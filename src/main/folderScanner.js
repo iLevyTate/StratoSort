@@ -15,10 +15,28 @@ const DEFAULT_IGNORE_PATTERNS = [
 async function scanDirectory(
   dirPath,
   ignorePatterns = DEFAULT_IGNORE_PATTERNS,
+  depth = 0,
+  maxDepth = 10,
 ) {
+  // Prevent infinite recursion by limiting depth
+  if (depth > maxDepth) {
+    return [];
+  }
+
+  // Validate input parameters
+  if (!dirPath || typeof dirPath !== 'string') {
+    throw new Error('Invalid directory path provided');
+  }
+
+  if (!Array.isArray(ignorePatterns)) {
+    ignorePatterns = DEFAULT_IGNORE_PATTERNS;
+  }
+
   const items = [];
+  let dirents;
+
   try {
-    const dirents = await fs.readdir(dirPath, { withFileTypes: true });
+    dirents = await fs.readdir(dirPath, { withFileTypes: true });
 
     for (const dirent of dirents) {
       if (dirent.isSymbolicLink()) {
@@ -40,19 +58,40 @@ async function scanDirectory(
         continue;
       }
 
-      const stats = await fs.stat(itemPath);
-      const itemInfo = {
-        name: itemName,
-        path: itemPath,
-        type: dirent.isDirectory() ? 'folder' : 'file',
-        size: stats.size,
-        modified: stats.mtime,
-      };
+      try {
+        const stats = await fs.stat(itemPath);
+        const itemInfo = {
+          name: itemName,
+          path: itemPath,
+          type: dirent.isDirectory() ? 'folder' : 'file',
+          size: stats.size,
+          modified: stats.mtime,
+        };
 
-      if (dirent.isDirectory()) {
-        itemInfo.children = await scanDirectory(itemPath, ignorePatterns);
+        if (dirent.isDirectory()) {
+          try {
+            itemInfo.children = await scanDirectory(
+              itemPath,
+              ignorePatterns,
+              depth + 1,
+              maxDepth,
+            );
+          } catch (subdirError) {
+            // If subdirectory scan fails, still include the directory but with empty children
+            console.warn(
+              `Failed to scan subdirectory ${itemPath}:`,
+              subdirError.message,
+            );
+            itemInfo.children = [];
+            itemInfo.error = 'Failed to scan subdirectory';
+          }
+        }
+        items.push(itemInfo);
+      } catch (statError) {
+        // Skip files/directories that can't be stat'ed (permission issues, etc.)
+        console.warn(`Failed to stat ${itemPath}:`, statError.message);
+        continue;
       }
-      items.push(itemInfo);
     }
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {

@@ -92,7 +92,12 @@ class FolderMatchingService {
   }
 
   async matchFileToFolders(fileId, topK = 5) {
-    return this.embeddingStore.queryFolders(fileId, topK);
+    try {
+      return await this.embeddingStore.queryFolders(fileId, topK);
+    } catch (error) {
+      logger.error('[FolderMatching] Query folders failed:', error);
+      return [];
+    }
   }
 }
 

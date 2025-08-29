@@ -213,11 +213,20 @@ async function getOllama() {
   return ollamaInstance;
 }
 
+// Lazy load PerformanceService to avoid sync require in async context
+let performanceService = null;
+const getPerformanceService = () => {
+  if (!performanceService) {
+    performanceService = require('./services/PerformanceService');
+  }
+  return performanceService;
+};
+
 // GPU detection and optimization - use system-level detection to avoid recursive
 // calls into getOllama() which can cause initialization recursion
 async function detectGPUSupport() {
   try {
-    const perf = require('./services/PerformanceService');
+    const perf = getPerformanceService();
     const nvidia = await perf.detectNvidiaGpu();
     return Boolean(nvidia && nvidia.hasNvidiaGpu);
   } catch (error) {

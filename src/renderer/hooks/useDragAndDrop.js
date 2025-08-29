@@ -23,17 +23,21 @@ export function useDragAndDrop(onFilesDropped) {
 
   const handleDrop = useCallback(
     (e) => {
+      if (!e) return;
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
 
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0 && onFilesDropped) {
+      const dt = e.dataTransfer;
+      if (!dt) return;
+
+      const files = Array.from(dt.files || []);
+      if (files.length > 0 && typeof onFilesDropped === 'function') {
         const fileObjects = files.map((file) => ({
-          path: file.path || file.name,
-          name: file.name,
+          path: file.path || file.name || '',
+          name: file.name || (file.path || '').split(/[\\/]/).pop() || '',
           type: 'file',
-          size: file.size,
+          size: file.size || 0,
         }));
         onFilesDropped(fileObjects);
       }

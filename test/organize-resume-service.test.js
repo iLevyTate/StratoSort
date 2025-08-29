@@ -42,10 +42,18 @@ describe('OrganizeResumeService.resumeIncompleteBatches', () => {
             ],
           },
         ],
-        markOrganizeOpStarted: jest.fn(async () => {}),
-        markOrganizeOpDone: jest.fn(async () => {}),
-        markOrganizeOpError: jest.fn(async () => {}),
-        completeOrganizeBatch: jest.fn(async () => {}),
+        markOrganizeOpStarted: jest.fn(async (batchId, opIndex) => {
+          console.log('markOrganizeOpStarted called:', batchId, opIndex);
+        }),
+        markOrganizeOpDone: jest.fn(async (batchId, opIndex, result) => {
+          console.log('markOrganizeOpDone called:', batchId, opIndex, result);
+        }),
+        markOrganizeOpError: jest.fn(async (batchId, opIndex, error) => {
+          console.log('markOrganizeOpError called:', batchId, opIndex, error);
+        }),
+        completeOrganizeBatch: jest.fn(async (batchId) => {
+          console.log('completeOrganizeBatch called:', batchId);
+        }),
       },
     };
 
@@ -55,7 +63,22 @@ describe('OrganizeResumeService.resumeIncompleteBatches', () => {
       webContents: { send: jest.fn() },
     });
 
-    await resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
+    try {
+      await resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
+      console.log('Service call completed successfully');
+    } catch (error) {
+      console.log('Service call failed:', error.message);
+      throw error;
+    }
+
+    // Debug logging
+    console.log('After service call:');
+    console.log('srcA exists:', fssync.existsSync(srcA));
+    console.log('srcB exists:', fssync.existsSync(srcB));
+    console.log('destA exists:', fssync.existsSync(destA));
+    console.log('destB exists:', fssync.existsSync(destB));
+    console.log('destA path:', destA);
+    console.log('destB path:', destB);
 
     expect(fssync.existsSync(destA)).toBe(true);
     expect(fssync.existsSync(destB)).toBe(true);

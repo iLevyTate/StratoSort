@@ -84,11 +84,31 @@ async function buildOllamaOptions(task = 'text') {
     numBatch = 128; // CPU-only safe default
   }
 
-  // GPU offload hint – many Ollama backends accept num_gpu/num_gpu_layers; unknown keys are ignored
-  // We set an aggressive hint when GPU is present.
+  // GPU offload hints – many Ollama backends accept gpu, num_gpu and num_gpu_layers.
+  // Prefer realistic defaults rather than unbounded placeholders. Allow environment
+  // overrides for advanced users.
+  const envNumGpu = process.env.OLLAMA_NUM_GPU
+    ? parseInt(process.env.OLLAMA_NUM_GPU, 10)
+    : undefined;
+  const envNumGpuLayers = process.env.OLLAMA_GPU_LAYERS
+    ? parseInt(process.env.OLLAMA_GPU_LAYERS, 10)
+    : undefined;
+
   const gpuHints = caps.hasNvidiaGpu
-    ? { num_gpu: 9999, num_gpu_layers: 9999 }
-    : { num_gpu_layers: 0 };
+    ? {
+        gpu: true,
+        num_gpu: envNumGpu || 1,
+        // choose sensible defaults based on GPU memory if not explicitly configured
+        num_gpu_layers:
+          typeof envNumGpuLayers === 'number'
+            ? envNumGpuLayers
+            : (caps.gpuMemoryMB || 0) >= 12000
+              ? 40
+              : (caps.gpuMemoryMB || 0) >= 8000
+                ? 35
+                : 20,
+      }
+    : { gpu: false, num_gpu_layers: 0 };
 
   // mmap tends to help on desktop, mlock can cause permissions issues; leave disabled by default
   const memoryHints = { use_mmap: true, use_mlock: false };

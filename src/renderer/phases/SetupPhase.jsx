@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useIsMounted from '../hooks/useIsMounted';
 import { PHASES } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -25,8 +26,11 @@ function SetupPhase() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(null);
 
+  const mounted = useIsMounted();
+
   useEffect(() => {
     const initializeSetup = async () => {
+      if (!mounted.current) return;
       setIsLoading(true);
       try {
         await Promise.all([loadSmartFolders(), loadDefaultLocation()]);
@@ -34,7 +38,7 @@ function SetupPhase() {
         console.error('Failed to initialize setup:', error);
         showError('Failed to load setup data');
       } finally {
-        setIsLoading(false);
+        if (mounted.current) setIsLoading(false);
       }
     };
     initializeSetup();
@@ -43,8 +47,10 @@ function SetupPhase() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && editingFolder) {
-        setEditingFolder(null);
-        setIsEditingFolder(false);
+        if (mounted.current) {
+          setEditingFolder(null);
+          setIsEditingFolder(false);
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -120,10 +126,18 @@ function SetupPhase() {
         } catch {}
       }
 
-      const illegalChars = /[<>:"|?*\x00-\x1f]/g;
+      const illegalChars = /[<>:"/\\|?*\x00-\x1f]/g;
       if (illegalChars.test(newFolderName)) {
         showError(
-          'Folder name contains invalid characters. Please avoid: < > : " | ? *',
+          'Folder name contains invalid characters. Please avoid: < > : " | ? * / \\',
+        );
+        return;
+      }
+
+      // Validate optional path if provided
+      if (newFolderPath && illegalChars.test(newFolderPath)) {
+        showError(
+          'Folder path contains invalid characters. Please avoid: < > : " | ? * / \\',
         );
         return;
       }
@@ -140,22 +154,30 @@ function SetupPhase() {
         return;
       }
 
-      const parentPath = targetPath.substring(
-        0,
-        targetPath.lastIndexOf('/') || targetPath.lastIndexOf('\\'),
-      );
+      const lastSlash = targetPath.lastIndexOf('/');
+      const lastBackslash = targetPath.lastIndexOf('\\');
+      const parentIdx = Math.max(lastSlash, lastBackslash);
+      const parentPath =
+        parentIdx > 0 ? targetPath.substring(0, parentIdx) : '';
       try {
         if (parentPath) {
           const parentStats =
             await window.electronAPI.files.getStats(parentPath);
-          if (!parentStats || !parentStats.isDirectory) {
+          // Guard against undefined/null and prefer optional chaining
+          if (!parentStats?.isDirectory) {
             showError(
               `Parent directory "${parentPath}" does not exist or is not accessible`,
             );
             return;
           }
         }
-      } catch {
+      } catch (err) {
+        // Provide more context for debugging while keeping user-friendly message
+        console.debug(
+          'Parent directory stat check failed for',
+          parentPath,
+          err?.message,
+        );
         showWarning(
           'Cannot verify parent directory permissions. Folder creation may fail.',
         );
@@ -331,9 +353,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'true'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'true');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}
@@ -346,9 +368,9 @@ function SetupPhase() {
             onClick={() => {
               try {
                 const keys = ['setup-current-folders', 'setup-add-folder'];
-                keys.forEach((k) =>
-                  window.localStorage.setItem(`collapsible:${k}`, 'false'),
-                );
+                keys.forEach((k) => {
+                  window.localStorage.setItem(`collapsible:${k}`, 'false');
+                });
                 window.dispatchEvent(new Event('storage'));
               } catch {}
             }}

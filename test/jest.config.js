@@ -1,37 +1,44 @@
-/**
- * Jest configuration for StratoSort tests (unit + integration).
- * Updated to Jest 29 syntax—removed deprecated options that triggered warnings.
- */
-
 module.exports = {
-  displayName: 'Stratosort Tests',
-  testEnvironment: 'node',
-  roots: ['<rootDir>'],
-  testMatch: ['**/__tests__/**/*.+(js|ts)', '**/*.(test|spec).+(js|ts)'],
-  transform: {
-    '^.+\\.(ts)$': 'ts-jest',
-    '^.+\\.(js)$': 'babel-jest',
-  },
-  collectCoverageFrom: [
-    '../src/**/*.{js,ts}',
-    '!../src/**/*.d.ts',
-    '!../src/**/node_modules/**',
+  projects: [
+    // Main Process Config
+    {
+      displayName: 'main',
+      testEnvironment: 'node',
+      testMatch: ['test/main/**/*.test.js', 'test/integration/**/*.test.js'],
+      roots: ['src/main', 'test'],
+      setupFilesAfterEnv: ['test/shared/test-setup.js'],
+      moduleNameMapper: {
+        '^electron$': '__mocks__/electron.js',
+        '^ollama$': 'test/shared/mocks/ollama.js',
+        '^officeparser$': 'test/shared/mocks/officeparser.js',
+        '^node-tesseract-ocr$': 'test/shared/mocks/tesseract.js',
+        '^sharp$': 'test/shared/mocks/sharp.js',
+        '^xlsx-populate$': 'test/shared/mocks/xlsx.js',
+        '^sanitize-html$': 'test/shared/mocks/sanitize-html.js',
+      },
+    },
+    // Renderer Process Config
+    {
+      displayName: 'renderer',
+      testEnvironment: 'jsdom',
+      testMatch: [
+        'test/renderer/**/*.test.js',
+        'test/renderer/**/*.test.jsx',
+        'test/components/**/*.test.js',
+        'test/components/**/*.test.jsx',
+      ],
+      roots: ['src/renderer', 'test'],
+      setupFilesAfterEnv: ['renderer.setup.js'],
+      moduleNameMapper: {
+        '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+        '^electron$': '__mocks__/electron.js',
+      },
+      transform: {
+        '^.+\\.(js|jsx)$': 'babel-jest',
+      },
+    },
   ],
-  coverageDirectory: '../coverage',
-  setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
-  // Sequential execution keeps Ollama mocks deterministic
-  maxWorkers: 1,
-
-  moduleNameMapper: {
-    '^electron$': '<rootDir>/mocks/electron.js',
-    '^ollama$': '<rootDir>/mocks/ollama.js',
-    '^officeparser$': '<rootDir>/mocks/officeparser.js',
-    '^node-tesseract-ocr$': '<rootDir>/mocks/tesseract.js',
-    '^sharp$': '<rootDir>/mocks/sharp.js',
-    '^xlsx-populate$': '<rootDir>/mocks/xlsx.js',
-    '^sanitize-html$': '<rootDir>/mocks/sanitize-html.js',
-  },
-
-  // Global setup for DOM-dependent packages
-  setupFiles: ['<rootDir>/test-globals.js'],
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['json', 'lcov', 'text', 'clover'],
 };

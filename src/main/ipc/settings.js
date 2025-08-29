@@ -11,6 +11,7 @@ function registerSettingsIpc({
   ipcMain,
   IPC_CHANNELS,
   logger,
+  systemAnalytics,
   settingsService,
   setOllamaHost,
   setOllamaModel,
@@ -41,6 +42,11 @@ function registerSettingsIpc({
           launchOnStartup: z.boolean().optional(),
           autoOrganize: z.boolean().optional(),
           backgroundMode: z.boolean().optional(),
+          skipAIModelVerification: z.boolean().optional(),
+          theme: z.string().optional(),
+          notifications: z.boolean().optional(),
+          defaultSmartFolderLocation: z.string().optional(),
+          maxConcurrentAnalysis: z.number().optional(),
         })
         .partial()
     : null;

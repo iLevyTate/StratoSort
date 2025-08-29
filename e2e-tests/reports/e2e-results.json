@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-08-28T18:46:28.759Z",
+  "summary": {
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "duration": 0
+  },
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64"
+  }
+}

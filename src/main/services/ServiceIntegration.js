@@ -1,6 +1,7 @@
 const AnalysisHistoryService = require('./AnalysisHistoryService');
 const UndoRedoService = require('./UndoRedoService');
 const ProcessingStateService = require('./ProcessingStateService');
+const { logger } = require('../../shared/logger');
 
 class ServiceIntegration {
   constructor() {
@@ -21,6 +22,34 @@ class ServiceIntegration {
       this.processingState.initialize(),
     ]);
     this.initialized = true;
+  }
+
+  /**
+   * Start service initialization in the background without blocking callers.
+   * Useful during app startup where we prefer to defer heavy work and
+   * continue bringing the UI up quickly. Errors are logged but not thrown.
+   */
+  initializeBackground() {
+    if (this.initialized) return;
+    this.analysisHistory = new AnalysisHistoryService();
+    this.undoRedo = new UndoRedoService();
+    this.processingState = new ProcessingStateService();
+
+    Promise.all([
+      this.analysisHistory.initialize(),
+      this.undoRedo.initialize(),
+      this.processingState.initialize(),
+    ])
+      .then(() => {
+        this.initialized = true;
+        logger.info('[ServiceIntegration] Background initialization completed');
+      })
+      .catch((err) => {
+        logger.warn(
+          '[ServiceIntegration] Background initialization failed:',
+          err.message || err,
+        );
+      });
   }
 }
 

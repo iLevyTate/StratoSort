@@ -7,6 +7,8 @@ const { Ollama } = require('ollama');
 const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class ModelManager {
   constructor(host = 'http://127.0.0.1:11434') {
@@ -16,9 +18,18 @@ class ModelManager {
     this.selectedModel = null;
     this.modelCapabilities = new Map();
     this.lastHealthCheck = null;
-    this.configPath = path
-      .join(app.getPath('userData'), 'model-config.json')
-      .replace(/\\/g, '/');
+
+    // Safely get config path with fallback for tests
+    try {
+      this.configPath = path
+        .join(app.getPath('userData'), 'model-config.json')
+        .replace(/\\/g, '/');
+    } catch (error) {
+      // Fallback for test environment where app might not be available
+      this.configPath = path
+        .join(process.cwd(), 'test-data', 'model-config.json')
+        .replace(/\\/g, '/');
+    }
 
     // Model categories and their capabilities
     this.modelCategories = {
@@ -87,7 +98,7 @@ class ModelManager {
       );
       return true;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Initialization failed:', error);
+      logger.error('[MODEL-MANAGER] Initialization failed:', error);
       return false;
     }
   }
@@ -110,7 +121,7 @@ class ModelManager {
       );
       return this.availableModels;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Failed to discover models:', error);
+      logger.error('[MODEL-MANAGER] Failed to discover models:', error);
       this.availableModels = [];
       return [];
     }
@@ -146,7 +157,13 @@ class ModelManager {
       capabilities.vision = true;
     }
 
-    if (modelName.includes('code') || modelName.includes('coder')) {
+    // Correctly check for code models
+    if (
+      Array.isArray(this.modelCategories.code) &&
+      this.modelCategories.code.some((pattern) =>
+        modelName.includes(pattern.toLowerCase()),
+      )
+    ) {
       capabilities.code = true;
     }
 
@@ -197,9 +214,17 @@ class ModelManager {
 
     // Try preferred models first
     for (const preferred of this.fallbackPreferences) {
-      const model = this.availableModels.find((m) =>
-        m.name.toLowerCase().includes(preferred.toLowerCase()),
-      );
+      const model = this.availableModels.find((m) => {
+        const modelName = m.name.toLowerCase();
+        const preferredName = preferred.toLowerCase();
+        // Match exact name or name followed by a separator (-, :, ., etc.)
+        return (
+          modelName === preferredName ||
+          modelName.startsWith(preferredName + '-') ||
+          modelName.startsWith(preferredName + ':') ||
+          modelName.startsWith(preferredName + '.')
+        );
+      });
 
       if (model && (await this.testModel(model.name))) {
         console.log(`[MODEL-MANAGER] Selected preferred model: ${model.name}`);
@@ -344,7 +369,17 @@ class ModelManager {
     const modelsToTry = [
       this.selectedModel,
       ...this.fallbackPreferences.filter((p) =>
-        this.availableModels.some((m) => m.name.includes(p)),
+        this.availableModels.some((m) => {
+          const modelName = m.name.toLowerCase();
+          const preferredName = p.toLowerCase();
+          // Match exact name or name followed by a separator (-, :, ., etc.)
+          return (
+            modelName === preferredName ||
+            modelName.startsWith(preferredName + '-') ||
+            modelName.startsWith(preferredName + ':') ||
+            modelName.startsWith(preferredName + '.')
+          );
+        }),
       ),
     ].filter(Boolean);
 
@@ -393,8 +428,21 @@ class ModelManager {
       this.selectedModel = config.selectedModel || null;
       console.log(`[MODEL-MANAGER] Loaded config: ${this.selectedModel}`);
     } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.error('[MODEL-MANAGER] Error loading config:', error);
+      if (error.code === 'ENOENT') {
+        // No config file exists - this is expected
+        return;
+      }
+      // Handle JSON parse errors or other issues
+      console.warn(
+        '[MODEL-MANAGER] Invalid model-config.json, resetting:',
+        error.message,
+      );
+      this.selectedModel = null;
+      // Reset the config file to a valid state
+      try {
+        await this.saveConfig();
+      } catch (saveError) {
+        logger.error('[MODEL-MANAGER] Failed to reset config:', saveError);
       }
     }
   }
@@ -408,9 +456,9 @@ class ModelManager {
         selectedModel: this.selectedModel,
         lastUpdated: new Date().toISOString(),
       };
-      await fs.writeFile(this.configPath, JSON.stringify(config, null, 2));
+      await backupAndReplace(this.configPath, JSON.stringify(config, null, 2));
     } catch (error) {
-      console.error('[MODEL-MANAGER] Error saving config:', error);
+      logger.error('[MODEL-MANAGER] Error saving config:', error);
     }
   }
 

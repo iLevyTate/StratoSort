@@ -5,9 +5,16 @@ import Input from './ui/Input';
 
 function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
   const { addNotification } = useNotification();
-  const [historyData, setHistoryData] = useState([]);
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
+  const [historyDataRaw, setHistoryDataRaw] = useState([]);
+  const historyData = historyDataRaw;
+  const setHistoryData = (v) => mounted.current && setHistoryDataRaw(v);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingRaw, setIsLoadingRaw] = useState(true);
+  const isLoading = isLoadingRaw;
+  const setIsLoading = (v) => mounted.current && setIsLoadingRaw(v);
   const [selectedTab, setSelectedTab] = useState('statistics');
 
   useEffect(() => {
@@ -21,8 +28,10 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
         window.electronAPI.analysisHistory.getStatistics(),
         window.electronAPI.analysisHistory.get({ all: true }),
       ]);
-      setAnalysisStats(stats);
-      setHistoryData(history);
+      if (mounted.current) {
+        setAnalysisStats(stats);
+        setHistoryData(history);
+      }
     } catch (error) {
       addNotification('Failed to load analysis history', 'error');
     } finally {
@@ -123,7 +132,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
           </div>
         </div>
         <div className="p-21 overflow-y-auto max-h-[70vh]">
-          {isLoading ? (
+          {isLoadingRaw ? (
             <div className="text-center py-21">
               <div className="animate-spin w-21 h-21 border-3 border-stratosort-blue border-t-transparent rounded-full mx-auto mb-8"></div>
               <p>Loading analysis data...</p>
@@ -206,9 +215,9 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                     </Button>
                   </div>
                   <div className="space-y-8">
-                    {historyData.map((entry, index) => (
+                    {historyDataRaw.map((entry, index) => (
                       <div
-                        key={index}
+                        key={`${entry.fileName}-${entry.timestamp || index}`}
                         className="bg-surface-primary rounded-xl border border-border-light shadow-sm p-21"
                       >
                         <div className="flex items-start justify-between">
@@ -269,7 +278,7 @@ function AnalysisHistoryModal({ onClose, analysisStats, setAnalysisStats }) {
                         </div>
                       </div>
                     ))}
-                    {historyData.length === 0 && (
+                    {historyDataRaw.length === 0 && (
                       <div className="text-center py-21 text-system-gray-500">
                         No analysis history found
                       </div>

@@ -2,8 +2,17 @@ const {
   getOllamaModel,
   loadOllamaConfig,
   getOllamaClient,
+  retryWithBackoff,
 } = require('../ollamaUtils');
+const { buildOllamaOptions } = require('../services/PerformanceService');
+
+// Import shared analysis utilities
+const {
+  validateAnalysisResult,
+  handleAnalysisError,
+} = require('./analysisUtils');
 const { AI_DEFAULTS } = require('../../shared/constants');
+const { logger } = require('../../shared/logger');
 
 const AppConfig = {
   ai: {
@@ -11,7 +20,7 @@ const AppConfig = {
       defaultModel: AI_DEFAULTS.TEXT.MODEL,
       defaultHost: AI_DEFAULTS.TEXT.HOST,
       timeout: 60000,
-      maxContentLength: AI_DEFAULTS.TEXT.MAX_CONTENT_LENGTH,
+      maxContentLength: 8000, // Reduced from default for better performance
       temperature: AI_DEFAULTS.TEXT.TEMPERATURE,
       maxTokens: AI_DEFAULTS.TEXT.MAX_TOKENS,
     },
@@ -26,6 +35,14 @@ async function analyzeTextWithOllama(
   smartFolders = [],
 ) {
   try {
+    // Early return for empty content
+    if (!textContent || textContent.trim().length === 0) {
+      return {
+        error: 'No text content provided for analysis',
+        keywords: [],
+        confidence: 0,
+      };
+    }
     let folderCategoriesStr = '';
     if (smartFolders && smartFolders.length > 0) {
       const validFolders = smartFolders
@@ -79,15 +96,26 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       cfg.selectedModel ||
       AppConfig.ai.textAnalysis.defaultModel;
     const client = await getOllamaClient();
-    const response = await client.generate({
-      model: modelToUse,
-      prompt,
-      options: {
-        temperature: AppConfig.ai.textAnalysis.temperature,
-        num_predict: AppConfig.ai.textAnalysis.maxTokens,
-      },
-      format: 'json',
-    });
+
+    // Get GPU-optimized performance options and ensure we always prefer GPU when available
+    const perfOptions = await buildOllamaOptions('text');
+
+    // Ensure conservative timeout and streaming disabled for synchronous JSON output
+    const response = await retryWithBackoff(
+      async () =>
+        await client.generate({
+          model: modelToUse,
+          prompt,
+          options: {
+            temperature: AppConfig.ai.textAnalysis.temperature,
+            num_predict: AppConfig.ai.textAnalysis.maxTokens,
+            ...perfOptions, // Include GPU optimizations
+          },
+          format: 'json',
+        }),
+      3,
+      500,
+    );
 
     if (response.response) {
       try {
@@ -117,10 +145,16 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
           keywords: finalKeywords,
         };
       } catch (e) {
+        logger.error(
+          `Failed to parse document analysis from Ollama for ${originalFileName}: ${e.message}`,
+        );
         return {
           error: 'Failed to parse document analysis from Ollama.',
           keywords: [],
           confidence: 65,
+          extractionMethod: 'unknown',
+          category: 'document',
+          suggestedName: null,
         };
       }
     }
@@ -128,12 +162,21 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
       error: 'No content in Ollama response for document',
       keywords: [],
       confidence: 60,
+      extractionMethod: 'unknown',
+      category: 'document',
+      suggestedName: null,
     };
   } catch (error) {
+    logger.error(
+      `Ollama API error for document ${originalFileName}: ${error.message}`,
+    );
     return {
       error: `Ollama API error for document: ${error.message}`,
       keywords: [],
       confidence: 60,
+      extractionMethod: 'unknown',
+      category: 'document',
+      suggestedName: null,
     };
   }
 }

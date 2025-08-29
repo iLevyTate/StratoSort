@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+} from 'react';
 import { PHASES, RENDERER_LIMITS } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -18,17 +24,72 @@ function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
   const { addNotification } = useNotification();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [analysisResults, setAnalysisResults] = useState([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [currentAnalysisFile, setCurrentAnalysisFile] = useState('');
-  const [analysisProgress, setAnalysisProgress] = useState({
+  // Mounted guard
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
+  // Timer cleanup registry to prevent memory leaks
+  const timersRef = useRef([]);
+
+  // Safe timer wrappers that register for cleanup
+  const safeSetTimeout = (fn, delay) => {
+    if (!mounted.current) return null;
+    const id = setTimeout(() => {
+      if (mounted.current) fn();
+    }, delay);
+    timersRef.current.push({ type: 'timeout', id });
+    return id;
+  };
+
+  const safeSetInterval = (fn, delay) => {
+    if (!mounted.current) return null;
+    const id = setInterval(() => {
+      if (mounted.current) fn();
+    }, delay);
+    timersRef.current.push({ type: 'interval', id });
+    return id;
+  };
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(({ type, id }) => {
+        if (type === 'timeout') clearTimeout(id);
+        else if (type === 'interval') clearInterval(id);
+      });
+      timersRef.current = [];
+    };
+  }, []);
+
+  const [selectedFiles, setSelectedFilesRaw] = useState([]);
+  const setSelectedFiles = (v) => mounted.current && setSelectedFilesRaw(v);
+
+  const [analysisResults, setAnalysisResultsRaw] = useState([]);
+  const setAnalysisResults = (v) => mounted.current && setAnalysisResultsRaw(v);
+
+  const [isAnalyzing, setIsAnalyzingRaw] = useState(false);
+  const setIsAnalyzing = (v) => mounted.current && setIsAnalyzingRaw(v);
+
+  const [isScanning, setIsScanningRaw] = useState(false);
+  const setIsScanning = (v) => mounted.current && setIsScanningRaw(v);
+
+  const [currentAnalysisFile, setCurrentAnalysisFileRaw] = useState('');
+  const setCurrentAnalysisFile = (v) =>
+    mounted.current && setCurrentAnalysisFileRaw(v);
+
+  const [analysisProgress, setAnalysisProgressRaw] = useState({
     current: 0,
     total: 0,
   });
-  const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
-  const [analysisStats, setAnalysisStats] = useState(null);
+  const setAnalysisProgress = (v) =>
+    mounted.current && setAnalysisProgressRaw(v);
+
+  const [showAnalysisHistory, setShowAnalysisHistoryRaw] = useState(false);
+  const setShowAnalysisHistory = (v) =>
+    mounted.current && setShowAnalysisHistoryRaw(v);
+
+  const [analysisStats, setAnalysisStatsRaw] = useState(null);
+  const setAnalysisStats = (v) => mounted.current && setAnalysisStatsRaw(v);
 
   const [namingConvention, setNamingConvention] = useState('subject-date');
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
@@ -36,9 +97,50 @@ function DiscoverPhase() {
   const [separator, setSeparator] = useState('-');
 
   const [fileStates, setFileStates] = useState({});
+  // Lightweight render instrumentation for performance troubleshooting
+  const renderCountRef = useRef(0);
+  useEffect(() => {
+    renderCountRef.current += 1;
+    // Log render count occasionally to avoid spamming (development only)
+    if (
+      process.env.NODE_ENV === 'development' &&
+      renderCountRef.current % 20 === 0
+    ) {
+      console.log('[PERF] DiscoverPhase render count:', renderCountRef.current);
+    }
+  });
+
+  useEffect(() => {
+    // Log sizes of large collections when they change to spot regressions (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[PERF] selectedFiles:',
+        selectedFiles.length,
+        'analysisResults:',
+        analysisResults.length,
+        'fileStates:',
+        Object.keys(fileStates).length,
+      );
+    }
+  }, [
+    selectedFiles.length,
+    analysisResults.length,
+    Object.keys(fileStates).length,
+  ]);
   const hasResumedRef = useRef(false);
   const analysisLockRef = useRef(false); // Add analysis lock to prevent multiple simultaneous calls
   const [globalAnalysisActive, setGlobalAnalysisActive] = useState(false); // Global analysis state
+  // Refs to avoid stale closures inside intervals/callbacks
+  const isAnalyzingRef = useRef(isAnalyzing);
+  const analysisProgressRef = useRef(analysisProgress);
+
+  useEffect(() => {
+    isAnalyzingRef.current = isAnalyzing;
+  }, [isAnalyzing]);
+
+  useEffect(() => {
+    analysisProgressRef.current = analysisProgress;
+  }, [analysisProgress]);
 
   useEffect(() => {
     const persistedResults = phaseData.analysisResults || [];
@@ -59,7 +161,40 @@ function DiscoverPhase() {
     setDateFormat(persistedNaming.dateFormat || 'YYYY-MM-DD');
     setCaseConvention(persistedNaming.caseConvention || 'kebab-case');
     setSeparator(persistedNaming.separator || '-');
-    if (persistedResults.length > 0) setAnalysisResults(persistedResults);
+
+    // Reconstruct analysis results from file states if no persisted results exist
+    let finalResults = persistedResults;
+    if (
+      persistedResults.length === 0 &&
+      Object.keys(persistedStates).length > 0
+    ) {
+      // Reconstruct analysis results from file states that have analysis data
+      const reconstructedResults = persistedFiles
+        .map((file) => {
+          const state = persistedStates[file.path];
+          if (state && state.state === 'ready' && state.analysis) {
+            return {
+              ...file,
+              analysis: state.analysis,
+              status: 'analyzed',
+              analyzedAt: state.analyzedAt || new Date().toISOString(),
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (reconstructedResults.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `[DISCOVER] Reconstructed ${reconstructedResults.length} analysis results from file states`,
+          );
+        }
+        finalResults = reconstructedResults;
+      }
+    }
+
+    if (finalResults.length > 0) setAnalysisResults(finalResults);
     if (persistedIsAnalyzing) {
       // Check if analysis state is actually valid (not stuck)
       const lastActivity = persistedProgress.lastActivity || Date.now();
@@ -67,9 +202,11 @@ function DiscoverPhase() {
       const isStuck = timeSinceActivity > 2 * 60 * 1000; // 2 minutes
 
       if (isStuck) {
-        console.log(
-          '[ANALYSIS] Detected stuck analysis state on mount, resetting...',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Detected stuck analysis state on mount, resetting...',
+          );
+        }
         // Don't restore stuck analysis state
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
@@ -78,7 +215,9 @@ function DiscoverPhase() {
         // Clear any stuck localStorage state
         try {
           localStorage.removeItem('stratosort_workflow_state');
-        } catch {}
+        } catch (error) {
+          console.warn('[ANALYSIS] Failed to clear localStorage:', error);
+        }
       } else {
         // Analysis state is valid, restore it
         setIsAnalyzing(true);
@@ -90,18 +229,23 @@ function DiscoverPhase() {
 
   useEffect(() => {
     // Resume analysis if it was in progress before app closed
-    if (
+    // Use a more robust check to prevent race conditions
+    const shouldResume =
       !hasResumedRef.current &&
       phaseData.isAnalyzing &&
       Array.isArray(selectedFiles) &&
-      selectedFiles.length > 0
-    ) {
+      selectedFiles.length > 0;
+
+    if (shouldResume) {
+      // Immediately mark as resumed to prevent duplicate calls
+      hasResumedRef.current = true;
+
       const remaining = selectedFiles.filter((f) => {
         const state = fileStates[f.path]?.state;
         return state !== 'ready' && state !== 'error';
       });
+
       if (remaining.length > 0) {
-        hasResumedRef.current = true;
         addNotification(
           `Resuming analysis of ${remaining.length} files...`,
           'info',
@@ -111,7 +255,6 @@ function DiscoverPhase() {
         // Kick off analysis for remaining files only
         analyzeFiles(remaining);
       } else {
-        hasResumedRef.current = true;
         // Nothing left to do; clear analyzing flag
         actions.setPhaseData('isAnalyzing', false);
         setIsAnalyzing(false);
@@ -126,9 +269,11 @@ function DiscoverPhase() {
       const fiveMinutes = 5 * 60 * 1000;
 
       if (timeSinceActivity > fiveMinutes) {
-        console.log(
-          '[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity',
+          );
+        }
         addNotification(
           'Detected stuck analysis state - auto-resetting',
           'warning',
@@ -145,7 +290,9 @@ function DiscoverPhase() {
         // Clear any stuck localStorage state
         try {
           localStorage.removeItem('stratosort_workflow_state');
-        } catch {}
+        } catch (error) {
+          console.warn('[ANALYSIS] Failed to clear localStorage:', error);
+        }
       }
     }
 
@@ -161,9 +308,11 @@ function DiscoverPhase() {
       const twoMinutes = 2 * 60 * 1000;
 
       if (timeSinceActivity > twoMinutes) {
-        console.log(
-          '[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes',
+          );
+        }
         addNotification(
           'Analysis stalled with no progress - auto-resetting',
           'warning',
@@ -180,7 +329,9 @@ function DiscoverPhase() {
         // Clear any stuck localStorage state
         try {
           localStorage.removeItem('stratosort_workflow_state');
-        } catch {}
+        } catch (error) {
+          console.warn('[ANALYSIS] Failed to clear localStorage:', error);
+        }
       }
     }
   }, [
@@ -218,7 +369,7 @@ function DiscoverPhase() {
 
   const getFileState = (filePath) => fileStates[filePath]?.state || 'pending';
 
-  const getFileStateDisplay = (filePath, hasAnalysis) => {
+  const getFileStateDisplay = useCallback((filePath, hasAnalysis) => {
     const state = getFileState(filePath);
     if (state === 'analyzing')
       return {
@@ -249,44 +400,49 @@ function DiscoverPhase() {
         spinning: false,
       };
     return {
-      icon: '❌',
-      label: 'Failed',
-      color: 'text-red-600',
+      icon: '⚪',
+      label: 'Unknown',
+      color: 'text-gray-500',
       spinning: false,
     };
-  };
+  }, []);
 
-  const generatePreviewName = (originalName, originalFileName) => {
-    // Always use the extension from the original file, not from the suggested name
-    const originalExtension =
-      originalFileName && originalFileName.includes('.')
-        ? '.' + originalFileName.split('.').pop()
-        : '';
+  const generatePreviewName = useCallback(
+    (originalName, originalFileName) => {
+      // Always use the extension from the original file, not from the suggested name
+      const originalExtension =
+        originalFileName && originalFileName.includes('.')
+          ? '.' + originalFileName.split('.').pop()
+          : '';
 
-    const baseName = originalName.replace(/\.[^/.]+$/, '');
-    const today = new Date();
-    let previewName = '';
-    switch (namingConvention) {
-      case 'subject-date':
-        previewName = `${baseName}${separator}${formatDate(today, dateFormat)}`;
-        break;
-      case 'date-subject':
-        previewName = `${formatDate(today, dateFormat)}${separator}${baseName}`;
-        break;
-      case 'project-subject-date':
-        previewName = `Project${separator}${baseName}${separator}${formatDate(today, dateFormat)}`;
-        break;
-      case 'category-subject':
-        previewName = `Category${separator}${baseName}`;
-        break;
-      case 'keep-original':
-        previewName = baseName;
-        break;
-      default:
-        previewName = baseName;
-    }
-    return applyCaseConvention(previewName, caseConvention) + originalExtension;
-  };
+      const baseName = originalName.replace(/\.[^/.]+$/, '');
+      const today = new Date();
+      let previewName = '';
+      switch (namingConvention) {
+        case 'subject-date':
+          previewName = `${baseName}${separator}${formatDate(today, dateFormat)}`;
+          break;
+        case 'date-subject':
+          previewName = `${formatDate(today, dateFormat)}${separator}${baseName}`;
+          break;
+        case 'project-subject-date':
+          previewName = `Project${separator}${baseName}${separator}${formatDate(today, dateFormat)}`;
+          break;
+        case 'category-subject':
+          previewName = `Category${separator}${baseName}`;
+          break;
+        case 'keep-original':
+          previewName = baseName;
+          break;
+        default:
+          previewName = baseName;
+      }
+      return (
+        applyCaseConvention(previewName, caseConvention) + originalExtension
+      );
+    },
+    [namingConvention, dateFormat, caseConvention, separator],
+  );
 
   const formatDate = (date, format) => {
     const year = date.getFullYear();
@@ -350,7 +506,7 @@ function DiscoverPhase() {
           'All dropped files are already in the queue',
           'info',
           2000,
-          'duplicate-files',
+          'files-dropped-duplicate',
         );
         return;
       }
@@ -361,7 +517,7 @@ function DiscoverPhase() {
           `Skipped ${duplicateCount} duplicate files already in queue`,
           'info',
           2000,
-          'duplicate-files',
+          'files-dropped-skipped',
         );
       }
 
@@ -407,7 +563,11 @@ function DiscoverPhase() {
 
   const { isDragging, dragProps } = useDragAndDrop(handleFileDrop);
 
-  const getFileType = (extension) => {
+  const getFileType = useCallback((extension) => {
+    // Strip leading dot from extension for comparison
+    const ext = extension.startsWith('.')
+      ? extension.slice(1).toLowerCase()
+      : extension.toLowerCase();
     const imageExts = [
       'jpg',
       'jpeg',
@@ -434,13 +594,13 @@ function DiscoverPhase() {
       'xml',
     ];
     const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'];
-    if (imageExts.includes(extension)) return 'image';
-    if (videoExts.includes(extension)) return 'video';
-    if (docExts.includes(extension)) return 'document';
-    if (codeExts.includes(extension)) return 'code';
-    if (archiveExts.includes(extension)) return 'archive';
+    if (imageExts.includes(ext)) return 'image';
+    if (videoExts.includes(ext)) return 'video';
+    if (docExts.includes(ext)) return 'document';
+    if (codeExts.includes(ext)) return 'code';
+    if (archiveExts.includes(ext)) return 'archive';
     return 'file';
-  };
+  }, []);
 
   const getBatchFileStats = async (
     filePaths,
@@ -528,7 +688,7 @@ function DiscoverPhase() {
             'All selected files are already in the queue',
             'info',
             2000,
-            'duplicate-files',
+            'files-selected-duplicate',
           );
           return;
         }
@@ -539,7 +699,7 @@ function DiscoverPhase() {
             `Skipped ${duplicateCount} duplicate files already in queue`,
             'info',
             2000,
-            'duplicate-files',
+            'files-selected-skipped',
           );
         }
 
@@ -678,7 +838,7 @@ function DiscoverPhase() {
               'All files from this folder are already in the queue',
               'info',
               2000,
-              'duplicate-files',
+              'folder-files-duplicate',
             );
             return;
           }
@@ -689,7 +849,7 @@ function DiscoverPhase() {
               `Skipped ${duplicateCount} duplicate files already in queue`,
               'info',
               2000,
-              'duplicate-files',
+              'folder-files-skipped',
             );
           }
 
@@ -847,47 +1007,44 @@ function DiscoverPhase() {
   const analyzeFiles = async (files) => {
     if (!files || files.length === 0) return;
 
-    console.log('[ANALYSIS] analyzeFiles called with:', {
-      filesCount: files.length,
-      isAnalyzing,
-      analysisProgress,
-      hasLastActivity: !!analysisProgress.lastActivity,
-      timeSinceActivity: analysisProgress.lastActivity
-        ? Date.now() - analysisProgress.lastActivity
-        : 'N/A',
-      lockStatus: analysisLockRef.current,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ANALYSIS] analyzeFiles called with:', {
+        filesCount: files.length,
+        isAnalyzing,
+        analysisProgress,
+        hasLastActivity: !!analysisProgress.lastActivity,
+        timeSinceActivity: analysisProgress.lastActivity
+          ? Date.now() - analysisProgress.lastActivity
+          : 'N/A',
+        lockStatus: analysisLockRef.current,
+      });
+    }
 
-    // Prevent multiple simultaneous analysis calls (silent)
-    if (analysisLockRef.current || globalAnalysisActive) {
+    // Prevent multiple simultaneous analysis calls with atomic check
+    if (analysisLockRef.current || globalAnalysisActive || isAnalyzing) {
       console.log(
         '[ANALYSIS] Analysis already in progress, skipping duplicate call',
         {
           lockRef: analysisLockRef.current,
           globalState: globalAnalysisActive,
+          uiState: isAnalyzing,
         },
       );
       return;
     }
 
-    // Additional check: prevent analysis if UI shows it's already running (silent)
-    if (isAnalyzing) {
-      console.log(
-        '[ANALYSIS] UI shows analysis already in progress, skipping call',
-      );
-      return;
-    }
-
-    // Set the lock immediately
+    // Atomically acquire both locks to prevent race conditions
     analysisLockRef.current = true;
     setGlobalAnalysisActive(true);
-    console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    }
 
-    // Small delay to ensure lock is properly established
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Initialize cleanup variables to prevent ReferenceError
+    let heartbeatInterval = null;
 
     // Set a timeout to release the lock after 5 minutes (safety measure)
-    const lockTimeout = setTimeout(
+    const lockTimeout = safeSetTimeout(
       () => {
         if (analysisLockRef.current) {
           console.warn(
@@ -927,14 +1084,24 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', initialProgress);
     actions.setPhaseData('currentAnalysisFile', '');
 
-    console.log('[ANALYSIS] Started analysis with progress:', initialProgress);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[ANALYSIS] Started analysis with progress:',
+        initialProgress,
+      );
+    }
 
     // Set up progress heartbeat to prevent stuck states
-    const heartbeatInterval = setInterval(() => {
-      if (isAnalyzing) {
+    heartbeatInterval = safeSetInterval(() => {
+      // Use refs to avoid stale closure values
+      if (isAnalyzingRef.current) {
+        const latestProgress = analysisProgressRef.current || {
+          current: 0,
+          total: files.length,
+        };
         const currentProgress = {
-          current: analysisProgress.current,
-          total: analysisProgress.total,
+          current: latestProgress.current,
+          total: latestProgress.total,
           lastActivity: Date.now(),
         };
 
@@ -946,11 +1113,17 @@ function DiscoverPhase() {
           console.warn(
             '[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis',
           );
-          clearInterval(heartbeatInterval);
           resetAnalysisState();
         }
       }
     }, 30000); // Update every 30 seconds
+    if (heartbeatInterval && typeof heartbeatInterval.unref === 'function') {
+      try {
+        heartbeatInterval.unref();
+      } catch (e) {
+        /* ignore */
+      }
+    }
 
     const results = [];
     let maxConcurrent = 3;
@@ -962,7 +1135,12 @@ function DiscoverPhase() {
       ) {
         maxConcurrent = Number(persistedSettings.maxConcurrentAnalysis);
       }
-    } catch {}
+    } catch (error) {
+      console.warn(
+        '[ANALYSIS] Failed to load settings, using defaults:',
+        error,
+      );
+    }
 
     const concurrency = Math.max(1, Math.min(Number(maxConcurrent) || 3, 8));
 
@@ -1105,7 +1283,12 @@ function DiscoverPhase() {
             'stratosort_workflow_state',
             JSON.stringify(workflowState),
           );
-        } catch {}
+        } catch (error) {
+          console.warn(
+            '[ANALYSIS] Failed to load settings, using defaults:',
+            error,
+          );
+        }
       };
 
       // Process files with controlled concurrency
@@ -1191,7 +1374,7 @@ function DiscoverPhase() {
           4000,
           'analysis-complete',
         );
-        setTimeout(() => {
+        safeSetTimeout(() => {
           addNotification(
             '📂 Proceeding to organize phase...',
             'info',
@@ -1207,7 +1390,7 @@ function DiscoverPhase() {
           4000,
           'analysis-complete',
         );
-        setTimeout(() => {
+        safeSetTimeout(() => {
           addNotification(
             '📂 Proceeding to organize phase...',
             'info',
@@ -1233,7 +1416,8 @@ function DiscoverPhase() {
       );
     } finally {
       // Always reset analysis state, regardless of success/failure
-      clearInterval(heartbeatInterval); // Clean up heartbeat
+      // Note: Timers are automatically cleaned up by useEffect cleanup function
+
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');
       setAnalysisProgress({ current: 0, total: 0 });
@@ -1244,12 +1428,16 @@ function DiscoverPhase() {
       // Release the analysis lock
       analysisLockRef.current = false;
       setGlobalAnalysisActive(false);
-      clearTimeout(lockTimeout); // Clear the timeout
 
       // Clear any stuck localStorage state
       try {
         localStorage.removeItem('stratosort_workflow_state');
-      } catch {}
+      } catch (error) {
+        console.warn(
+          '[ANALYSIS] Failed to load settings, using defaults:',
+          error,
+        );
+      }
     }
   };
 
@@ -1268,7 +1456,12 @@ function DiscoverPhase() {
     // Clear any stuck localStorage state
     try {
       localStorage.removeItem('stratosort_workflow_state');
-    } catch {}
+    } catch (error) {
+      console.warn(
+        '[ANALYSIS] Failed to load settings, using defaults:',
+        error,
+      );
+    }
 
     addNotification(
       'Analysis state reset successfully',
@@ -1374,11 +1567,16 @@ function DiscoverPhase() {
                 'discover-dnd',
                 'discover-results',
               ];
-              keys.forEach((k) =>
-                window.localStorage.setItem(`collapsible:${k}`, 'true'),
-              );
+              keys.forEach((k) => {
+                window.localStorage.setItem(`collapsible:${k}`, 'true');
+              });
               window.dispatchEvent(new Event('storage'));
-            } catch {}
+            } catch (error) {
+              console.warn(
+                '[ANALYSIS] Failed to load settings, using defaults:',
+                error,
+              );
+            }
           }}
         >
           Expand all
@@ -1394,11 +1592,16 @@ function DiscoverPhase() {
                 'discover-dnd',
                 'discover-results',
               ];
-              keys.forEach((k) =>
-                window.localStorage.setItem(`collapsible:${k}`, 'false'),
-              );
+              keys.forEach((k) => {
+                window.localStorage.setItem(`collapsible:${k}`, 'false');
+              });
               window.dispatchEvent(new Event('storage'));
-            } catch {}
+            } catch (error) {
+              console.warn(
+                '[ANALYSIS] Failed to load settings, using defaults:',
+                error,
+              );
+            }
           }}
         >
           Collapse all

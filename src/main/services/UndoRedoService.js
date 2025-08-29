@@ -1,16 +1,33 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { atomicFileOps } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class UndoRedoService {
   constructor() {
-    this.userDataPath = app.getPath('userData');
-    this.actionsPath = path.join(this.userDataPath, 'undo-actions.json');
+    this.userDataPath = null;
+    this.actionsPath = null;
     this.maxActions = 100; // Maximum number of actions to keep
 
     this.actions = [];
     this.currentIndex = -1; // Points to the last executed action
     this.initialized = false;
+    this.exitHandlersSetup = false; // Track if exit handlers have been registered
+
+    // Debouncing for file writes
+    this.saveTimeout = null;
+    this.dirty = false;
+    this.DEBOUNCE_DELAY = 2000; // 2 seconds delay for saves
+  }
+
+  // Lazy initialize paths to avoid calling app.getPath before app is ready
+  _initPaths() {
+    if (!this.userDataPath) {
+      this.userDataPath = app.getPath('userData');
+      this.actionsPath = path.join(this.userDataPath, 'undo-actions.json');
+    }
   }
 
   async ensureParentDirectory(filePath) {
@@ -18,42 +35,80 @@ class UndoRedoService {
     await fs.mkdir(parentDirectory, { recursive: true });
   }
 
-  async safeMove(sourcePath, destinationPath) {
-    await this.ensureParentDirectory(destinationPath);
-    try {
-      await fs.rename(sourcePath, destinationPath);
-      return;
-    } catch (error) {
-      if (error && error.code === 'EXDEV') {
-        // Cross-device move: copy then verify then remove
-        await fs.copyFile(sourcePath, destinationPath);
-        const [sourceStats, destStats] = await Promise.all([
-          fs.stat(sourcePath),
-          fs.stat(destinationPath),
-        ]);
-        if (sourceStats.size !== destStats.size) {
-          throw new Error('File copy verification failed - size mismatch');
-        }
-        await fs.unlink(sourcePath);
-        return;
-      }
-      throw error;
-    }
-  }
-
   async initialize() {
     if (this.initialized) return;
+
+    // Initialize paths first
+    this._initPaths();
+
+    // Set up process exit handlers to ensure data is saved before exit
+    this._setupExitHandlers();
 
     try {
       await this.loadActions();
       this.initialized = true;
       console.log('UndoRedoService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize UndoRedoService:', error);
+      logger.error('Failed to initialize UndoRedoService:', error);
       this.actions = [];
       this.currentIndex = -1;
       this.initialized = true;
     }
+  }
+
+  /**
+   * Set up process exit handlers to ensure data is saved before shutdown
+   */
+  _setupExitHandlers() {
+    if (this.exitHandlersSetup) return;
+    this.exitHandlersSetup = true;
+
+    // Handle various exit scenarios
+    const handleExit = async (signal) => {
+      console.log(
+        `[UNDO-REDO] Received ${signal}, forcing save before exit...`,
+      );
+      try {
+        await this.forceSave();
+        console.log('[UNDO-REDO] Save completed successfully before exit');
+      } catch (error) {
+        logger.error('[UNDO-REDO] Failed to save before exit:', error);
+      }
+    };
+
+    // Handle different exit signals
+    process.on('beforeExit', () => handleExit('beforeExit'));
+    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    process.on('SIGINT', () => handleExit('SIGINT'));
+
+    // Handle uncaught exceptions (last resort)
+    process.on('uncaughtException', async (error) => {
+      logger.error(
+        '[UNDO-REDO] Uncaught exception, attempting emergency save:',
+        error,
+      );
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error('[UNDO-REDO] Emergency save failed:', saveError);
+      }
+      // Re-throw to maintain original error handling
+      throw error;
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason, promise) => {
+      logger.error('[UNDO-REDO] Unhandled rejection, attempting save:', reason);
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error(
+          '[UNDO-REDO] Save failed during unhandled rejection:',
+          saveError,
+        );
+      }
+      // Don't throw, just log - this is for cleanup only
+    });
   }
 
   async loadActions() {
@@ -76,7 +131,51 @@ class UndoRedoService {
       currentIndex: this.currentIndex,
       lastSaved: new Date().toISOString(),
     };
-    await fs.writeFile(this.actionsPath, JSON.stringify(data, null, 2));
+    const result = await backupAndReplace(
+      this.actionsPath,
+      JSON.stringify(data, null, 2),
+    );
+    if (!result.success) {
+      logger.error('[UNDO-REDO] Failed to save actions:', result.error);
+    }
+  }
+
+  /**
+   * Debounced save - delays actual file write to batch multiple changes
+   */
+  debouncedSave() {
+    this.dirty = true;
+
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    this.saveTimeout = setTimeout(async () => {
+      if (this.dirty && this.actions) {
+        try {
+          await this.saveActions();
+          this.dirty = false;
+        } catch (error) {
+          logger.error('[UNDO-REDO] Failed to save actions:', error);
+          // Keep dirty flag so we retry later
+        }
+      }
+    }, this.DEBOUNCE_DELAY);
+  }
+
+  /**
+   * Force immediate save (for testing and critical operations)
+   */
+  async forceSave() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+
+    if (this.dirty && this.actions) {
+      await this.saveActions();
+      this.dirty = false;
+    }
   }
 
   async recordAction(actionType, actionData) {
@@ -105,7 +204,7 @@ class UndoRedoService {
       this.currentIndex--;
     }
 
-    await this.saveActions();
+    this.debouncedSave();
     return action.id;
   }
 
@@ -121,14 +220,14 @@ class UndoRedoService {
     try {
       await this.executeReverseAction(action);
       this.currentIndex--;
-      await this.saveActions();
+      this.debouncedSave();
       return {
         success: true,
         action: action,
         message: `Undid: ${action.description}`,
       };
     } catch (error) {
-      console.error('Failed to undo action:', error);
+      logger.error('Failed to undo action:', error);
       throw new Error(`Failed to undo action: ${error.message}`);
     }
   }
@@ -145,14 +244,14 @@ class UndoRedoService {
     try {
       await this.executeForwardAction(action);
       this.currentIndex++;
-      await this.saveActions();
+      this.debouncedSave();
       return {
         success: true,
         action: action,
         message: `Redid: ${action.description}`,
       };
     } catch (error) {
-      console.error('Failed to redo action:', error);
+      logger.error('Failed to redo action:', error);
       throw new Error(`Failed to redo action: ${error.message}`);
     }
   }
@@ -169,12 +268,32 @@ class UndoRedoService {
     switch (action.type) {
       case 'FILE_MOVE':
         // Move file back to original location
-        await this.safeMove(action.data.newPath, action.data.originalPath);
+        await atomicFileOps.atomicMove(
+          action.data.newPath,
+          action.data.originalPath,
+        );
         break;
 
       case 'FILE_RENAME':
-        // Rename file back to original name
-        await this.safeMove(action.data.newPath, action.data.originalPath);
+        // Skip if source and destination are identical
+        if (action.data.newPath === action.data.originalPath) {
+          console.log(
+            '[FILE_OP] Reverse rename skipped – paths are identical:',
+            action.data.originalPath,
+          );
+          break;
+        }
+        // If a file exists at originalPath, handle or report conflict
+        if (await this.fileExists(action.data.originalPath)) {
+          throw new Error(
+            `Cannot reverse rename: target file already exists at ${action.data.originalPath}`,
+          );
+        }
+        // Perform the reverse rename (atomic move)
+        await atomicFileOps.atomicMove(
+          action.data.newPath,
+          action.data.originalPath,
+        );
         break;
 
       case 'FILE_DELETE':
@@ -183,7 +302,10 @@ class UndoRedoService {
           action.data.backupPath &&
           (await this.fileExists(action.data.backupPath))
         ) {
-          await this.safeMove(action.data.backupPath, action.data.originalPath);
+          await atomicFileOps.atomicMove(
+            action.data.backupPath,
+            action.data.originalPath,
+          );
         } else {
           throw new Error('Cannot restore deleted file - backup not found');
         }
@@ -203,12 +325,63 @@ class UndoRedoService {
         break;
 
       case 'BATCH_ORGANIZE':
-      case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
-        // Reverse each file operation in the batch
-        for (const operation of action.data.operations.reverse()) {
-          await this.reverseFileOperation(operation);
+      case 'BATCH_OPERATION': {
+        // Backwards/forwards compatibility with shared ACTION_TYPES
+        // Reverse each file operation in the batch (clone array to preserve original order)
+        const reversedOperations = [...action.data.operations].reverse();
+
+        // Track successful operations for potential rollback
+        const successfulOperations = [];
+        let batchError = null;
+
+        // Execute reverse operations with rollback capability
+        for (let i = 0; i < reversedOperations.length; i++) {
+          const operation = reversedOperations[i];
+          try {
+            await this.reverseFileOperation(operation);
+            successfulOperations.push(operation);
+          } catch (error) {
+            batchError = error;
+            logger.error(
+              `[UNDO] Failed to reverse operation ${i + 1}/${reversedOperations.length}:`,
+              error.message,
+            );
+
+            // Attempt to rollback successful operations to restore state
+            if (successfulOperations.length > 0) {
+              console.warn(
+                `[UNDO] Attempting to rollback ${successfulOperations.length} successful operations`,
+              );
+              let rollbackErrors = 0;
+
+              for (const successfulOp of successfulOperations.reverse()) {
+                try {
+                  // Re-execute the operation to restore original state
+                  await this.executeFileOperation(successfulOp);
+                } catch (rollbackError) {
+                  rollbackErrors++;
+                  logger.error(
+                    `[UNDO] Rollback failed for operation:`,
+                    rollbackError.message,
+                  );
+                }
+              }
+
+              if (rollbackErrors > 0) {
+                logger.error(
+                  `[UNDO] ${rollbackErrors} operations could not be rolled back - system may be in inconsistent state`,
+                );
+              }
+            }
+
+            // Mark the batch action as partially undone and stop further processing
+            throw new Error(
+              `Batch undo partially failed: ${error.message}. ${successfulOperations.length} operations were undone, ${reversedOperations.length - successfulOperations.length} failed.`,
+            );
+          }
         }
         break;
+      }
 
       default:
         throw new Error(`Unknown action type: ${action.type}`);
@@ -219,18 +392,41 @@ class UndoRedoService {
     switch (action.type) {
       case 'FILE_MOVE':
         // Move file to new location
-        await this.safeMove(action.data.originalPath, action.data.newPath);
+        await atomicFileOps.atomicMove(
+          action.data.originalPath,
+          action.data.newPath,
+        );
         break;
 
       case 'FILE_RENAME':
-        // Rename file to new name
-        await this.safeMove(action.data.originalPath, action.data.newPath);
+        // Skip if source and destination are identical
+        if (action.data.originalPath === action.data.newPath) {
+          console.log(
+            '[FILE_OP] Rename skipped – original and new paths are identical:',
+            action.data.originalPath,
+          );
+          break;
+        }
+        // If a file exists at newPath, handle or report conflict
+        if (await this.fileExists(action.data.newPath)) {
+          throw new Error(
+            `Cannot rename: target file already exists at ${action.data.newPath}`,
+          );
+        }
+        // Perform the rename (atomic move)
+        await atomicFileOps.atomicMove(
+          action.data.originalPath,
+          action.data.newPath,
+        );
         break;
 
       case 'FILE_DELETE':
         // Delete file again (move to backup if configured)
         if (action.data.createBackup) {
-          await this.safeMove(action.data.originalPath, action.data.backupPath);
+          await atomicFileOps.atomicMove(
+            action.data.originalPath,
+            action.data.backupPath,
+          );
         } else {
           await fs.unlink(action.data.originalPath);
         }
@@ -243,9 +439,14 @@ class UndoRedoService {
 
       case 'BATCH_ORGANIZE':
       case 'BATCH_OPERATION': // Backwards/forwards compatibility with shared ACTION_TYPES
-        // Re-execute each file operation in the batch
-        for (const operation of action.data.operations) {
-          await this.executeFileOperation(operation);
+        // Re-execute each file operation in the batch with error handling
+        try {
+          for (const operation of action.data.operations) {
+            await this.executeFileOperation(operation);
+          }
+        } catch (error) {
+          logger.error('[REDO] Batch redo failed:', error);
+          throw error;
         }
         break;
 
@@ -257,17 +458,41 @@ class UndoRedoService {
   async reverseFileOperation(operation) {
     switch (operation.type) {
       case 'move':
-        await this.safeMove(operation.newPath, operation.originalPath);
+        await atomicFileOps.atomicMove(
+          operation.newPath,
+          operation.originalPath,
+        );
         break;
       case 'rename':
-        await this.safeMove(operation.newPath, operation.originalPath);
+        // Skip if source and destination are identical
+        if (operation.newPath === operation.originalPath) {
+          console.log(
+            '[FILE_OP] Reverse rename skipped – paths are identical:',
+            operation.originalPath,
+          );
+          break;
+        }
+        // If a file exists at originalPath, handle or report conflict
+        if (await this.fileExists(operation.originalPath)) {
+          throw new Error(
+            `Cannot reverse rename: target file already exists at ${operation.originalPath}`,
+          );
+        }
+        // Perform the reverse rename (atomic move)
+        await atomicFileOps.atomicMove(
+          operation.newPath,
+          operation.originalPath,
+        );
         break;
       case 'delete':
         if (
           operation.backupPath &&
           (await this.fileExists(operation.backupPath))
         ) {
-          await this.safeMove(operation.backupPath, operation.originalPath);
+          await atomicFileOps.atomicMove(
+            operation.backupPath,
+            operation.originalPath,
+          );
         }
         break;
     }
@@ -276,14 +501,38 @@ class UndoRedoService {
   async executeFileOperation(operation) {
     switch (operation.type) {
       case 'move':
-        await this.safeMove(operation.originalPath, operation.newPath);
+        await atomicFileOps.atomicMove(
+          operation.originalPath,
+          operation.newPath,
+        );
         break;
       case 'rename':
-        await this.safeMove(operation.originalPath, operation.newPath);
+        // Skip if source and destination are identical
+        if (operation.originalPath === operation.newPath) {
+          console.log(
+            '[FILE_OP] Rename skipped – original and new paths are identical:',
+            operation.originalPath,
+          );
+          break;
+        }
+        // If a file exists at newPath, handle or report conflict
+        if (await this.fileExists(operation.newPath)) {
+          throw new Error(
+            `Cannot rename: target file already exists at ${operation.newPath}`,
+          );
+        }
+        // Perform the rename (atomic move)
+        await atomicFileOps.atomicMove(
+          operation.originalPath,
+          operation.newPath,
+        );
         break;
       case 'delete':
         if (operation.createBackup) {
-          await this.safeMove(operation.originalPath, operation.backupPath);
+          await atomicFileOps.atomicMove(
+            operation.originalPath,
+            operation.backupPath,
+          );
         } else {
           await fs.unlink(operation.originalPath);
         }
@@ -350,7 +599,7 @@ class UndoRedoService {
   async clearHistory() {
     this.actions = [];
     this.currentIndex = -1;
-    await this.saveActions();
+    await this.forceSave();
   }
 }
 

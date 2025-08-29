@@ -1,0 +1,13 @@
+{
+  "theme": "system",
+  "notifications": true,
+  "defaultSmartFolderLocation": "Documents",
+  "maxConcurrentAnalysis": 3,
+  "autoOrganize": false,
+  "backgroundMode": false,
+  "skipAIModelVerification": false,
+  "ollamaHost": "http://127.0.0.1:11434",
+  "textModel": "llama3.2:latest",
+  "visionModel": "llava:latest",
+  "embeddingModel": "mxbai-embed-large"
+}

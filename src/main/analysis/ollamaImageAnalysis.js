@@ -1,11 +1,13 @@
 const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
+const { logger } = require('../../shared/logger');
 const {
   getOllamaVisionModel,
   loadOllamaConfig,
   getOllamaClient,
 } = require('../ollamaUtils');
+const { buildOllamaOptions } = require('../services/PerformanceService');
 const {
   AI_DEFAULTS,
   SUPPORTED_IMAGE_EXTENSIONS,
@@ -16,8 +18,41 @@ const {
   getIntelligentKeywords: getIntelligentImageKeywords,
   safeSuggestedName,
 } = require('./fallbackUtils');
-const EmbeddingIndexService = require('../services/EmbeddingIndexService');
-const FolderMatchingService = require('../services/FolderMatchingService');
+// Import shared analysis utilities
+const {
+  getSharedServices,
+  performSemanticAnalysis,
+  handleAnalysisError,
+  validateAnalysisResult,
+} = require('./analysisUtils');
+
+// Cache of processed image buffers keyed by hash to avoid reprocessing identical images
+const processedImageCache = new Map();
+const MAX_IMAGE_CACHE = 100; // keep a bounded cache
+
+function updateImageCache(key, buffer) {
+  try {
+    processedImageCache.set(key, { buffer, ts: Date.now() });
+    if (processedImageCache.size > MAX_IMAGE_CACHE) {
+      // remove oldest entry
+      const entries = Array.from(processedImageCache.entries()).sort(
+        (a, b) => a[1].ts - b[1].ts,
+      );
+      processedImageCache.delete(entries[0][0]);
+    }
+  } catch (e) {
+    // ignore cache failures
+  }
+}
+
+function getFromImageCache(key) {
+  const v = processedImageCache.get(key);
+  if (!v) return null;
+  return v.buffer;
+}
+
+// Note: EmbeddingIndexService and FolderMatchingService are now accessed via getSharedServices()
+// to avoid duplicate service instantiation and improve performance
 
 // App configuration for image analysis - Optimized for speed
 const AppConfig = {
@@ -41,7 +76,8 @@ async function analyzeImageWithOllama(
   smartFolders = [],
 ) {
   try {
-    const { logger } = require('../../shared/logger');
+    // Get shared services for better performance
+    const { embeddingIndex, folderMatcher } = await getSharedServices();
     logger.info(`Analyzing image content with Ollama`, {
       model: AppConfig.ai.imageAnalysis.defaultModel,
     });
@@ -94,6 +130,10 @@ Analyze this image:`;
       cfg.selectedVisionModel ||
       AppConfig.ai.imageAnalysis.defaultModel;
     const client = await getOllamaClient();
+
+    // Get GPU-optimized performance options for vision tasks
+    const perfOptions = await buildOllamaOptions('vision');
+
     const response = await client.generate({
       model: modelToUse,
       prompt,
@@ -101,6 +141,7 @@ Analyze this image:`;
       options: {
         temperature: AppConfig.ai.imageAnalysis.temperature,
         num_predict: AppConfig.ai.imageAnalysis.maxTokens,
+        ...perfOptions, // Include GPU optimizations
       },
       format: 'json',
     });
@@ -162,10 +203,9 @@ Analyze this image:`;
       confidence: 60,
     };
   } catch (error) {
-    const { logger } = require('../../shared/logger');
-    logger.error('Error calling Ollama API for image', {
-      error: error.message,
-    });
+    logger.error(
+      `Error calling Ollama API for image ${originalFileName}: ${error.message}`,
+    );
 
     // Specific handling for zero-length image error
     if (error.message.includes('zero length image')) {
@@ -194,7 +234,6 @@ Analyze this image:`;
 }
 
 async function analyzeImageFile(filePath, smartFolders = []) {
-  const { logger } = require('../../shared/logger');
   logger.info(`Analyzing image file`, { path: filePath });
   const fileExtension = path.extname(filePath).toLowerCase();
   const fileName = path.basename(filePath);
@@ -231,6 +270,17 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     // Read and encode image as base64
     let imageBuffer = await fs.readFile(filePath);
 
+    // Check processed-image cache (use SHA256 of raw file + resize params)
+    const rawHash = require('crypto')
+      .createHash('sha256')
+      .update(imageBuffer)
+      .digest('hex');
+    const cacheKey = `${rawHash}:${process.env.STRATOSORT_MAX_IMAGE_DIM || 2048}`;
+    const cached = getFromImageCache(cacheKey);
+    if (cached) {
+      imageBuffer = cached;
+    }
+
     // Preprocess image for vision model compatibility
     // - Convert unsupported formats (svg, tiff, bmp, gif, webp) to PNG
     // - Downscale very large images to avoid model failures
@@ -250,7 +300,9 @@ async function analyzeImageFile(filePath, smartFolders = []) {
         meta = await sharp(imageBuffer).metadata();
       } catch {}
 
-      const maxDimension = 2048;
+      const maxDimension = process.env.STRATOSORT_MAX_IMAGE_DIM
+        ? parseInt(process.env.STRATOSORT_MAX_IMAGE_DIM, 10)
+        : 2048;
       const shouldResize =
         meta &&
         (Number(meta.width) > maxDimension ||
@@ -268,7 +320,13 @@ async function analyzeImageFile(filePath, smartFolders = []) {
           }
           transformer = transformer.resize(resizeOptions);
         }
+        // Use aggressive compression for analysis to reduce payload size
         imageBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
+        try {
+          updateImageCache(cacheKey, imageBuffer);
+        } catch (e) {
+          // ignore cache set failures
+        }
       }
     } catch (preErr) {
       logger.error(`Failed to pre-process image for analysis`, {
@@ -305,42 +363,33 @@ async function analyzeImageFile(filePath, smartFolders = []) {
     logger.debug(`Base64 length`, { chars: imageBase64.length });
 
     // Analyze with Ollama
-    const analysis = await analyzeImageWithOllama(
+    let analysis = await analyzeImageWithOllama(
       imageBase64,
       fileName,
       smartFolders,
     );
 
-    // Semantic folder refinement using embeddings based on image JSON fields
-    try {
-      const embeddingIndex = new EmbeddingIndexService();
-      const folderMatcher = new FolderMatchingService(embeddingIndex);
-      if (smartFolders && smartFolders.length > 0) {
-        await Promise.all(
-          smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
-        );
-      }
-      const fileId = `image:${filePath}`;
-      const summary = [
-        analysis.project,
-        analysis.purpose,
-        (analysis.keywords || []).join(' '),
-        analysis.content_type || '',
-      ]
-        .filter(Boolean)
-        .join('\n');
-      await folderMatcher.upsertFileEmbedding(fileId, summary, {
-        path: filePath,
-      });
-      const candidates = await folderMatcher.matchFileToFolders(fileId, 5);
-      if (Array.isArray(candidates) && candidates.length > 0) {
-        const top = candidates[0];
-        if (top.score >= 0.55) {
-          analysis.category = top.name;
-        }
-        analysis.folderMatchCandidates = candidates;
-      }
-    } catch {}
+    // Semantic folder refinement using shared utilities
+    const fileId = `image:${filePath}`;
+    const summary = [
+      analysis.project,
+      analysis.purpose,
+      (analysis.keywords || []).join(' '),
+      analysis.content_type || '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const { embeddingIndex, folderMatcher } = await getSharedServices();
+    analysis = await performSemanticAnalysis(
+      analysis,
+      fileId,
+      summary,
+      embeddingIndex,
+      folderMatcher,
+      smartFolders,
+      filePath,
+    );
 
     if (analysis && !analysis.error) {
       return normalizeAnalysisResult(
@@ -377,14 +426,14 @@ async function analyzeImageFile(filePath, smartFolders = []) {
       error: analysis?.error || 'Ollama image analysis failed.',
     };
   } catch (error) {
-    console.error(`Error processing image ${filePath}:`, error.message);
-    return {
-      error: `Failed to process image: ${error.message}`,
-      category: 'error',
-      project: fileName,
-      keywords: [],
-      confidence: 50,
-    };
+    return handleAnalysisError(error, {
+      type: 'Image Analysis',
+      filePath,
+      fileName,
+      extractionMethod: 'error_fallback',
+      fallbackCategory: 'image',
+      confidence: 40,
+    });
   }
 }
 
@@ -402,6 +451,10 @@ async function extractTextFromImage(filePath) {
       cfg2.selectedVisionModel ||
       AppConfig.ai.imageAnalysis.defaultModel;
     const client2 = await getOllamaClient();
+
+    // Get GPU-optimized performance options for vision tasks
+    const perfOptions2 = await buildOllamaOptions('vision');
+
     const response = await client2.generate({
       model: modelToUse2,
       prompt,
@@ -409,6 +462,7 @@ async function extractTextFromImage(filePath) {
       options: {
         temperature: 0.1, // Lower temperature for text extraction
         num_predict: 2000,
+        ...perfOptions2, // Include GPU optimizations
       },
     });
 
@@ -418,7 +472,9 @@ async function extractTextFromImage(filePath) {
 
     return null;
   } catch (error) {
-    console.error('Error extracting text from image:', error.message);
+    logger.error(
+      `Error extracting text from image ${filePath}: ${error.message}`,
+    );
     return null;
   }
 }

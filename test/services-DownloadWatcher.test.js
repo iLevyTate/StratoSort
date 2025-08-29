@@ -7,6 +7,28 @@ jest.mock('../src/shared/logger', () => ({
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+// Mock electron app
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn(),
+  },
+}));
+
+// Mock constants to make FILE_STABILITY_CHECK immediate
+jest.mock('../src/shared/constants', () => ({
+  TIMEOUTS: {
+    FILE_STABILITY_CHECK: 0, // Make stability check immediate for testing
+  },
+}));
+
+// Mock atomic file operations
+jest.mock('../src/shared/atomicFileOperations', () => ({
+  atomicFileOps: {
+    atomicMove: jest.fn(),
   },
 }));
 
@@ -14,6 +36,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const chokidar = require('chokidar');
+const { app } = require('electron');
 const DownloadWatcher = require('../src/main/services/DownloadWatcher');
 
 // Helper function to normalize paths for cross-platform testing
@@ -41,9 +64,37 @@ describe('DownloadWatcher', () => {
     };
     chokidar.watch.mockReturnValue(mockWatcher);
 
+    // Mock electron app.getPath
+    app.getPath.mockReturnValue(path.join(os.homedir(), 'Downloads'));
+
     // Mock fs operations
-    jest.spyOn(fs, 'mkdir').mockResolvedValue();
-    jest.spyOn(fs, 'rename').mockResolvedValue();
+    jest.spyOn(fs, 'access').mockImplementation(() => Promise.resolve());
+    jest
+      .spyOn(fs, 'stat')
+      .mockImplementation(() => Promise.resolve({ size: 1000 })); // Mock file stats for stability check
+    jest.spyOn(fs, 'mkdir'); // Spy on fs.mkdir to track calls
+
+    // Mock fs.open for file stability check
+    const mockFileHandle = {
+      stat: jest.fn().mockResolvedValue({ size: 1000 }),
+      close: jest.fn().mockResolvedValue(),
+    };
+    jest
+      .spyOn(fs, 'open')
+      .mockImplementation(() => Promise.resolve(mockFileHandle));
+
+    // Mock atomic file operations to track calls but still trigger fs.mkdir
+    const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+    jest
+      .spyOn(atomicFileOps, 'atomicMove')
+      .mockImplementation(async (source, dest) => {
+        // Simulate the real behavior by calling fs.mkdir
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        return dest; // Return the destination path as the real method does
+      });
+
+    // Mock setTimeout to be immediate for testing
+    jest.spyOn(global, 'setTimeout').mockImplementation((cb) => cb());
 
     // Create watcher instance
     watcher = new DownloadWatcher({
@@ -70,21 +121,40 @@ describe('DownloadWatcher', () => {
   });
 
   describe('start', () => {
-    test('starts watching downloads directory', () => {
+    test('starts watching downloads directory', async () => {
       const downloadsPath = path.join(os.homedir(), 'Downloads');
 
-      watcher.start();
+      await watcher.start();
 
       expect(chokidar.watch).toHaveBeenCalledWith(downloadsPath, {
         ignoreInitial: true,
+        // Enhanced configuration for better Windows compatibility
+        ignored: [
+          /(^|[/\\])\../, // dotfiles
+          /.*\.crdownload$/, // Chrome downloads
+          /.*\.tmp$/, // temp files
+          /.*\.download$/, // download files
+          /.*\.part$/, // partial files
+          /.*\.sw[a-z]$/, // vim swap files
+          /Thumbs\.db$/, // Windows thumbnails
+          /desktop\.ini$/, // Windows desktop.ini
+        ],
+        awaitWriteFinish: {
+          stabilityThreshold: 1000,
+          pollInterval: 100,
+        },
+        depth: 3,
+        followSymlinks: false,
+        usePolling: process.platform === 'win32',
+        interval: process.platform === 'win32' ? 1000 : undefined,
       });
       expect(mockWatcher.on).toHaveBeenCalledWith('add', expect.any(Function));
       expect(watcher.watcher).toBe(mockWatcher);
     });
 
-    test('does not start if already watching', () => {
+    test('does not start if already watching', async () => {
       watcher.watcher = mockWatcher;
-      watcher.start();
+      await watcher.start();
 
       expect(chokidar.watch).not.toHaveBeenCalled();
     });
@@ -146,7 +216,8 @@ describe('DownloadWatcher', () => {
       expect(fs.mkdir).toHaveBeenCalledWith(normalizePath('/dest/images'), {
         recursive: true,
       });
-      expect(fs.rename).toHaveBeenCalledWith(
+      const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+      expect(atomicFileOps.atomicMove).toHaveBeenCalledWith(
         imageFile,
         normalizePath('/dest/images/analyzed_image.png'),
       );
@@ -172,7 +243,8 @@ describe('DownloadWatcher', () => {
       expect(fs.mkdir).toHaveBeenCalledWith(normalizePath('/dest/docs'), {
         recursive: true,
       });
-      expect(fs.rename).toHaveBeenCalledWith(
+      const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+      expect(atomicFileOps.atomicMove).toHaveBeenCalledWith(
         docFile,
         normalizePath('/dest/docs/analyzed_doc.pdf'),
       );
@@ -187,7 +259,8 @@ describe('DownloadWatcher', () => {
       await watcher.handleFile(file);
 
       expect(fs.mkdir).not.toHaveBeenCalled();
-      expect(fs.rename).not.toHaveBeenCalled();
+      const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+      expect(atomicFileOps.atomicMove).not.toHaveBeenCalled();
     });
 
     test('uses original filename when no suggestedName provided', async () => {
@@ -203,7 +276,8 @@ describe('DownloadWatcher', () => {
 
       await watcher.handleFile(file);
 
-      expect(fs.rename).toHaveBeenCalledWith(
+      const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+      expect(atomicFileOps.atomicMove).toHaveBeenCalledWith(
         file,
         normalizePath('/dest/docs/document.pdf'),
       );
@@ -220,14 +294,22 @@ describe('DownloadWatcher', () => {
         { id: 'docs', name: 'Documents', path: '/dest/docs' },
       ]);
       mockAnalyzeDocumentFile.mockResolvedValue(mockResult);
-      fs.rename.mockRejectedValue(new Error('Move failed'));
+
+      // Mock atomic move to call fs.mkdir but then reject
+      const { atomicFileOps } = require('../src/shared/atomicFileOperations');
+      atomicFileOps.atomicMove.mockImplementation(async (source, dest) => {
+        // Still call fs.mkdir as the real method would
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        // Then reject to simulate the move failure
+        throw new Error('Move failed');
+      });
 
       await watcher.handleFile(file);
 
       expect(fs.mkdir).toHaveBeenCalledWith(normalizePath('/dest/docs'), {
         recursive: true,
       });
-      expect(fs.rename).toHaveBeenCalledWith(
+      expect(atomicFileOps.atomicMove).toHaveBeenCalledWith(
         file,
         normalizePath('/dest/docs/analyzed_doc.pdf'),
       );
@@ -325,7 +407,7 @@ describe('DownloadWatcher', () => {
   });
 
   describe('file type detection', () => {
-    test('recognizes image extensions', () => {
+    test('recognizes image extensions', async () => {
       const imageExtensions = [
         '.png',
         '.jpg',
@@ -338,7 +420,7 @@ describe('DownloadWatcher', () => {
         '.heic',
       ];
 
-      imageExtensions.forEach((ext) => {
+      for (const ext of imageExtensions) {
         const file = `/path/to/file${ext}`;
         const folders = [{ id: 'images', name: 'Images', path: '/dest' }];
         const result = { category: 'Images' };
@@ -346,17 +428,19 @@ describe('DownloadWatcher', () => {
         mockGetCustomFolders.mockReturnValue(folders);
         mockAnalyzeImageFile.mockResolvedValue(result);
 
-        watcher.handleFile(file);
+        await watcher.handleFile(file);
 
-        expect(mockAnalyzeImageFile).toHaveBeenCalled();
+        expect(mockAnalyzeImageFile).toHaveBeenCalledWith(file, [
+          { name: 'Images', description: '', id: 'images' },
+        ]);
         expect(mockAnalyzeDocumentFile).not.toHaveBeenCalled();
-      });
+      }
     });
 
-    test('treats non-image files as documents', () => {
+    test('treats non-image files as documents', async () => {
       const documentExtensions = ['.pdf', '.doc', '.txt', '.xlsx'];
 
-      documentExtensions.forEach((ext) => {
+      for (const ext of documentExtensions) {
         const file = `/path/to/file${ext}`;
         const folders = [{ id: 'docs', name: 'Documents', path: '/dest' }];
         const result = { category: 'Documents' };
@@ -364,11 +448,13 @@ describe('DownloadWatcher', () => {
         mockGetCustomFolders.mockReturnValue(folders);
         mockAnalyzeDocumentFile.mockResolvedValue(result);
 
-        watcher.handleFile(file);
+        await watcher.handleFile(file);
 
-        expect(mockAnalyzeDocumentFile).toHaveBeenCalled();
+        expect(mockAnalyzeDocumentFile).toHaveBeenCalledWith(file, [
+          { name: 'Documents', description: '', id: 'docs' },
+        ]);
         expect(mockAnalyzeImageFile).not.toHaveBeenCalled();
-      });
+      }
     });
   });
 });

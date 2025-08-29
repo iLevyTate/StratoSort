@@ -8,6 +8,7 @@ jest.mock('../src/shared/logger', () => ({
   logger: {
     info: jest.fn(),
     warn: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 

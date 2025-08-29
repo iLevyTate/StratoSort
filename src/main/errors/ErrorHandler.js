@@ -14,6 +14,7 @@ class ErrorHandler {
     this.currentLogFile = null;
     this.errorQueue = [];
     this.isInitialized = false;
+    this.handlingError = false;
   }
 
   async initialize() {
@@ -34,6 +35,7 @@ class ErrorHandler {
       this.isInitialized = true;
       await this.log('info', 'ErrorHandler initialized successfully');
     } catch (error) {
+      // Use console.error as fallback since logger might not be available yet
       console.error('Failed to initialize ErrorHandler:', error);
     }
   }
@@ -76,16 +78,20 @@ class ErrorHandler {
     // Handle based on severity
     switch (severity) {
       case 'critical':
+        // Critical errors (unknown/permission errors) may crash the app - show dialog and handle gracefully
         await this.handleCriticalError(errorInfo.message, error);
         break;
       case 'error':
+        // Error-level issues (file not found, AI unavailable) - notify user but app continues
         await this.notifyUser(errorInfo.message, 'error');
         break;
       case 'warning':
+        // Warning-level issues (format/large files) - notify user with less urgency
         await this.notifyUser(errorInfo.message, 'warning');
         break;
       default:
-        // Info level errors are just logged
+        // Info level errors are just logged, no user notification needed
+        // These are typically minor issues that don't affect functionality
         break;
     }
 
@@ -106,23 +112,27 @@ class ErrorHandler {
     if (error instanceof Error) {
       errorInfo.message = error.message;
 
-      // Determine error type
+      // Determine error type based on Node.js error codes and message patterns
       if (error.code === 'ENOENT') {
+        // File system errors: file/directory not found
         errorInfo.type = ERROR_TYPES.FILE_NOT_FOUND;
         errorInfo.message = 'File or directory not found';
       } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+        // Permission errors: access denied, insufficient privileges
         errorInfo.type = ERROR_TYPES.PERMISSION_DENIED;
         errorInfo.message = 'Permission denied';
       } else if (
         error.message.includes('network') ||
         error.code === 'ENOTFOUND'
       ) {
+        // Network errors: connection issues, DNS resolution failures
         errorInfo.type = ERROR_TYPES.NETWORK_ERROR;
         errorInfo.message = 'Network connection error';
       } else if (
         error.message.includes('AI') ||
         error.message.includes('Ollama')
       ) {
+        // AI service errors: Ollama unavailable, model issues, API failures
         errorInfo.type = ERROR_TYPES.AI_UNAVAILABLE;
         errorInfo.message = 'AI service is unavailable';
       }
@@ -132,20 +142,26 @@ class ErrorHandler {
   }
 
   /**
-   * Determine error severity
+   * Determine error severity based on error type
+   * Severity levels: critical (app may crash), error (user notification needed),
+   * warning (less urgent notification), info (just logging)
    */
   determineSeverity(errorType) {
     switch (errorType) {
-      case ERROR_TYPES.PERMISSION_DENIED:
       case ERROR_TYPES.UNKNOWN:
+      case ERROR_TYPES.PERMISSION_DENIED:
+        // Critical: unknown errors and permission issues are severe and may crash the app
         return 'critical';
       case ERROR_TYPES.FILE_NOT_FOUND:
       case ERROR_TYPES.AI_UNAVAILABLE:
+        // Error: file/AI issues are significant but app can continue with fallback behavior
         return 'error';
       case ERROR_TYPES.INVALID_FORMAT:
       case ERROR_TYPES.FILE_TOO_LARGE:
+        // Warning: format/size issues are problematic but not critical
         return 'warning';
       default:
+        // Info: other errors are logged but don't need user notification
         return 'info';
     }
   }
@@ -154,28 +170,35 @@ class ErrorHandler {
    * Handle critical errors that may crash the app
    */
   async handleCriticalError(message, error) {
-    console.error('CRITICAL ERROR:', message, error);
+    if (this.handlingError) return;
+    this.handlingError = true;
 
-    // Log to file
-    await this.log('critical', message, {
-      error: error?.toString(),
-      stack: error?.stack,
-    });
+    try {
+      console.error('CRITICAL ERROR:', message, error);
 
-    // Show error dialog
-    const response = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Critical Error',
-      message: 'Stratosort encountered a critical error',
-      detail: `${message}\n\nWould you like to restart the application?`,
-      buttons: ['Restart', 'Quit'],
-      defaultId: 0,
-    });
+      // Log to file
+      await this.log('critical', message, {
+        error: error?.toString(),
+        stack: error?.stack,
+      });
 
-    if (response.response === 0) {
-      app.relaunch();
+      // Show error dialog
+      const response = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Critical Error',
+        message: 'Stratosort encountered a critical error',
+        detail: message,
+        buttons: ['Restart', 'Quit'],
+        defaultId: 0,
+      });
+
+      if (response.response === 0) {
+        app.relaunch();
+      }
+      app.quit();
+    } finally {
+      this.handlingError = false;
     }
-    app.quit();
   }
 
   /**

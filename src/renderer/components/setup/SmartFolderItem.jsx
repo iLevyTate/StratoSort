@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useIsMounted from '../../hooks/useIsMounted';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Textarea from '../ui/Textarea';
@@ -19,7 +20,9 @@ function SmartFolderItem({
   addNotification,
 }) {
   const isEditing = editingFolder?.id === folder.id;
-  const [isRebuilding, setIsRebuilding] = useState(false);
+  const mounted = useIsMounted();
+  const [isRebuilding, setIsRebuildingRaw] = useState(false);
+  const setIsRebuilding = (v) => mounted.current && setIsRebuildingRaw(v);
 
   return (
     <div

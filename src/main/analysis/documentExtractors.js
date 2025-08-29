@@ -8,6 +8,7 @@ const officeParser = require('officeparser');
 const XLSX = require('xlsx-populate');
 const AdmZip = require('adm-zip');
 
+const { logger } = require('../../shared/logger');
 const { FileProcessingError } = require('../errors/AnalysisError');
 
 async function extractTextFromPdf(filePath, fileName) {
@@ -31,7 +32,19 @@ async function ocrPdfIfNeeded(filePath) {
       psm: 3,
     });
     return ocrText && ocrText.trim().length > 0 ? ocrText : '';
-  } catch {
+  } catch (error) {
+    // Log OCR failure with details for debugging
+    logger.warn(
+      `[OCR] Failed to extract text from PDF ${path.basename(filePath)}:`,
+      {
+        error: error.message,
+        stack: error.stack,
+        suggestion:
+          'OCR may be unavailable or PDF may be corrupted. Consider installing Tesseract OCR or checking PDF integrity.',
+      },
+    );
+
+    // Return empty string on OCR failure as expected by tests
     return '';
   }
 }
@@ -39,51 +52,127 @@ async function ocrPdfIfNeeded(filePath) {
 async function extractTextFromDoc(filePath) {
   try {
     const result = await mammoth.extractRawText({ path: filePath });
-    return result.value || '';
-  } catch {
-    return await fs.readFile(filePath, 'utf8');
+    return result.value && result.value.trim() ? result.value : '';
+  } catch (mammothError) {
+    logger.debug(
+      `[DOC-EXTRACT] Mammoth extraction failed for ${path.basename(filePath)}, trying fallback:`,
+      mammothError.message,
+    );
+
+    try {
+      const content = await fs.readFile(filePath, 'utf8');
+      const textContent = content.toString('utf8');
+      if (textContent && textContent.trim()) {
+        logger.info(
+          `[DOC-EXTRACT] Successfully extracted text using fallback method for ${path.basename(filePath)}`,
+        );
+        return textContent;
+      } else {
+        throw new Error(
+          'File appears to be binary or contains no readable text',
+        );
+      }
+    } catch (fallbackError) {
+      logger.warn(
+        `[DOC-EXTRACT] Both primary and fallback extraction failed for ${path.basename(filePath)}:`,
+        {
+          mammothError: mammothError.message,
+          fallbackError: fallbackError.message,
+          suggestion:
+            'DOC file may be corrupted, password-protected, or in an unsupported format.',
+        },
+      );
+
+      throw new FileProcessingError(
+        'DOC_PROCESSING_FAILURE',
+        path.basename(filePath),
+        {
+          originalError: mammothError.message,
+          fallbackError: fallbackError.message,
+          suggestion:
+            'DOC file extraction failed. File may be corrupted, password-protected, or in an unsupported format.',
+        },
+      );
+    }
   }
 }
 
 async function extractTextFromDocx(filePath) {
-  const result = await mammoth.extractRawText({ path: filePath });
-  if (!result.value || result.value.trim().length === 0)
-    throw new Error('No text content in DOCX');
-  return result.value;
+  try {
+    const result = await mammoth.extractRawText({ path: filePath });
+    if (!result.value || result.value.trim().length === 0) {
+      throw new FileProcessingError('DOCX_NO_TEXT', path.basename(filePath), {
+        suggestion: 'Ensure the DOCX has readable text content',
+      });
+    }
+    return result.value;
+  } catch (error) {
+    if (error instanceof FileProcessingError) throw error;
+    throw new FileProcessingError(
+      'DOCX_PROCESSING_FAILURE',
+      path.basename(filePath),
+      { originalError: error.message },
+    );
+  }
 }
 
 async function extractTextFromXlsx(filePath) {
-  const workbook = await XLSX.fromFileAsync(filePath);
-  const sheets = workbook.sheets();
-  let allText = '';
-  for (const sheet of sheets) {
-    const usedRange = sheet.usedRange();
-    if (usedRange) {
-      const values = usedRange.value();
-      if (Array.isArray(values)) {
-        for (const row of values) {
-          if (Array.isArray(row)) {
-            allText +=
-              row
-                .filter((cell) => cell !== null && cell !== undefined)
-                .join(' ') + '\n';
+  try {
+    const workbook = await XLSX.fromFileAsync(filePath);
+    const sheets = workbook.sheets();
+    let allText = '';
+    for (const sheet of sheets) {
+      const usedRange = sheet.usedRange();
+      if (usedRange) {
+        const values = usedRange.value();
+        if (Array.isArray(values)) {
+          for (const row of values) {
+            if (Array.isArray(row)) {
+              allText +=
+                row
+                  .filter((cell) => cell !== null && cell !== undefined)
+                  .join(' ') + '\n';
+            }
           }
         }
       }
     }
+    allText = allText.trim();
+    if (!allText) {
+      throw new FileProcessingError('XLSX_NO_TEXT', path.basename(filePath), {
+        suggestion: 'Ensure the XLSX file contains readable text content',
+      });
+    }
+    return allText;
+  } catch (error) {
+    if (error instanceof FileProcessingError) throw error;
+    throw new FileProcessingError(
+      'XLSX_PROCESSING_FAILURE',
+      path.basename(filePath),
+      { originalError: error.message },
+    );
   }
-  allText = allText.trim();
-  if (!allText) throw new Error('No text content in XLSX');
-  return allText;
 }
 
 async function extractTextFromPptx(filePath) {
-  const result = await officeParser.parseOfficeAsync(filePath);
-  const text =
-    typeof result === 'string' ? result : (result && result.text) || '';
-  if (!text || text.trim().length === 0)
-    throw new Error('No text content in PPTX');
-  return text;
+  try {
+    const result = await officeParser.parseOfficeAsync(filePath);
+    const text =
+      typeof result === 'string' ? result : (result && result.text) || '';
+    if (!text || text.trim().length === 0) {
+      throw new FileProcessingError('PPTX_NO_TEXT', path.basename(filePath), {
+        suggestion: 'Ensure the PPTX file contains readable text content',
+      });
+    }
+    return text;
+  } catch (error) {
+    if (error instanceof FileProcessingError) throw error;
+    throw new FileProcessingError(
+      'PPTX_PROCESSING_FAILURE',
+      path.basename(filePath),
+      { originalError: error.message },
+    );
+  }
 }
 
 function extractPlainTextFromRtf(rtf) {
@@ -91,15 +180,23 @@ function extractPlainTextFromRtf(rtf) {
     const decoded = rtf.replace(/\\'([0-9a-fA-F]{2})/g, (_, hex) => {
       try {
         return String.fromCharCode(parseInt(hex, 16));
-      } catch {
+      } catch (hexError) {
+        logger.debug(
+          '[RTF-EXTRACT] Failed to decode hex sequence:',
+          hexError.message,
+        );
         return '';
       }
     });
     const noGroups = decoded.replace(/[{}]/g, '');
     const noControls = noGroups.replace(/\\[a-zA-Z]+-?\d* ?/g, '');
     return noControls.replace(/\s+/g, ' ').trim();
-  } catch {
-    return rtf;
+  } catch (error) {
+    logger.debug(
+      '[RTF-EXTRACT] Failed to extract plain text from RTF:',
+      error.message,
+    );
+    return rtf; // Return original as fallback
   }
 }
 
@@ -119,8 +216,12 @@ function extractPlainTextFromHtml(html) {
       .replace(/&quot;/g, '"')
       .replace(/&#39;|&apos;/g, "'");
     return entitiesDecoded.replace(/\s+/g, ' ').trim();
-  } catch {
-    return html;
+  } catch (error) {
+    logger.debug(
+      '[HTML-EXTRACT] Failed to extract plain text from HTML:',
+      error.message,
+    );
+    return html; // Return original as fallback
   }
 }
 
@@ -147,7 +248,13 @@ async function extractTextFromEpub(filePath) {
       try {
         const html = e.getData().toString('utf8');
         text += extractPlainTextFromHtml(html) + '\n';
-      } catch {}
+      } catch (entryError) {
+        logger.debug(
+          `[EPUB-EXTRACT] Failed to extract text from entry ${e.entryName}:`,
+          entryError.message,
+        );
+        // Continue processing other entries rather than failing completely
+      }
     }
   }
   return text.trim();
@@ -171,7 +278,11 @@ async function extractTextFromMsg(filePath) {
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
     return text || '';
-  } catch {
+  } catch (error) {
+    // Log the error but don't throw - MSG files are often problematic
+    logger.warn(
+      `[MSG-EXTRACT] Failed to extract text from ${path.basename(filePath)}: ${error.message}`,
+    );
     return '';
   }
 }
@@ -197,8 +308,17 @@ async function extractTextFromXls(filePath) {
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
     if (text && text.trim()) return text;
-  } catch {}
-  return '';
+    throw new Error('No text content found in XLS file');
+  } catch (error) {
+    throw new FileProcessingError(
+      'XLS_PROCESSING_FAILURE',
+      path.basename(filePath),
+      {
+        originalError: error.message,
+        suggestion: 'File may be corrupted or password-protected',
+      },
+    );
+  }
 }
 
 async function extractTextFromPpt(filePath) {
@@ -206,9 +326,17 @@ async function extractTextFromPpt(filePath) {
     const result = await officeParser.parseOfficeAsync(filePath);
     const text =
       typeof result === 'string' ? result : (result && result.text) || '';
-    return text || '';
-  } catch {
-    return '';
+    if (text && text.trim()) return text;
+    throw new Error('No text content found in PPT file');
+  } catch (error) {
+    throw new FileProcessingError(
+      'PPT_PROCESSING_FAILURE',
+      path.basename(filePath),
+      {
+        originalError: error.message,
+        suggestion: 'File may be corrupted or password-protected',
+      },
+    );
   }
 }
 
@@ -229,4 +357,5 @@ module.exports = {
   extractTextFromKmz,
   extractPlainTextFromRtf,
   extractPlainTextFromHtml,
+  FileProcessingError,
 };

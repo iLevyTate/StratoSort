@@ -3,21 +3,6 @@
     "target": "ES2020",
     "module": "commonjs",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": [
-      "node",
-      "jest",
-      "react",
-      "react-dom",
-      "react-dropzone",
-      "react-window",
-      "react-test-renderer",
-      "tough-cookie",
-      "uuid",
-      "pdf-parse",
-      "semver",
-      "terser-webpack-plugin",
-      "webpack-bundle-analyzer"
-    ],
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": false,
@@ -31,7 +16,8 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "checkJs": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

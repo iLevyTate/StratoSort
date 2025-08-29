@@ -7,27 +7,12 @@ import React, {
   useCallback,
 } from 'react';
 import { ConfirmModal } from './Modal';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Undo/Redo Context
 const UndoRedoContext = createContext();
 
-// Simple notification interface for UndoRedo system
-function useSimpleNotifications() {
-  return {
-    showSuccess: (title, description) => {
-      console.log(`✅ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available
-    },
-    showError: (title, description) => {
-      console.error(`❌ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available
-    },
-    showInfo: (title, description) => {
-      console.log(`ℹ️ ${title}: ${description}`);
-      // Could integrate with window.electronAPI for toast notifications if available
-    },
-  };
-}
+// Use app notification system (toasts) via context
 
 // Use shared action type constants so renderer/main/tests are aligned
 import { ACTION_TYPES as SHARED_ACTION_TYPES } from '../../shared/constants';
@@ -102,12 +87,14 @@ class UndoStack {
       timestamp: new Date().toISOString(),
     });
 
-    // Maintain max size
+    // Maintain max size and ensure pointer points at the latest entry
     if (this.stack.length > this.maxSize) {
-      this.stack.shift();
-    } else {
-      this.pointer++;
+      // Remove oldest until within max size
+      while (this.stack.length > this.maxSize) this.stack.shift();
     }
+
+    // Pointer should always reference the last valid entry
+    this.pointer = this.stack.length - 1;
 
     this.notifyListeners();
   }
@@ -174,10 +161,16 @@ class UndoStack {
 // Undo/Redo Provider Component
 export function UndoRedoProvider({ children }) {
   const [undoStack] = useState(() => new UndoStack());
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
-  const { showSuccess, showError, showInfo } = useSimpleNotifications();
+  const [isHistoryVisibleRaw, setIsHistoryVisibleRaw] = useState(false);
+  const isHistoryVisible = isHistoryVisibleRaw;
+  const setIsHistoryVisible = (v) =>
+    mounted.current && setIsHistoryVisibleRaw(v);
+  const { showSuccess, showError, showInfo } = useNotification();
 
   // Local confirmation dialog state for nicer UX than window.confirm
   const [confirmState, setConfirmState] = useState({

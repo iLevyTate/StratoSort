@@ -39,6 +39,8 @@ function checkFile(filePath, description) {
 }
 
 function runDiagnostic() {
+  const startTime = Date.now();
+
   console.log(chalk.cyan('🔧 System Requirements'));
   const systemChecks = [
     checkCommand('node --version', 'Node.js'),
@@ -166,6 +168,10 @@ function runDiagnostic() {
   console.log('   npm run fix          - Auto-fix common issues');
   console.log('   npm run clean        - Clean build artifacts');
   console.log('   npm run reset        - Nuclear reset (clean everything)');
+
+  // Performance metrics
+  const diagnosticTime = Date.now() - startTime;
+  console.log(chalk.gray(`\n📊 Diagnostic completed in ${diagnosticTime}ms`));
 
   console.log(chalk.blue.bold('\n✨ Diagnostic complete!'));
 }

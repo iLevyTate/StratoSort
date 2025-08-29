@@ -8,7 +8,7 @@ describe('AnalysisHistoryService', () => {
     tmpDir = path.join(os.tmpdir(), `history-${Date.now()}`);
     await fs.mkdir(tmpDir, { recursive: true });
     jest.resetModules();
-    const electron = require('./mocks/electron');
+    const electron = require('electron');
     electron.app.getPath.mockReturnValue(tmpDir);
   });
 

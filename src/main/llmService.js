@@ -13,10 +13,14 @@ async function testOllamaConnection() {
   try {
     const ollama = getOllamaClient();
     const model = getOllamaModel();
+
+    // Get GPU-optimized performance options for text tasks
+    const perfOptions = await buildOllamaOptions('text');
+
     await ollama.generate({
       model,
       prompt: 'Hello',
-      options: { num_predict: 1 },
+      options: { ...perfOptions, num_predict: 1 },
     });
     return { success: true, model };
   } catch (error) {

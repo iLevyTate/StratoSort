@@ -9,6 +9,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { isSafePath } = require('../main/ipc/pathValidation');
 
 /**
  * Transaction-based file operation manager
@@ -122,6 +123,14 @@ class AtomicFileOperations {
     }
 
     const { type, source, destination, data } = operation;
+
+    // Validate paths to prevent traversal or unsafe access
+    if (
+      (source && !isSafePath(source)) ||
+      (destination && !isSafePath(destination))
+    ) {
+      throw new Error(`Unsafe file path detected: ${source} or ${destination}`);
+    }
 
     try {
       let backupPath = null;
@@ -238,14 +247,30 @@ class AtomicFileOperations {
     let counter = 1;
     let uniquePath = originalPath;
 
+    // Bounded retries with exponential backoff to avoid busy-waiting
+    const maxAttempts = 1000;
+    const baseDelayMs = 10; // starting backoff
+
     while (await this.fileExists(uniquePath)) {
       uniquePath = path.join(dir, `${name}_${counter}${ext}`);
       counter++;
 
-      if (counter > 1000) {
+      if (counter > maxAttempts) {
         throw new Error(
-          'Unable to generate unique filename after 1000 attempts',
+          `Unable to generate unique filename after ${maxAttempts} attempts`,
         );
+      }
+
+      // Reduce frequency of sleeps to avoid long test timeouts when fileExists
+      // returns true repeatedly (e.g., in tests). Sleep only every N attempts.
+      const sleepEvery = 50;
+      if (counter % sleepEvery === 0) {
+        const delay = Math.min(
+          baseDelayMs * Math.floor(counter / sleepEvery),
+          100,
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 

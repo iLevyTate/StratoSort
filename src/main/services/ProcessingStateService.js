@@ -1,6 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 /**
  * ProcessingStateService
@@ -8,23 +10,74 @@ const { app } = require('electron');
  */
 class ProcessingStateService {
   constructor() {
-    this.userDataPath = app.getPath('userData');
-    this.statePath = path.join(this.userDataPath, 'processing-state.json');
+    this.userDataPath = null;
+    this.statePath = null;
     this.state = null;
     this.initialized = false;
+    this.exitHandlersSetup = false; // Track if exit handlers have been registered
     this.SCHEMA_VERSION = '1.0.0';
+    this.saveTimeout = null;
+    this.dirty = false;
+    this.DEBOUNCE_DELAY = 2000; // 2 seconds delay for saves
+
+    // Save queue to prevent concurrent writes and corruption
+    this.saveQueue = Promise.resolve();
+    this.isSaving = false;
+  }
+
+  // Lazy initialize paths to avoid calling app.getPath before app is ready
+  _initPaths() {
+    if (!this.userDataPath) {
+      this.userDataPath = app.getPath('userData');
+      this.statePath = path.join(this.userDataPath, 'processing-state.json');
+    }
   }
 
   async initialize() {
     if (this.initialized) return;
+
+    // Initialize paths first
+    this._initPaths();
+
+    // Set up process exit handlers to ensure data is saved before exit
+    this._setupExitHandlers();
+
     try {
       await this.loadState();
       this.initialized = true;
     } catch (error) {
       this.state = this.createEmptyState();
-      await this.saveState();
+      await this.forceSave();
       this.initialized = true;
     }
+  }
+
+  /**
+   * Set up process exit handlers to ensure data is saved before shutdown
+   */
+  _setupExitHandlers() {
+    if (this.exitHandlersSetup) return;
+    this.exitHandlersSetup = true;
+
+    // Handle various exit scenarios
+    const handleExit = async (signal) => {
+      console.log(
+        `[PROCESSING-STATE] Received ${signal}, forcing save before exit...`,
+      );
+      try {
+        await this.forceSave();
+        console.log(
+          '[PROCESSING-STATE] Save completed successfully before exit',
+        );
+      } catch (error) {
+        logger.error('[PROCESSING-STATE] Failed to save before exit:', error);
+      }
+    };
+
+    // Handle different exit signals
+    process.on('beforeExit', () => handleExit('beforeExit'));
+    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    process.on('SIGINT', () => handleExit('SIGINT'));
   }
 
   createEmptyState() {
@@ -60,9 +113,84 @@ class ProcessingStateService {
     }
   }
 
+  /**
+   * Queued save to prevent concurrent writes and file corruption
+   */
   async saveState() {
     this.state.updatedAt = new Date().toISOString();
-    await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2));
+
+    // Add this save operation to the queue
+    this.saveQueue = this.saveQueue
+      .then(async () => {
+        if (this.isSaving) {
+          console.log(
+            '[PROCESSING-STATE] Save already in progress, queuing...',
+          );
+        }
+
+        this.isSaving = true;
+        try {
+          const result = await backupAndReplace(
+            this.statePath,
+            JSON.stringify(this.state, null, 2),
+          );
+          if (!result.success) {
+            logger.error('[PROCESSING-STATE] Save failed:', result.error);
+            throw new Error(result.error);
+          }
+          return result;
+        } catch (error) {
+          logger.error('[PROCESSING-STATE] Save operation failed:', error);
+          throw error;
+        } finally {
+          this.isSaving = false;
+        }
+      })
+      .catch((error) => {
+        logger.error('[PROCESSING-STATE] Save failed:', error);
+        this.isSaving = false;
+        throw error;
+      });
+
+    return this.saveQueue;
+  }
+
+  /**
+   * Debounced save - delays actual file write to batch multiple changes
+   */
+  debouncedSave() {
+    this.dirty = true;
+
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    this.saveTimeout = setTimeout(async () => {
+      if (this.dirty && this.state) {
+        try {
+          await this.saveState();
+          this.dirty = false;
+        } catch (error) {
+          logger.error('[PROCESSING-STATE] Failed to save state:', error);
+          // Keep dirty flag so we retry later
+        }
+      }
+    }, this.DEBOUNCE_DELAY);
+  }
+
+  /**
+   * Force immediate save (for critical operations)
+   */
+  async forceSave() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+
+    if (this.dirty && this.state) {
+      await this.saveState();
+      this.dirty = false;
+    }
   }
 
   // ===== Analysis tracking =====
@@ -77,7 +205,7 @@ class ProcessingStateService {
       error: null,
     };
     this.state.analysis.lastUpdated = now;
-    await this.saveState();
+    this.debouncedSave();
   }
 
   async markAnalysisComplete(filePath) {
@@ -90,7 +218,7 @@ class ProcessingStateService {
       error: null,
     };
     this.state.analysis.lastUpdated = now;
-    await this.saveState();
+    this.debouncedSave();
   }
 
   async markAnalysisError(filePath, errorMessage) {
@@ -103,7 +231,7 @@ class ProcessingStateService {
       error: errorMessage || 'Unknown analysis error',
     };
     this.state.analysis.lastUpdated = now;
-    await this.saveState();
+    this.debouncedSave();
   }
 
   getIncompleteAnalysisJobs() {
@@ -129,7 +257,7 @@ class ProcessingStateService {
         completedAt: null,
       };
       this.state.organize.lastUpdated = now;
-      await this.saveState();
+      this.debouncedSave();
     }
     return this.state.organize.batches[batchId];
   }
@@ -141,7 +269,7 @@ class ProcessingStateService {
     batch.operations[index].status = 'in_progress';
     batch.operations[index].error = null;
     this.state.organize.lastUpdated = new Date().toISOString();
-    await this.saveState();
+    this.debouncedSave();
   }
 
   async markOrganizeOpDone(batchId, index, updatedOp = null) {
@@ -154,7 +282,7 @@ class ProcessingStateService {
     batch.operations[index].status = 'done';
     batch.operations[index].error = null;
     this.state.organize.lastUpdated = new Date().toISOString();
-    await this.saveState();
+    this.debouncedSave();
   }
 
   async markOrganizeOpError(batchId, index, errorMessage) {
@@ -164,7 +292,7 @@ class ProcessingStateService {
     batch.operations[index].status = 'failed';
     batch.operations[index].error = errorMessage || 'Unknown organize error';
     this.state.organize.lastUpdated = new Date().toISOString();
-    await this.saveState();
+    this.debouncedSave();
   }
 
   async completeOrganizeBatch(batchId) {
@@ -173,7 +301,7 @@ class ProcessingStateService {
     if (!batch) return;
     batch.completedAt = new Date().toISOString();
     this.state.organize.lastUpdated = batch.completedAt;
-    await this.saveState();
+    await this.forceSave();
   }
 
   getIncompleteOrganizeBatches() {

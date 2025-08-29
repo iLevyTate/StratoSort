@@ -33,20 +33,39 @@ function registerAnalysisIpc({
           schemas?.filePath || schemas?.string,
           async (event, filePath) => {
             try {
-              const startTime =
-                typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
+              const startTime = performance.now();
               logger.info(
                 `[IPC-ANALYSIS] Starting document analysis for: ${filePath}`,
               );
+
+              // Check if file exists before analysis
+              const fs = require('fs').promises;
+              try {
+                const stats = await fs.stat(filePath);
+                logger.info(
+                  `[IPC-ANALYSIS] File stats: size=${stats.size}, mtime=${stats.mtime}`,
+                );
+              } catch (fileError) {
+                logger.error(
+                  `[IPC-ANALYSIS] File access error:`,
+                  fileError.message,
+                );
+                throw new Error(`Cannot access file: ${fileError.message}`);
+              }
+
               const serviceIntegration =
                 getServiceIntegration && getServiceIntegration();
               try {
                 await serviceIntegration?.processingState?.markAnalysisStart(
                   filePath,
                 );
-              } catch {}
+              } catch (stateError) {
+                logger.debug(
+                  '[IPC-ANALYSIS] Processing state error:',
+                  stateError?.message,
+                );
+              }
+
               const customFolders = getCustomFolders().filter(
                 (f) => !f.isDefault || f.path,
               );
@@ -59,34 +78,34 @@ function registerAnalysisIpc({
                 `[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`,
                 folderCategories.map((f) => f.name).join(', '),
               );
-              let result;
-              try {
-                result = await analyzeDocumentFile(filePath, folderCategories);
-              } catch (analysisError) {
-                logger.error(
-                  '[ANALYSIS] Document analysis failed:',
-                  analysisError,
-                );
-                // Return error result instead of throwing
-                return {
-                  error: analysisError.message,
-                  success: false,
-                  suggestedName: path.basename(
-                    filePath,
-                    path.extname(filePath),
-                  ),
-                  category: 'documents',
-                  keywords: [],
-                  confidence: 0,
-                  summary: '',
-                  extractedText: null,
-                  model: 'error',
-                };
-              }
-              const duration =
-                (typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now()) - startTime;
+
+              logger.info(`[IPC-ANALYSIS] Calling analyzeDocumentFile...`);
+
+              // Add timeout to analysis call
+              const analysisTimeout = 120000; // 2 minutes timeout
+              const analysisPromise = analyzeDocumentFile(
+                filePath,
+                folderCategories,
+              );
+
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                  reject(
+                    new Error(`Analysis timed out after ${analysisTimeout}ms`),
+                  );
+                }, analysisTimeout);
+              });
+
+              const result = await Promise.race([
+                analysisPromise,
+                timeoutPromise,
+              ]);
+              const duration = performance.now() - startTime;
+              logger.info(
+                `[IPC-ANALYSIS] Analysis completed in ${duration}ms, result:`,
+                result,
+              );
+
               systemAnalytics.recordProcessingTime(duration);
               try {
                 const stats = await require('fs').promises.stat(filePath);
@@ -116,6 +135,7 @@ function registerAnalysisIpc({
                   fileInfo,
                   normalized,
                 );
+                logger.info(`[IPC-ANALYSIS] Analysis recorded to history`);
               } catch (historyError) {
                 logger.warn(
                   '[ANALYSIS-HISTORY] Failed to record document analysis:',
@@ -126,8 +146,47 @@ function registerAnalysisIpc({
                 await serviceIntegration?.processingState?.markAnalysisComplete(
                   filePath,
                 );
-              } catch {}
-              return result;
+                logger.info(`[IPC-ANALYSIS] Processing state marked complete`);
+              } catch (completeError) {
+                logger.debug(
+                  '[IPC-ANALYSIS] Processing state complete error:',
+                  completeError?.message,
+                );
+              }
+              // Ensure the returned analysis result is structured-cloneable for IPC
+              try {
+                const {
+                  validateAnalysisResult,
+                } = require('../analysis/analysisUtils');
+                const safe = validateAnalysisResult(result, {
+                  category: 'document',
+                  keywords: [],
+                  confidence: 0,
+                });
+                return safe;
+              } catch (e) {
+                logger.debug(
+                  '[IPC-ANALYSIS] Failed to validate result for IPC, returning minimal payload:',
+                  e?.message || e,
+                );
+                return {
+                  subject:
+                    result && result.suggestedName
+                      ? result.suggestedName
+                      : path.basename(filePath),
+                  category:
+                    result && result.category
+                      ? result.category
+                      : 'uncategorized',
+                  keywords: Array.isArray(result && result.keywords)
+                    ? result.keywords
+                    : [],
+                  confidence:
+                    typeof result?.confidence === 'number'
+                      ? result.confidence
+                      : 0,
+                };
+              }
             } catch (error) {
               logger.error(
                 `[IPC] Document analysis failed for ${filePath}:`,
@@ -158,13 +217,35 @@ function registerAnalysisIpc({
             logger.info(
               `[IPC-ANALYSIS] Starting document analysis for: ${filePath}`,
             );
+
+            // Check if file exists before analysis
+            const fs = require('fs').promises;
+            try {
+              const stats = await fs.stat(filePath);
+              logger.info(
+                `[IPC-ANALYSIS] File stats: size=${stats.size}, mtime=${stats.mtime}`,
+              );
+            } catch (fileError) {
+              logger.error(
+                `[IPC-ANALYSIS] File access error:`,
+                fileError.message,
+              );
+              throw new Error(`Cannot access file: ${fileError.message}`);
+            }
+
             const serviceIntegration =
               getServiceIntegration && getServiceIntegration();
             try {
               await serviceIntegration?.processingState?.markAnalysisStart(
                 filePath,
               );
-            } catch {}
+            } catch (stateError) {
+              logger.debug(
+                '[IPC-ANALYSIS] Processing state error:',
+                stateError?.message,
+              );
+            }
+
             const customFolders = getCustomFolders().filter(
               (f) => !f.isDefault || f.path,
             );
@@ -177,11 +258,34 @@ function registerAnalysisIpc({
               `[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`,
               folderCategories.map((f) => f.name).join(', '),
             );
-            const result = await analyzeDocumentFile(
+
+            logger.info(`[IPC-ANALYSIS] Calling analyzeDocumentFile...`);
+
+            // Add timeout to analysis call
+            const analysisTimeout = 120000; // 2 minutes timeout
+            const analysisPromise = analyzeDocumentFile(
               filePath,
               folderCategories,
             );
+
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                reject(
+                  new Error(`Analysis timed out after ${analysisTimeout}ms`),
+                );
+              }, analysisTimeout);
+            });
+
+            const result = await Promise.race([
+              analysisPromise,
+              timeoutPromise,
+            ]);
             const duration = performance.now() - startTime;
+            logger.info(
+              `[IPC-ANALYSIS] Analysis completed in ${duration}ms, result:`,
+              result,
+            );
+
             systemAnalytics.recordProcessingTime(duration);
             try {
               const stats = await require('fs').promises.stat(filePath);
@@ -209,6 +313,7 @@ function registerAnalysisIpc({
                 fileInfo,
                 normalized,
               );
+              logger.info(`[IPC-ANALYSIS] Analysis recorded to history`);
             } catch (historyError) {
               logger.warn(
                 '[ANALYSIS-HISTORY] Failed to record document analysis:',
@@ -219,8 +324,45 @@ function registerAnalysisIpc({
               await serviceIntegration?.processingState?.markAnalysisComplete(
                 filePath,
               );
-            } catch {}
-            return result;
+              logger.info(`[IPC-ANALYSIS] Processing state marked complete`);
+            } catch (completeError) {
+              logger.debug(
+                '[IPC-ANALYSIS] Processing state complete error:',
+                completeError?.message,
+              );
+            }
+            // Ensure the returned analysis result is structured-cloneable for IPC
+            try {
+              const {
+                validateAnalysisResult,
+              } = require('../analysis/analysisUtils');
+              const safe = validateAnalysisResult(result, {
+                category: 'document',
+                keywords: [],
+                confidence: 0,
+              });
+              return safe;
+            } catch (e) {
+              logger.debug(
+                '[IPC-ANALYSIS] Failed to validate result for IPC, returning minimal payload:',
+                e?.message || e,
+              );
+              return {
+                subject:
+                  result && result.suggestedName
+                    ? result.suggestedName
+                    : path.basename(filePath),
+                category:
+                  result && result.category ? result.category : 'uncategorized',
+                keywords: Array.isArray(result && result.keywords)
+                  ? result.keywords
+                  : [],
+                confidence:
+                  typeof result?.confidence === 'number'
+                    ? result.confidence
+                    : 0,
+              };
+            }
           } catch (error) {
             logger.error(
               `[IPC] Document analysis failed for ${filePath}:`,
@@ -416,19 +558,13 @@ function registerAnalysisIpc({
     z && stringSchema
       ? withValidation(logger, stringSchema, async (event, filePath) => {
           try {
-            const start =
-              typeof performance !== 'undefined'
-                ? performance.now()
-                : Date.now();
+            const start = performance.now();
             const text = await tesseract.recognize(filePath, {
               lang: 'eng',
               oem: 1,
               psm: 3,
             });
-            const duration =
-              (typeof performance !== 'undefined'
-                ? performance.now()
-                : Date.now()) - start;
+            const duration = performance.now() - start;
             systemAnalytics.recordProcessingTime(duration);
             return { success: true, text };
           } catch (error) {
@@ -439,19 +575,13 @@ function registerAnalysisIpc({
         })
       : withErrorLogging(logger, async (event, filePath) => {
           try {
-            const start =
-              typeof performance !== 'undefined'
-                ? performance.now()
-                : Date.now();
+            const start = performance.now();
             const text = await tesseract.recognize(filePath, {
               lang: 'eng',
               oem: 1,
               psm: 3,
             });
-            const duration =
-              (typeof performance !== 'undefined'
-                ? performance.now()
-                : Date.now()) - start;
+            const duration = performance.now() - start;
             systemAnalytics.recordProcessingTime(duration);
             return { success: true, text };
           } catch (error) {

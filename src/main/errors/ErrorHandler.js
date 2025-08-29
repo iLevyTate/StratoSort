@@ -14,7 +14,7 @@ class ErrorHandler {
     this.currentLogFile = null;
     this.errorQueue = [];
     this.isInitialized = false;
-    this.handlingCritical = false;
+    this.handlingError = false;
   }
 
   async initialize() {
@@ -35,44 +35,30 @@ class ErrorHandler {
       this.isInitialized = true;
       await this.log('info', 'ErrorHandler initialized successfully');
     } catch (error) {
+      // Use console.error as fallback since logger might not be available yet
       console.error('Failed to initialize ErrorHandler:', error);
     }
   }
 
   setupGlobalHandlers() {
-    const { app } = require('electron');
-
-    process.removeAllListeners('uncaughtException');
-    process.removeAllListeners('unhandledRejection');
-
+    // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
-      Promise.resolve(
-        this.handleCriticalError('Uncaught Exception', error),
-      ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+      this.handleCriticalError('Uncaught Exception', error);
     });
 
-    process.on('unhandledRejection', (reason) => {
-      Promise.resolve(
-        this.handleCriticalError('Unhandled Rejection', reason),
-      ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, _promise) => {
+      this.handleCriticalError('Unhandled Promise Rejection', reason);
     });
 
-    if (app && app.removeAllListeners) {
-      app.removeAllListeners('render-process-gone');
-      app.removeAllListeners('child-process-gone');
+    // Handle Electron errors
+    app.on('render-process-gone', (event, webContents, details) => {
+      this.handleCriticalError('Renderer Process Crashed', details);
+    });
 
-      app.on('render-process-gone', (_, __, details) => {
-        Promise.resolve(
-          this.handleCriticalError('Renderer Crashed', details),
-        ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
-      });
-
-      app.on('child-process-gone', (_, details) => {
-        Promise.resolve(
-          this.handleCriticalError('Child Crashed', details),
-        ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
-      });
-    }
+    app.on('child-process-gone', (event, details) => {
+      this.handleCriticalError('Child Process Crashed', details);
+    });
   }
 
   /**
@@ -105,6 +91,7 @@ class ErrorHandler {
         break;
       default:
         // Info level errors are just logged, no user notification needed
+        // These are typically minor issues that don't affect functionality
         break;
     }
 
@@ -117,16 +104,10 @@ class ErrorHandler {
   parseError(error) {
     const errorInfo = {
       type: ERROR_TYPES.UNKNOWN,
-      message: error?.message || 'An unexpected error occurred',
+      message: 'An unexpected error occurred',
       details: {},
-      stack: error?.stack || new Error().stack,
+      stack: error?.stack,
     };
-
-    // If it's a plain string or other non-Error object, keep the generic message
-    if (typeof error === 'string') {
-      errorInfo.message = 'An unexpected error occurred';
-      errorInfo.details.originalError = error;
-    }
 
     if (error instanceof Error) {
       errorInfo.message = error.message;
@@ -141,15 +122,15 @@ class ErrorHandler {
         errorInfo.type = ERROR_TYPES.PERMISSION_DENIED;
         errorInfo.message = 'Permission denied';
       } else if (
-        (error.message && error.message.includes('network')) ||
+        error.message.includes('network') ||
         error.code === 'ENOTFOUND'
       ) {
         // Network errors: connection issues, DNS resolution failures
         errorInfo.type = ERROR_TYPES.NETWORK_ERROR;
         errorInfo.message = 'Network connection error';
       } else if (
-        error.message &&
-        (error.message.includes('AI') || error.message.includes('Ollama'))
+        error.message.includes('AI') ||
+        error.message.includes('Ollama')
       ) {
         // AI service errors: Ollama unavailable, model issues, API failures
         errorInfo.type = ERROR_TYPES.AI_UNAVAILABLE;
@@ -189,8 +170,8 @@ class ErrorHandler {
    * Handle critical errors that may crash the app
    */
   async handleCriticalError(message, error) {
-    if (this.handlingCritical) return;
-    this.handlingCritical = true;
+    if (this.handlingError) return;
+    this.handlingError = true;
 
     try {
       console.error('CRITICAL ERROR:', message, error);
@@ -216,7 +197,7 @@ class ErrorHandler {
       }
       app.quit();
     } finally {
-      this.handlingCritical = false;
+      this.handlingError = false;
     }
   }
 

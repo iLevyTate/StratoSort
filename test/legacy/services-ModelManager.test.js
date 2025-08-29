@@ -6,7 +6,7 @@ jest.mock('electron', () => ({
 }));
 
 // Mock PerformanceService at the top level
-jest.mock('../src/main/services/PerformanceService', () => ({
+jest.mock('../../src/main/services/PerformanceService', () => ({
   buildOllamaOptions: jest.fn().mockResolvedValue({}),
 }));
 
@@ -20,8 +20,13 @@ const fs = require('fs').promises;
 jest.spyOn(fs, 'readFile').mockResolvedValue('{}');
 jest.spyOn(fs, 'writeFile').mockResolvedValue();
 
+// Mock atomic file operations
+jest.mock('../../src/shared/atomicFileOperations', () => ({
+  backupAndReplace: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 const path = require('path');
-const ModelManager = require('../src/main/services/ModelManager');
+const ModelManager = require('../../src/main/services/ModelManager');
 
 // Helper function to normalize paths for cross-platform testing
 const normalizePath = (filePath) => filePath.replace(/\\/g, '/');
@@ -541,9 +546,12 @@ describe('ModelManager', () => {
 
       await modelManager.saveConfig();
 
-      // Atomic operation writes to temp file first, then moves
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining('model-config.json.tmp'),
+      // Atomic operation uses backupAndReplace
+      const {
+        backupAndReplace,
+      } = require('../../src/shared/atomicFileOperations');
+      expect(backupAndReplace).toHaveBeenCalledWith(
+        expect.stringContaining('model-config.json'),
         expect.stringContaining('"selectedModel": "llama3.2"'),
       );
     });

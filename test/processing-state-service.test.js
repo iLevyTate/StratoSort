@@ -9,7 +9,7 @@ describe('ProcessingStateService', () => {
     tmpDir = path.join(os.tmpdir(), `stratosort-processing-${Date.now()}`);
     await fs.mkdir(tmpDir, { recursive: true });
     jest.resetModules();
-    const electron = require('./mocks/electron');
+    const electron = require('electron');
     electron.app.getPath.mockReturnValue(tmpDir);
   });
 

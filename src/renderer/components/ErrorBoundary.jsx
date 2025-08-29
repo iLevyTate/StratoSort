@@ -24,6 +24,42 @@ class ErrorBoundary extends React.Component {
       error,
       info,
     );
+    try {
+      // Send error details to main process crash reporter if available
+      if (
+        window &&
+        window.electronAPI &&
+        typeof window.electronAPI.reportCrash === 'function'
+      ) {
+        window.electronAPI.reportCrash({
+          type: 'renderer_error',
+          timestamp: new Date().toISOString(),
+          error: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+          info,
+        });
+      } else if (window && window.ipcRenderer && window.ipcRenderer.send) {
+        // Older preload exposures
+        window.ipcRenderer.send('crash-report', {
+          type: 'renderer_error',
+          timestamp: new Date().toISOString(),
+          error: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+          info,
+        });
+      }
+    } catch (e) {
+      console.debug(
+        '[ErrorBoundary] Failed to report crash to main process:',
+        e?.message || e,
+      );
+    }
   }
 
   handleReset() {

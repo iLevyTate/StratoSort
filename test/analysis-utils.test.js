@@ -2,7 +2,17 @@
 jest.mock('../src/main/services/EmbeddingIndexService');
 jest.mock('../src/main/services/FolderMatchingService');
 jest.mock('../src/main/services/ModelVerifier');
-jest.mock('../src/shared/logger');
+
+// Mock logger before importing analysisUtils
+jest.mock('../src/shared/logger', () => ({
+  logger: {
+    error: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    setContext: jest.fn(),
+  },
+}));
 
 // Setup mock implementations
 const mockModelVerifier = { verifyModel: jest.fn() };
@@ -11,17 +21,16 @@ const mockEmbeddingIndex = {
   resetFolders: jest.fn(),
 };
 const mockFolderMatcher = { upsertFolderEmbedding: jest.fn() };
-const mockLogger = {
-  error: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  setContext: jest.fn(),
-};
 
-// Mock modules directly
-jest.mock('../src/shared/logger', () => ({
-  logger: mockLogger,
-}));
+require('../src/main/services/ModelVerifier').mockImplementation(
+  () => mockModelVerifier,
+);
+require('../src/main/services/EmbeddingIndexService').mockImplementation(
+  () => mockEmbeddingIndex,
+);
+require('../src/main/services/FolderMatchingService').mockImplementation(
+  () => mockFolderMatcher,
+);
 
 const {
   getSharedServices,
@@ -34,18 +43,11 @@ const {
   processBatch,
 } = require('../src/main/analysis/analysisUtils');
 
+// Get the mocked logger
+const { logger: mockLogger } = require('../src/shared/logger');
+
 // Also test the original utils for compatibility
 const { normalizeAnalysisResult } = require('../src/main/analysis/utils');
-
-// Mock the services after require to avoid hoisting issues
-const ModelVerifier = require('../src/main/services/ModelVerifier');
-const EmbeddingIndexService = require('../src/main/services/EmbeddingIndexService');
-const FolderMatchingService = require('../src/main/services/FolderMatchingService');
-
-// Replace the constructors with our mocks
-ModelVerifier.mockImplementation(() => mockModelVerifier);
-EmbeddingIndexService.mockImplementation(() => mockEmbeddingIndex);
-FolderMatchingService.mockImplementation(() => mockFolderMatcher);
 
 describe('analysis utils', () => {
   describe('normalizeAnalysisResult', () => {
@@ -217,6 +219,7 @@ describe('analysis utils', () => {
   describe('handleAnalysisError', () => {
     beforeEach(() => {
       jest.clearAllMocks();
+      mockLogger.error.mockClear();
     });
 
     test('returns standardized error response', () => {

@@ -18,9 +18,18 @@ class ModelManager {
     this.selectedModel = null;
     this.modelCapabilities = new Map();
     this.lastHealthCheck = null;
-    this.configPath = path
-      .join(app.getPath('userData'), 'model-config.json')
-      .replace(/\\/g, '/');
+
+    // Safely get config path with fallback for tests
+    try {
+      this.configPath = path
+        .join(app.getPath('userData'), 'model-config.json')
+        .replace(/\\/g, '/');
+    } catch (error) {
+      // Fallback for test environment where app might not be available
+      this.configPath = path
+        .join(process.cwd(), 'test-data', 'model-config.json')
+        .replace(/\\/g, '/');
+    }
 
     // Model categories and their capabilities
     this.modelCategories = {
@@ -148,7 +157,13 @@ class ModelManager {
       capabilities.vision = true;
     }
 
-    if (modelName.includes('code') || modelName.includes('coder')) {
+    // Correctly check for code models
+    if (
+      Array.isArray(this.modelCategories.code) &&
+      this.modelCategories.code.some((pattern) =>
+        modelName.includes(pattern.toLowerCase()),
+      )
+    ) {
       capabilities.code = true;
     }
 

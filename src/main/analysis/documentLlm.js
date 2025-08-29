@@ -2,6 +2,7 @@ const {
   getOllamaModel,
   loadOllamaConfig,
   getOllamaClient,
+  retryWithBackoff,
 } = require('../ollamaUtils');
 const { buildOllamaOptions } = require('../services/PerformanceService');
 
@@ -116,16 +117,21 @@ ${textContent.substring(0, AppConfig.ai.textAnalysis.maxContentLength)}`;
     const perfOptions = await buildOllamaOptions('text');
 
     // Ensure conservative timeout and streaming disabled for synchronous JSON output
-    const response = await client.generate({
-      model: modelToUse,
-      prompt,
-      options: {
-        temperature: AppConfig.ai.textAnalysis.temperature,
-        num_predict: AppConfig.ai.textAnalysis.maxTokens,
-        ...perfOptions, // Include GPU optimizations
-      },
-      format: 'json',
-    });
+    const response = await retryWithBackoff(
+      async () =>
+        await client.generate({
+          model: modelToUse,
+          prompt,
+          options: {
+            temperature: AppConfig.ai.textAnalysis.temperature,
+            num_predict: AppConfig.ai.textAnalysis.maxTokens,
+            ...perfOptions, // Include GPU optimizations
+          },
+          format: 'json',
+        }),
+      3,
+      500,
+    );
 
     if (!response) {
       throw new Error('No response received from Ollama API');

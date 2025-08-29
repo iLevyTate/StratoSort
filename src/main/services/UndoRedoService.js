@@ -14,6 +14,7 @@ class UndoRedoService {
     this.actions = [];
     this.currentIndex = -1; // Points to the last executed action
     this.initialized = false;
+    this.exitHandlersSetup = false; // Track if exit handlers have been registered
 
     // Debouncing for file writes
     this.saveTimeout = null;
@@ -40,12 +41,13 @@ class UndoRedoService {
     // Initialize paths first
     this._initPaths();
 
+    // Set up process exit handlers to ensure data is saved before exit
+    this._setupExitHandlers();
+
     try {
       await this.loadActions();
       this.initialized = true;
       console.log('UndoRedoService initialized successfully');
-      // Setup exit handlers after successful initialization
-      this._setupExitHandlers();
     } catch (error) {
       logger.error('Failed to initialize UndoRedoService:', error);
       this.actions = [];
@@ -54,22 +56,59 @@ class UndoRedoService {
     }
   }
 
+  /**
+   * Set up process exit handlers to ensure data is saved before shutdown
+   */
   _setupExitHandlers() {
     if (this.exitHandlersSetup) return;
     this.exitHandlersSetup = true;
 
+    // Handle various exit scenarios
     const handleExit = async (signal) => {
+      console.log(
+        `[UNDO-REDO] Received ${signal}, forcing save before exit...`,
+      );
       try {
-        await this.forceSave(); // Ensure data is saved
-        console.log(`[UNDO-REDO] Saved on exit signal: ${signal}`);
+        await this.forceSave();
+        console.log('[UNDO-REDO] Save completed successfully before exit');
       } catch (error) {
-        logger.error('[UNDO-REDO] Failed to save on exit:', error);
+        logger.error('[UNDO-REDO] Failed to save before exit:', error);
       }
     };
 
-    process.on('SIGINT', () => handleExit('SIGINT'));
-    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    // Handle different exit signals
     process.on('beforeExit', () => handleExit('beforeExit'));
+    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    process.on('SIGINT', () => handleExit('SIGINT'));
+
+    // Handle uncaught exceptions (last resort)
+    process.on('uncaughtException', async (error) => {
+      logger.error(
+        '[UNDO-REDO] Uncaught exception, attempting emergency save:',
+        error,
+      );
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error('[UNDO-REDO] Emergency save failed:', saveError);
+      }
+      // Re-throw to maintain original error handling
+      throw error;
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason, promise) => {
+      logger.error('[UNDO-REDO] Unhandled rejection, attempting save:', reason);
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error(
+          '[UNDO-REDO] Save failed during unhandled rejection:',
+          saveError,
+        );
+      }
+      // Don't throw, just log - this is for cleanup only
+    });
   }
 
   async loadActions() {
@@ -173,7 +212,7 @@ class UndoRedoService {
     await this.initialize();
 
     if (!this.canUndo()) {
-      throw new Error('Nothing to undo');
+      throw new Error('No actions to undo');
     }
 
     const action = this.actions[this.currentIndex];
@@ -218,21 +257,11 @@ class UndoRedoService {
   }
 
   canUndo() {
-    return (
-      this.actions &&
-      Array.isArray(this.actions) &&
-      this.currentIndex >= 0 &&
-      this.currentIndex < this.actions.length
-    );
+    return this.currentIndex >= 0;
   }
 
   canRedo() {
-    return (
-      this.actions &&
-      Array.isArray(this.actions) &&
-      this.currentIndex >= -1 &&
-      this.currentIndex < this.actions.length - 1
-    );
+    return this.currentIndex < this.actions.length - 1;
   }
 
   async executeReverseAction(action) {

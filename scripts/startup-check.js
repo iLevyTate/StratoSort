@@ -32,12 +32,12 @@ function main() {
   // Basic file presence
   const hasDistIndex = checkFileExists('dist/index.html');
   const hasWebpackConfig = checkFileExists('webpack.config.js');
-  const hasRendererIndex = checkFileExists('src/renderer/index.html');
+  const hasRendererIndex = checkFileExists('src/renderer/index.js');
   printStatus(hasWebpackConfig, 'Webpack config present', 'webpack.config.js');
   printStatus(
     hasRendererIndex,
     'Renderer index present',
-    'src/renderer/index.html',
+    'src/renderer/index.js',
   );
   printStatus(hasDistIndex, 'Built renderer present', 'dist/index.html');
 

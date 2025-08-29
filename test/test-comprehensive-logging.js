@@ -1,6 +1,6 @@
 // Comprehensive test for all logging functionality
-const { fileLogger } = require('./src/shared/fileLogger');
-const { logger } = require('./src/shared/logger');
+const { fileLogger } = require('../src/shared/fileLogger');
+const { logger } = require('../src/shared/logger');
 
 async function testComprehensiveLogging() {
   console.log('=== COMPREHENSIVE LOGGING TEST ===');

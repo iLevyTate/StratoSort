@@ -15,6 +15,14 @@ jest.mock('electron', () => ({
       openDevTools: jest.fn(),
       on: jest.fn(),
       setWindowOpenHandler: jest.fn(),
+      getWebPreferences: jest.fn(() => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInWorker: false,
+        nodeIntegrationInSubFrames: false,
+        sandbox: true,
+        enableRemoteModule: false,
+      })),
       session: {
         webRequest: {
           onHeadersReceived: jest.fn(),
@@ -60,10 +68,10 @@ jest.mock('electron-window-state', () =>
 
 const { BrowserWindow, app, shell } = require('electron');
 const path = require('path');
-const createMainWindow = require('../src/main/core/createWindow');
+const createMainWindow = require('../../src/main/core/createWindow');
 
 // Mock logger at top level
-jest.mock('../src/shared/logger', () => ({
+jest.mock('../../src/shared/logger', () => ({
   logger: {
     debug: jest.fn(),
     info: jest.fn(),
@@ -73,7 +81,7 @@ jest.mock('../src/shared/logger', () => ({
 }));
 
 // Mock ollamaUtils at top level
-jest.mock('../src/main/ollamaUtils', () => ({
+jest.mock('../../src/main/ollamaUtils', () => ({
   getOllamaHost: jest.fn().mockReturnValue('http://localhost:11434'),
 }));
 
@@ -345,7 +353,7 @@ describe('createWindow', () => {
   });
 
   test('handles Ollama host configuration errors gracefully', () => {
-    const { getOllamaHost } = require('../src/main/ollamaUtils');
+    const { getOllamaHost } = require('../../src/main/ollamaUtils');
     getOllamaHost.mockImplementation(() => {
       throw new Error('Configuration error');
     });

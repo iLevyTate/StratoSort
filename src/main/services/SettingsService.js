@@ -5,16 +5,16 @@ const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 class SettingsService {
   constructor() {
-    const fs = require('fs');
-    const os = require('os');
-
+    // Safely get settings path with fallback for tests
     try {
-      const { app } = require('electron');
       this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
     } catch (error) {
-      const dir = path.join(os.tmpdir(), 'stratosort');
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      this.settingsPath = path.join(dir, 'settings.json');
+      // Fallback for test environment where app might not be available
+      this.settingsPath = path.join(
+        process.cwd(),
+        'test-data',
+        'settings.json',
+      );
     }
 
     this.defaults = {
@@ -36,11 +36,6 @@ class SettingsService {
   }
 
   async load() {
-    // Initialize settingsPath if not already set
-    if (!this.settingsPath) {
-      this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
-    }
-
     try {
       const raw = await fs.readFile(this.settingsPath, 'utf-8');
       const parsed = JSON.parse(raw);
@@ -57,11 +52,6 @@ class SettingsService {
   }
 
   async save(settings) {
-    // Initialize settingsPath if not already set
-    if (!this.settingsPath) {
-      this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
-    }
-
     const merged = { ...this.defaults, ...(settings || {}) };
     await fs.mkdir(path.dirname(this.settingsPath), { recursive: true });
     const result = await backupAndReplace(

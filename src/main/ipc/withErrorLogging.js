@@ -1,3 +1,5 @@
+const { logger: defaultLogger } = require('../../shared/logger');
+
 function withErrorLogging(logger, fn, systemAnalytics) {
   return async (...args) => {
     const startTime = Date.now();
@@ -12,8 +14,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
         type: 'ipc_call_start',
       });
     } catch (logError) {
-      // eslint-disable-next-line no-console
-      logger.error('Failed to log action start:', logError);
+      defaultLogger.error('Failed to log action start:', logError);
     }
 
     try {
@@ -27,8 +28,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
           argsCount: args.length - 1, // Exclude event object
         });
       } catch (metricsError) {
-        // eslint-disable-next-line no-console
-        logger.error('Failed to record IPC metrics:', metricsError);
+        defaultLogger.error('Failed to record IPC metrics:', metricsError);
       }
 
       // Track successful action completion
@@ -48,8 +48,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
           });
         }
       } catch (logError) {
-        // eslint-disable-next-line no-console
-        logger.error('Failed to log action success:', logError);
+        defaultLogger.error('Failed to log action success:', logError);
       }
 
       return result;
@@ -64,8 +63,10 @@ function withErrorLogging(logger, fn, systemAnalytics) {
           argsCount: args.length - 1,
         });
       } catch (metricsError) {
-        // eslint-disable-next-line no-console
-        logger.error('Failed to record IPC error metrics:', metricsError);
+        defaultLogger.error(
+          'Failed to record IPC error metrics:',
+          metricsError,
+        );
       }
 
       try {
@@ -85,11 +86,11 @@ function withErrorLogging(logger, fn, systemAnalytics) {
           type: 'ipc_call_error',
         });
       } catch (logError) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to log IPC error:', logError);
+        defaultLogger.error('Failed to log IPC error:', logError);
       }
 
-      throw error;
+      // Return a structured error object to the renderer instead of throwing
+      return { success: false, error: error?.message || String(error) };
     }
   };
 }

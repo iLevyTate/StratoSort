@@ -8,6 +8,13 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
+// Mock electron app for tests
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn(() => '/tmp/test-user-data'),
+  },
+}));
+
 // Import actual application modules
 const SettingsService = require('../../src/main/services/SettingsService');
 const ServiceIntegration = require('../../src/main/services/ServiceIntegration');

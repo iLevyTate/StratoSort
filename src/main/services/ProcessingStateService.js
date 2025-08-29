@@ -14,13 +14,15 @@ class ProcessingStateService {
     this.statePath = null;
     this.state = null;
     this.initialized = false;
+    this.exitHandlersSetup = false; // Track if exit handlers have been registered
     this.SCHEMA_VERSION = '1.0.0';
     this.saveTimeout = null;
     this.dirty = false;
     this.DEBOUNCE_DELAY = 2000; // 2 seconds delay for saves
-    this.saving = false;
-    this.savePromise = null;
-    this.updateLock = false; // Prevent concurrent state updates
+
+    // Save queue to prevent concurrent writes and corruption
+    this.saveQueue = Promise.resolve();
+    this.isSaving = false;
   }
 
   // Lazy initialize paths to avoid calling app.getPath before app is ready
@@ -37,6 +39,9 @@ class ProcessingStateService {
     // Initialize paths first
     this._initPaths();
 
+    // Set up process exit handlers to ensure data is saved before exit
+    this._setupExitHandlers();
+
     try {
       await this.loadState();
       this.initialized = true;
@@ -48,25 +53,31 @@ class ProcessingStateService {
   }
 
   /**
-   * Safely update state with locking to prevent race conditions
+   * Set up process exit handlers to ensure data is saved before shutdown
    */
-  async updateState(updater) {
-    if (this.updateLock) {
-      // Wait for current update to complete
-      while (this.updateLock) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    }
+  _setupExitHandlers() {
+    if (this.exitHandlersSetup) return;
+    this.exitHandlersSetup = true;
 
-    this.updateLock = true;
-    try {
-      if (typeof updater === 'function' && this.state) {
-        updater(this.state);
-        this.debouncedSave();
+    // Handle various exit scenarios
+    const handleExit = async (signal) => {
+      console.log(
+        `[PROCESSING-STATE] Received ${signal}, forcing save before exit...`,
+      );
+      try {
+        await this.forceSave();
+        console.log(
+          '[PROCESSING-STATE] Save completed successfully before exit',
+        );
+      } catch (error) {
+        logger.error('[PROCESSING-STATE] Failed to save before exit:', error);
       }
-    } finally {
-      this.updateLock = false;
-    }
+    };
+
+    // Handle different exit signals
+    process.on('beforeExit', () => handleExit('beforeExit'));
+    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    process.on('SIGINT', () => handleExit('SIGINT'));
   }
 
   createEmptyState() {
@@ -102,9 +113,46 @@ class ProcessingStateService {
     }
   }
 
+  /**
+   * Queued save to prevent concurrent writes and file corruption
+   */
   async saveState() {
     this.state.updatedAt = new Date().toISOString();
-    await backupAndReplace(this.statePath, JSON.stringify(this.state, null, 2));
+
+    // Add this save operation to the queue
+    this.saveQueue = this.saveQueue
+      .then(async () => {
+        if (this.isSaving) {
+          console.log(
+            '[PROCESSING-STATE] Save already in progress, queuing...',
+          );
+        }
+
+        this.isSaving = true;
+        try {
+          const result = await backupAndReplace(
+            this.statePath,
+            JSON.stringify(this.state, null, 2),
+          );
+          if (!result.success) {
+            logger.error('[PROCESSING-STATE] Save failed:', result.error);
+            throw new Error(result.error);
+          }
+          return result;
+        } catch (error) {
+          logger.error('[PROCESSING-STATE] Save operation failed:', error);
+          throw error;
+        } finally {
+          this.isSaving = false;
+        }
+      })
+      .catch((error) => {
+        logger.error('[PROCESSING-STATE] Save failed:', error);
+        this.isSaving = false;
+        throw error;
+      });
+
+    return this.saveQueue;
   }
 
   /**
@@ -134,29 +182,15 @@ class ProcessingStateService {
    * Force immediate save (for critical operations)
    */
   async forceSave() {
-    if (this.saving) {
-      return this.savePromise;
-    }
-    this.saving = true;
-
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
     }
 
-    this.savePromise = (async () => {
-      try {
-        if (this.dirty && this.state) {
-          await this.saveState();
-          this.dirty = false;
-        }
-      } finally {
-        this.saving = false;
-        this.savePromise = null;
-      }
-    })();
-
-    return this.savePromise;
+    if (this.dirty && this.state) {
+      await this.saveState();
+      this.dirty = false;
+    }
   }
 
   // ===== Analysis tracking =====
@@ -231,8 +265,7 @@ class ProcessingStateService {
   async markOrganizeOpStarted(batchId, index) {
     await this.initialize();
     const batch = this.state.organize.batches[batchId];
-    if (!batch || !batch.operations) return;
-    if (!batch.operations[index]) return;
+    if (!batch) return;
     batch.operations[index].status = 'in_progress';
     batch.operations[index].error = null;
     this.state.organize.lastUpdated = new Date().toISOString();

@@ -1,5 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const sanitizeHtml = require('sanitize-html');
+let sanitizeHtml;
+try {
+  sanitizeHtml = require('sanitize-html');
+} catch (e) {
+  // Fallback minimal sanitizer if the module isn't available in the preload bundle
+  console.warn(
+    '[PRELOAD] sanitize-html not available, using minimal fallback sanitizer',
+  );
+  sanitizeHtml = function (input) {
+    if (typeof input !== 'string') return input;
+    return input.replace(/<[^>]*>?/gm, '');
+  };
+}
 
 // Import centralized IPC channel map - simplified for sandbox compatibility
 // The main process will provide the IPC channels via a synchronous IPC call
@@ -15,17 +27,46 @@ try {
 }
 
 // Dynamically derive allowed send channels from centralized IPC_CHANNELS to prevent drift
+// Be defensive: IPC_CHANNELS may be an empty object in some sandboxed contexts
 const ALLOWED_CHANNELS = {
-  FILES: Object.values(IPC_CHANNELS?.FILES || {}),
-  SMART_FOLDERS: Object.values(IPC_CHANNELS?.SMART_FOLDERS || {}),
-  ANALYSIS: Object.values(IPC_CHANNELS?.ANALYSIS || {}),
-  SETTINGS: Object.values(IPC_CHANNELS?.SETTINGS || {}),
-  OLLAMA: Object.values(IPC_CHANNELS?.OLLAMA || {}),
-  UNDO_REDO: Object.values(IPC_CHANNELS?.UNDO_REDO || {}),
-  ANALYSIS_HISTORY: Object.values(IPC_CHANNELS?.ANALYSIS_HISTORY || {}),
-  EMBEDDINGS: Object.values(IPC_CHANNELS?.EMBEDDINGS || {}),
-  SYSTEM: Object.values(IPC_CHANNELS?.SYSTEM || {}),
-  WINDOW: Object.values(IPC_CHANNELS?.WINDOW || {}),
+  FILES:
+    IPC_CHANNELS && IPC_CHANNELS.FILES ? Object.values(IPC_CHANNELS.FILES) : [],
+  SMART_FOLDERS:
+    IPC_CHANNELS && IPC_CHANNELS.SMART_FOLDERS
+      ? Object.values(IPC_CHANNELS.SMART_FOLDERS)
+      : [],
+  ANALYSIS:
+    IPC_CHANNELS && IPC_CHANNELS.ANALYSIS
+      ? Object.values(IPC_CHANNELS.ANALYSIS)
+      : [],
+  SETTINGS:
+    IPC_CHANNELS && IPC_CHANNELS.SETTINGS
+      ? Object.values(IPC_CHANNELS.SETTINGS)
+      : [],
+  OLLAMA:
+    IPC_CHANNELS && IPC_CHANNELS.OLLAMA
+      ? Object.values(IPC_CHANNELS.OLLAMA)
+      : [],
+  UNDO_REDO:
+    IPC_CHANNELS && IPC_CHANNELS.UNDO_REDO
+      ? Object.values(IPC_CHANNELS.UNDO_REDO)
+      : [],
+  ANALYSIS_HISTORY:
+    IPC_CHANNELS && IPC_CHANNELS.ANALYSIS_HISTORY
+      ? Object.values(IPC_CHANNELS.ANALYSIS_HISTORY)
+      : [],
+  EMBEDDINGS:
+    IPC_CHANNELS && IPC_CHANNELS.EMBEDDINGS
+      ? Object.values(IPC_CHANNELS.EMBEDDINGS)
+      : [],
+  SYSTEM:
+    IPC_CHANNELS && IPC_CHANNELS.SYSTEM
+      ? Object.values(IPC_CHANNELS.SYSTEM)
+      : [],
+  WINDOW:
+    IPC_CHANNELS && IPC_CHANNELS.WINDOW
+      ? Object.values(IPC_CHANNELS.WINDOW)
+      : [],
 };
 
 // Fast-path receive channels (Set-based for quick lookups)
@@ -88,6 +129,8 @@ class SecureIPCManager {
    * Secure invoke with validation and error handling
    */
   async safeInvoke(channel, ...args) {
+    const startTime = performance.now();
+
     try {
       // Channel validation
       if (!ALL_SEND_CHANNELS.includes(channel)) {
@@ -121,20 +164,43 @@ class SecureIPCManager {
       // Argument sanitization
       const sanitizedArgs = this.sanitizeArguments(args);
 
-      console.log(
-        `[PRELOAD] Secure invoke: ${channel}`,
-        sanitizedArgs.length > 0 ? '[with args]' : '',
-      );
+      // Performance monitoring for slow operations
+      const invokePromise = ipcRenderer.invoke(channel, ...sanitizedArgs);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error('IPC timeout after 30 seconds')),
+          30000,
+        );
+      });
 
-      const result = await ipcRenderer.invoke(channel, ...sanitizedArgs);
+      const result = await Promise.race([invokePromise, timeoutPromise]);
 
       // Result validation
-      return this.validateResult(result, channel);
+      const validatedResult = this.validateResult(result, channel);
+
+      // Performance logging for slow operations (>500ms)
+      const duration = performance.now() - startTime;
+      if (duration > 500) {
+        console.warn(
+          `[PERF] Slow IPC operation: ${channel} took ${duration.toFixed(2)}ms`,
+        );
+      }
+
+      return validatedResult;
     } catch (error) {
+      const duration = performance.now() - startTime;
       console.error(
-        `[PRELOAD] IPC invoke error for ${channel}:`,
+        `[PRELOAD] IPC invoke error for ${channel} (${duration.toFixed(2)}ms):`,
         error.message,
       );
+
+      // Enhanced error classification
+      if (error.message.includes('timeout')) {
+        this.logSecurityEvent('ipc_timeout', { channel, duration });
+      } else if (error.message.includes('Unauthorized')) {
+        this.logSecurityEvent('unauthorized_channel', { channel });
+      }
+
       throw new Error(`IPC Error: ${error.message}`);
     }
   }
@@ -325,19 +391,250 @@ class SecureIPCManager {
   }
 
   /**
-   * Cleanup all active listeners
+   * Log security events for monitoring and analysis
+   */
+  logSecurityEvent(eventType, details = {}) {
+    const securityEvent = {
+      timestamp: new Date().toISOString(),
+      type: eventType,
+      ...details,
+    };
+
+    // Store in local security log (limited to prevent memory issues)
+    if (!this.securityEvents) {
+      this.securityEvents = [];
+    }
+
+    this.securityEvents.push(securityEvent);
+
+    // Keep only last 100 events
+    if (this.securityEvents.length > 100) {
+      this.securityEvents = this.securityEvents.slice(-100);
+    }
+
+    console.warn(`[SECURITY] ${eventType}:`, details);
+  }
+
+  /**
+   * Get security events for debugging
+   */
+  getSecurityEvents() {
+    return this.securityEvents || [];
+  }
+
+  /**
+   * Enhanced cleanup with security event summary
    */
   cleanup() {
     for (const [_key, { channel, callback }] of this.activeListeners) {
       ipcRenderer.removeListener(channel, callback);
     }
     this.activeListeners.clear();
+
+    // Log security summary on cleanup
+    const securityEvents = this.getSecurityEvents();
+    if (securityEvents.length > 0) {
+      console.log(
+        `[PRELOAD] Cleanup: ${securityEvents.length} security events recorded`,
+      );
+    }
+
     console.log('[PRELOAD] All IPC listeners cleaned up');
   }
 }
 
-// Initialize secure IPC manager
+/**
+ * Enhanced Error Recovery System for IPC
+ */
+class IPCErrorRecovery {
+  constructor(secureIPC) {
+    this.secureIPC = secureIPC;
+    this.retryQueue = new Map();
+    this.circuitBreakers = new Map();
+    this.failureCounts = new Map();
+    this.maxRetries = 3;
+    this.baseDelay = 1000; // 1 second
+    this.maxDelay = 30000; // 30 seconds
+    this.circuitBreakerThreshold = 5; // Open circuit after 5 failures
+    this.circuitBreakerTimeout = 60000; // 1 minute
+  }
+
+  /**
+   * Execute IPC call with automatic retry and error recovery
+   */
+  async executeWithRecovery(channel, args = [], options = {}) {
+    const {
+      maxRetries = this.maxRetries,
+      retryCondition = (error) => this.isRetryableError(error),
+      fallbackFn = null,
+      onRetry = null,
+    } = options;
+
+    // Check circuit breaker
+    if (this.isCircuitOpen(channel)) {
+      if (fallbackFn) {
+        console.warn(`[RECOVERY] Circuit open for ${channel}, using fallback`);
+        return await fallbackFn(...args);
+      }
+      throw new Error(`Circuit breaker open for channel: ${channel}`);
+    }
+
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.secureIPC.safeInvoke(channel, ...args);
+
+        // Success - reset circuit breaker and failure count
+        this.resetCircuitBreaker(channel);
+        this.failureCounts.delete(channel);
+
+        return result;
+      } catch (error) {
+        lastError = error;
+
+        // Record failure
+        this.recordFailure(channel, error);
+
+        // Check if error is retryable
+        if (!retryCondition(error) || attempt === maxRetries) {
+          break;
+        }
+
+        // Calculate delay with exponential backoff and jitter
+        const delay = this.calculateDelay(attempt);
+        console.warn(
+          `[RECOVERY] Attempt ${attempt + 1} failed for ${channel}, retrying in ${delay}ms:`,
+          error.message,
+        );
+
+        if (onRetry) {
+          onRetry(attempt + 1, error, delay);
+        }
+
+        await this.delay(delay);
+      }
+    }
+
+    // All retries exhausted
+    if (fallbackFn) {
+      console.warn(
+        `[RECOVERY] All retries exhausted for ${channel}, using fallback`,
+      );
+      try {
+        return await fallbackFn(...args);
+      } catch (fallbackError) {
+        console.error(
+          `[RECOVERY] Fallback also failed for ${channel}:`,
+          fallbackError,
+        );
+        throw fallbackError;
+      }
+    }
+
+    // Open circuit breaker if we've had multiple failures
+    this.openCircuitBreaker(channel);
+    throw lastError;
+  }
+
+  /**
+   * Determine if an error is retryable
+   */
+  isRetryableError(error) {
+    const retryablePatterns = [
+      'timeout',
+      'network',
+      'connection',
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+    ];
+
+    const errorMessage = error.message.toLowerCase();
+    return retryablePatterns.some((pattern) => errorMessage.includes(pattern));
+  }
+
+  /**
+   * Calculate delay with exponential backoff and jitter
+   */
+  calculateDelay(attempt) {
+    const exponentialDelay = this.baseDelay * Math.pow(2, attempt);
+    const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
+    return Math.min(exponentialDelay + jitter, this.maxDelay);
+  }
+
+  /**
+   * Record a failure for circuit breaker logic
+   */
+  recordFailure(channel, error) {
+    const count = (this.failureCounts.get(channel) || 0) + 1;
+    this.failureCounts.set(channel, count);
+
+    if (count >= this.circuitBreakerThreshold) {
+      this.openCircuitBreaker(channel);
+    }
+  }
+
+  /**
+   * Open circuit breaker for a channel
+   */
+  openCircuitBreaker(channel) {
+    this.circuitBreakers.set(channel, {
+      openTime: Date.now(),
+      failureCount: this.failureCounts.get(channel) || 0,
+    });
+    console.error(`[RECOVERY] Circuit breaker opened for ${channel}`);
+  }
+
+  /**
+   * Reset circuit breaker for a channel
+   */
+  resetCircuitBreaker(channel) {
+    if (this.circuitBreakers.has(channel)) {
+      this.circuitBreakers.delete(channel);
+      this.failureCounts.delete(channel);
+      console.log(`[RECOVERY] Circuit breaker reset for ${channel}`);
+    }
+  }
+
+  /**
+   * Check if circuit breaker is open
+   */
+  isCircuitOpen(channel) {
+    const breaker = this.circuitBreakers.get(channel);
+    if (!breaker) return false;
+
+    // Check if circuit breaker should be reset
+    if (Date.now() - breaker.openTime > this.circuitBreakerTimeout) {
+      this.resetCircuitBreaker(channel);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Utility delay function
+   */
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get recovery statistics
+   */
+  getRecoveryStats() {
+    return {
+      activeCircuitBreakers: Array.from(this.circuitBreakers.keys()),
+      failureCounts: Object.fromEntries(this.failureCounts),
+      retryQueue: this.retryQueue.size,
+    };
+  }
+}
+
+// Initialize secure IPC manager and error recovery
 const secureIPC = new SecureIPCManager();
+const ipcRecovery = new IPCErrorRecovery(secureIPC);
 
 // Cleanup on window unload
 window.addEventListener('beforeunload', () => {
@@ -346,6 +643,161 @@ window.addEventListener('beforeunload', () => {
 
 // Expose secure, typed API through context bridge
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Security monitoring and debugging (development only)
+  security: {
+    getSecurityEvents: () => secureIPC.getSecurityEvents(),
+    getIPCMetrics: () => ({
+      activeListeners: secureIPC.activeListeners.size,
+      rateLimiterSize: secureIPC.rateLimiter.size,
+      totalSecurityEvents: secureIPC.getSecurityEvents().length,
+    }),
+    auditSecurity: () => {
+      const events = secureIPC.getSecurityEvents();
+      const recentEvents = events.filter((event) => {
+        const eventTime = new Date(event.timestamp);
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        return eventTime > oneHourAgo;
+      });
+
+      return {
+        totalEvents: events.length,
+        recentEvents: recentEvents.length,
+        eventTypes: events.reduce((acc, event) => {
+          acc[event.type] = (acc[event.type] || 0) + 1;
+          return acc;
+        }, {}),
+        lastEvent: events[events.length - 1] || null,
+      };
+    },
+    getRecoveryStats: () => ipcRecovery.getRecoveryStats(),
+    executeWithRecovery: (channel, args, options) =>
+      ipcRecovery.executeWithRecovery(channel, args, options),
+  },
+
+  // IPC Monitoring (development and debugging)
+  monitoring: {
+    getMetrics: () => secureIPC.safeInvoke('ipc:get-metrics'),
+    getRecentCalls: (limit = 50) =>
+      secureIPC.safeInvoke('ipc:get-recent-calls', limit),
+    getSlowCalls: () => secureIPC.safeInvoke('ipc:get-slow-calls'),
+    detectAnomalies: () => secureIPC.safeInvoke('ipc:detect-anomalies'),
+  },
+
+  // IPC Testing (development only)
+  testing: {
+    simulateFailure: (channel, failureType, responseData) =>
+      secureIPC.safeInvoke('ipc:test:simulate-failure', {
+        channel,
+        failureType,
+        responseData,
+      }),
+    clearFailures: () => secureIPC.safeInvoke('ipc:test:clear-failures'),
+    getFailureModes: () => secureIPC.safeInvoke('ipc:test:get-failure-modes'),
+    runScenarios: () => secureIPC.safeInvoke('ipc:test:run-scenarios'),
+    getReport: () => secureIPC.safeInvoke('ipc:test:get-report'),
+  },
+
+  // High-Performance MessagePort Communication
+  messagePort: {
+    /**
+     * Create a MessagePort for high-throughput communication
+     * Useful for large data transfers, streaming, or real-time updates
+     */
+    create: async () => {
+      try {
+        const result = await secureIPC.safeInvoke('ipc:create-message-port');
+        if (result.success && result.port) {
+          const port = result.port;
+
+          // Set up the port in the renderer
+          port.onmessage = (event) => {
+            const { type, requestId, ...data } = event.data;
+            // Handle responses based on type
+            console.log(`[MESSAGEPORT] Received: ${type}`, data);
+          };
+
+          port.start();
+
+          return {
+            success: true,
+            port,
+            sendMessage: (type, data, requestId = Date.now()) => {
+              port.postMessage({ type, data, requestId });
+            },
+            close: () => port.close(),
+          };
+        }
+        return result;
+      } catch (error) {
+        console.error('[MESSAGEPORT] Failed to create MessagePort:', error);
+        return { success: false, error: error.message };
+      }
+    },
+
+    /**
+     * Utility for sending large data efficiently
+     */
+    sendLargeData: async (data, onProgress) => {
+      const portResult = await window.electronAPI.messagePort.create();
+      if (!portResult.success) {
+        throw new Error('Failed to create MessagePort for large data transfer');
+      }
+
+      const { port, sendMessage } = portResult;
+
+      return new Promise((resolve, reject) => {
+        const totalSize = JSON.stringify(data).length;
+        let sentSize = 0;
+
+        // Set up response handler
+        port.onmessage = (event) => {
+          const { type, success, error, size } = event.data;
+          if (type === 'data-received' && success) {
+            sentSize += size;
+            if (onProgress) {
+              onProgress(sentSize / totalSize);
+            }
+            if (sentSize >= totalSize) {
+              port.close();
+              resolve({ success: true, totalSize });
+            }
+          } else if (type === 'error') {
+            port.close();
+            reject(new Error(error));
+          }
+        };
+
+        // Send data in chunks if needed
+        if (totalSize > 1024 * 1024) {
+          // 1MB threshold
+          // For very large data, send in chunks
+          const chunkSize = 512 * 1024; // 512KB chunks
+          const chunks = [];
+          const dataStr = JSON.stringify(data);
+
+          for (let i = 0; i < dataStr.length; i += chunkSize) {
+            chunks.push(dataStr.slice(i, i + chunkSize));
+          }
+
+          // Send stream start
+          sendMessage('stream-start', {
+            totalChunks: chunks.length,
+            totalSize,
+          });
+
+          // Send chunks
+          chunks.forEach((chunk, index) => {
+            setTimeout(() => {
+              sendMessage('stream-chunk', chunk, `chunk_${index}`);
+            }, index * 10); // Small delay between chunks
+          });
+        } else {
+          // Send as single transfer
+          sendMessage('large-data-transfer', data);
+        }
+      });
+    },
+  },
   // File Operations
   files: {
     select: () => secureIPC.safeInvoke(IPC_CHANNELS.FILES.SELECT),
@@ -502,7 +954,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     canRedo: () => secureIPC.safeInvoke(IPC_CHANNELS.UNDO_REDO.CAN_REDO),
   },
 
-  // System Monitoring (only metrics and app statistics currently implemented)
+  // System Monitoring (including log management)
   system: {
     getMetrics: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_METRICS),
     getApplicationStatistics: () =>
@@ -511,6 +963,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       IPC_CHANNELS.SYSTEM.APPLY_UPDATE
         ? secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.APPLY_UPDATE)
         : undefined,
+    // Log management functions for LogViewer component
+    getLogFiles: (type) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_LOG_FILES, type),
+    getLogStats: () => secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_LOG_STATS),
+    getRecentLogs: (type, lines = 100) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_RECENT_LOGS, type, lines),
+    readLogFile: (type, filename) =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.READ_LOG_FILE, type, filename),
+    getSystemStatus: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.GET_SYSTEM_STATUS),
+    performHealthCheck: () =>
+      secureIPC.safeInvoke(IPC_CHANNELS.SYSTEM.PERFORM_HEALTH_CHECK),
   },
 
   // Window controls (Windows custom title bar)
@@ -561,6 +1025,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onAiStatusUpdate: (callback) =>
       secureIPC.safeOn('ai-status-update', callback),
   },
+
+  // Reporting / crash helpers - allow renderer to notify main crash reporter
+  reportCrash: (crashData) =>
+    secureIPC.safeInvoke('ipc:report-crash', crashData),
 
   // Settings
   settings: {

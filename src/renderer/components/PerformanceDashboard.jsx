@@ -11,10 +11,17 @@ const ipcRenderer = (typeof window !== 'undefined' &&
 };
 
 const PerformanceDashboard = ({ isOpen, onClose, onOpenLogViewer }) => {
-  const [metrics, setMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
+  const [metrics, setMetricsRaw] = useState(null);
+  const setMetrics = (v) => mounted.current && setMetricsRaw(v);
+  const [loadingRaw, setLoadingRaw] = useState(true);
+  const setLoading = (v) => mounted.current && setLoadingRaw(v);
   const [refreshInterval, setRefreshInterval] = useState(5000); // 5 seconds
-  const [systemStatus, setSystemStatus] = useState(null);
+  const [systemStatusRaw, setSystemStatusRaw] = useState(null);
+  const systemStatus = systemStatusRaw;
+  const setSystemStatus = (v) => mounted.current && setSystemStatusRaw(v);
   const [showSystemStatus, setShowSystemStatus] = useState(false);
 
   const fetchMetrics = async () => {
@@ -53,12 +60,15 @@ const PerformanceDashboard = ({ isOpen, onClose, onOpenLogViewer }) => {
   };
 
   useEffect(() => {
+    let interval;
     if (isOpen) {
       fetchMetrics();
-      const interval = setInterval(fetchMetrics, refreshInterval);
-      return () => clearInterval(interval);
+      interval = setInterval(fetchMetrics, refreshInterval);
     }
-  }, [isOpen, refreshInterval, fetchMetrics]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isOpen, refreshInterval]);
 
   const formatDuration = (ms) => {
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -132,7 +142,7 @@ const PerformanceDashboard = ({ isOpen, onClose, onOpenLogViewer }) => {
         </div>
 
         <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-          {loading ? (
+          {loadingRaw ? (
             <div className="flex justify-center items-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>

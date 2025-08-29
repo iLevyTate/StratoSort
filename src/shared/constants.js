@@ -262,7 +262,7 @@ const TIMEOUTS = {
   AI_REQUEST: 60000, // 1 minute for faster models (llama3.2, whisper-tiny)
   LLM_ENHANCEMENT: 30000, // 30 seconds for LLM smart folder enhancement
   LLM_SIMILARITY: 10000, // 10 seconds for folder similarity checks
-  GPU_DETECTION: 3000, // 3 seconds for GPU subprocess detection
+  GPU_DETECTION: 7000, // 7 seconds for GPU subprocess detection (increased to reduce false timeouts)
   FILE_STABILITY_CHECK: 1000, // 1 second to verify file stability
   SUBPROCESS_GRACE_KILL: 1000, // 1 second grace period before force kill
   FILE_OPERATION: 10000, // 10 seconds

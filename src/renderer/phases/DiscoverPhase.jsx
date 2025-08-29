@@ -24,17 +24,72 @@ function DiscoverPhase() {
   const { actions, phaseData } = usePhase();
   const { addNotification } = useNotification();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [analysisResults, setAnalysisResults] = useState([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [currentAnalysisFile, setCurrentAnalysisFile] = useState('');
-  const [analysisProgress, setAnalysisProgress] = useState({
+  // Mounted guard
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
+  // Timer cleanup registry to prevent memory leaks
+  const timersRef = useRef([]);
+
+  // Safe timer wrappers that register for cleanup
+  const safeSetTimeout = (fn, delay) => {
+    if (!mounted.current) return null;
+    const id = setTimeout(() => {
+      if (mounted.current) fn();
+    }, delay);
+    timersRef.current.push({ type: 'timeout', id });
+    return id;
+  };
+
+  const safeSetInterval = (fn, delay) => {
+    if (!mounted.current) return null;
+    const id = setInterval(() => {
+      if (mounted.current) fn();
+    }, delay);
+    timersRef.current.push({ type: 'interval', id });
+    return id;
+  };
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(({ type, id }) => {
+        if (type === 'timeout') clearTimeout(id);
+        else if (type === 'interval') clearInterval(id);
+      });
+      timersRef.current = [];
+    };
+  }, []);
+
+  const [selectedFiles, setSelectedFilesRaw] = useState([]);
+  const setSelectedFiles = (v) => mounted.current && setSelectedFilesRaw(v);
+
+  const [analysisResults, setAnalysisResultsRaw] = useState([]);
+  const setAnalysisResults = (v) => mounted.current && setAnalysisResultsRaw(v);
+
+  const [isAnalyzing, setIsAnalyzingRaw] = useState(false);
+  const setIsAnalyzing = (v) => mounted.current && setIsAnalyzingRaw(v);
+
+  const [isScanning, setIsScanningRaw] = useState(false);
+  const setIsScanning = (v) => mounted.current && setIsScanningRaw(v);
+
+  const [currentAnalysisFile, setCurrentAnalysisFileRaw] = useState('');
+  const setCurrentAnalysisFile = (v) =>
+    mounted.current && setCurrentAnalysisFileRaw(v);
+
+  const [analysisProgress, setAnalysisProgressRaw] = useState({
     current: 0,
     total: 0,
   });
-  const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
-  const [analysisStats, setAnalysisStats] = useState(null);
+  const setAnalysisProgress = (v) =>
+    mounted.current && setAnalysisProgressRaw(v);
+
+  const [showAnalysisHistory, setShowAnalysisHistoryRaw] = useState(false);
+  const setShowAnalysisHistory = (v) =>
+    mounted.current && setShowAnalysisHistoryRaw(v);
+
+  const [analysisStats, setAnalysisStatsRaw] = useState(null);
+  const setAnalysisStats = (v) => mounted.current && setAnalysisStatsRaw(v);
 
   const [namingConvention, setNamingConvention] = useState('subject-date');
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
@@ -66,22 +121,27 @@ function DiscoverPhase() {
   const renderCountRef = useRef(0);
   useEffect(() => {
     renderCountRef.current += 1;
-    // Log render count occasionally to avoid spamming
-    if (renderCountRef.current % 20 === 0) {
+    // Log render count occasionally to avoid spamming (development only)
+    if (
+      process.env.NODE_ENV === 'development' &&
+      renderCountRef.current % 20 === 0
+    ) {
       console.log('[PERF] DiscoverPhase render count:', renderCountRef.current);
     }
   });
 
   useEffect(() => {
-    // Log sizes of large collections when they change to spot regressions
-    console.log(
-      '[PERF] selectedFiles:',
-      selectedFiles.length,
-      'analysisResults:',
-      analysisResults.length,
-      'fileStates:',
-      Object.keys(fileStates).length,
-    );
+    // Log sizes of large collections when they change to spot regressions (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[PERF] selectedFiles:',
+        selectedFiles.length,
+        'analysisResults:',
+        analysisResults.length,
+        'fileStates:',
+        Object.keys(fileStates).length,
+      );
+    }
   }, [
     selectedFiles.length,
     analysisResults.length,
@@ -121,7 +181,40 @@ function DiscoverPhase() {
     setDateFormat(persistedNaming.dateFormat || 'YYYY-MM-DD');
     setCaseConvention(persistedNaming.caseConvention || 'kebab-case');
     setSeparator(persistedNaming.separator || '-');
-    if (persistedResults.length > 0) setAnalysisResults(persistedResults);
+
+    // Reconstruct analysis results from file states if no persisted results exist
+    let finalResults = persistedResults;
+    if (
+      persistedResults.length === 0 &&
+      Object.keys(persistedStates).length > 0
+    ) {
+      // Reconstruct analysis results from file states that have analysis data
+      const reconstructedResults = persistedFiles
+        .map((file) => {
+          const state = persistedStates[file.path];
+          if (state && state.state === 'ready' && state.analysis) {
+            return {
+              ...file,
+              analysis: state.analysis,
+              status: 'analyzed',
+              analyzedAt: state.analyzedAt || new Date().toISOString(),
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (reconstructedResults.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `[DISCOVER] Reconstructed ${reconstructedResults.length} analysis results from file states`,
+          );
+        }
+        finalResults = reconstructedResults;
+      }
+    }
+
+    if (finalResults.length > 0) setAnalysisResults(finalResults);
     if (persistedIsAnalyzing) {
       // Check if analysis state is actually valid (not stuck)
       const lastActivity = persistedProgress.lastActivity || Date.now();
@@ -129,9 +222,11 @@ function DiscoverPhase() {
       const isStuck = timeSinceActivity > 2 * 60 * 1000; // 2 minutes
 
       if (isStuck) {
-        console.log(
-          '[ANALYSIS] Detected stuck analysis state on mount, resetting...',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Detected stuck analysis state on mount, resetting...',
+          );
+        }
         // Don't restore stuck analysis state
         actions.setPhaseData('isAnalyzing', false);
         actions.setPhaseData('analysisProgress', { current: 0, total: 0 });
@@ -194,9 +289,11 @@ function DiscoverPhase() {
       const fiveMinutes = 5 * 60 * 1000;
 
       if (timeSinceActivity > fiveMinutes) {
-        console.log(
-          '[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Auto-resetting stuck analysis state after 5 minutes of inactivity',
+          );
+        }
         addNotification(
           'Detected stuck analysis state - auto-resetting',
           'warning',
@@ -231,9 +328,11 @@ function DiscoverPhase() {
       const twoMinutes = 2 * 60 * 1000;
 
       if (timeSinceActivity > twoMinutes) {
-        console.log(
-          '[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes',
-        );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            '[ANALYSIS] Auto-resetting analysis with no progress after 2 minutes',
+          );
+        }
         addNotification(
           'Analysis stalled with no progress - auto-resetting',
           'warning',
@@ -929,16 +1028,18 @@ function DiscoverPhase() {
   const analyzeFiles = async (files) => {
     if (!files || files.length === 0) return;
 
-    console.log('[ANALYSIS] analyzeFiles called with:', {
-      filesCount: files.length,
-      isAnalyzing,
-      analysisProgress,
-      hasLastActivity: !!analysisProgress.lastActivity,
-      timeSinceActivity: analysisProgress.lastActivity
-        ? Date.now() - analysisProgress.lastActivity
-        : 'N/A',
-      lockStatus: analysisLockRef.current,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ANALYSIS] analyzeFiles called with:', {
+        filesCount: files.length,
+        isAnalyzing,
+        analysisProgress,
+        hasLastActivity: !!analysisProgress.lastActivity,
+        timeSinceActivity: analysisProgress.lastActivity
+          ? Date.now() - analysisProgress.lastActivity
+          : 'N/A',
+        lockStatus: analysisLockRef.current,
+      });
+    }
 
     // Prevent multiple simultaneous analysis calls with atomic check
     if (analysisLockRef.current || globalAnalysisActive || isAnalyzing) {
@@ -956,13 +1057,15 @@ function DiscoverPhase() {
     // Atomically acquire both locks to prevent race conditions
     analysisLockRef.current = true;
     setGlobalAnalysisActive(true);
-    console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ANALYSIS] Analysis lock acquired and global state set');
+    }
 
     // Initialize cleanup variables to prevent ReferenceError
     let heartbeatInterval = null;
 
     // Set a timeout to release the lock after 5 minutes (safety measure)
-    const lockTimeout = setTimeout(
+    const lockTimeout = safeSetTimeout(
       () => {
         if (analysisLockRef.current) {
           console.warn(
@@ -1002,10 +1105,15 @@ function DiscoverPhase() {
     actions.setPhaseData('analysisProgress', initialProgress);
     actions.setPhaseData('currentAnalysisFile', '');
 
-    console.log('[ANALYSIS] Started analysis with progress:', initialProgress);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[ANALYSIS] Started analysis with progress:',
+        initialProgress,
+      );
+    }
 
     // Set up progress heartbeat to prevent stuck states
-    heartbeatInterval = setInterval(() => {
+    heartbeatInterval = safeSetInterval(() => {
       // Use refs to avoid stale closure values
       if (isAnalyzingRef.current) {
         const latestProgress = analysisProgressRef.current || {
@@ -1026,7 +1134,6 @@ function DiscoverPhase() {
           console.warn(
             '[ANALYSIS] Invalid heartbeat progress state detected, resetting analysis',
           );
-          clearInterval(heartbeatInterval);
           resetAnalysisState();
         }
       }
@@ -1288,7 +1395,7 @@ function DiscoverPhase() {
           4000,
           'analysis-complete',
         );
-        setTimeout(() => {
+        safeSetTimeout(() => {
           addNotification(
             '📂 Proceeding to organize phase...',
             'info',
@@ -1304,7 +1411,7 @@ function DiscoverPhase() {
           4000,
           'analysis-complete',
         );
-        setTimeout(() => {
+        safeSetTimeout(() => {
           addNotification(
             '📂 Proceeding to organize phase...',
             'info',
@@ -1330,12 +1437,7 @@ function DiscoverPhase() {
       );
     } finally {
       // Always reset analysis state, regardless of success/failure
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval); // Clean up heartbeat
-      }
-      if (lockTimeout) {
-        clearTimeout(lockTimeout); // Clear the timeout
-      }
+      // Note: Timers are automatically cleaned up by useEffect cleanup function
 
       setIsAnalyzing(false);
       setCurrentAnalysisFile('');

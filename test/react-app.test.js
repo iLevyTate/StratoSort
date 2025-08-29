@@ -71,27 +71,42 @@ describe('StratoSort React App', () => {
 
   describe('File Processing', () => {
     test('drag and drop functionality is implemented', () => {
-      const discoverContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/phases/DiscoverPhase.jsx'),
-        'utf8',
+      // Use absolute paths to avoid __dirname issues in test environment
+      const projectRoot = path.resolve(__dirname, '..');
+      const discoverPath = path.join(
+        projectRoot,
+        'src/renderer/phases/DiscoverPhase.jsx',
       );
+      const hookPath = path.join(
+        projectRoot,
+        'src/renderer/hooks/useDragAndDrop.js',
+      );
+
+      // Check if files exist first
+      expect(fs.existsSync(discoverPath)).toBe(true);
+      expect(fs.existsSync(hookPath)).toBe(true);
+
+      const discoverContent = fs.readFileSync(discoverPath, 'utf8');
+      const hookContent = fs.readFileSync(hookPath, 'utf8');
+
       // Discover should use the hook
       expect(discoverContent).toContain('useDragAndDrop');
       // The hook should implement the handlers
-      const hookContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/hooks/useDragAndDrop.js'),
-        'utf8',
-      );
       expect(hookContent).toContain('handleDragEnter');
       expect(hookContent).toContain('handleDragLeave');
       expect(hookContent).toContain('handleDrop');
     });
 
     test('file analysis supports multiple file types (via DiscoverPhase)', () => {
-      const discoverContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/phases/DiscoverPhase.jsx'),
-        'utf8',
+      const projectRoot = path.resolve(__dirname, '..');
+      const discoverPath = path.join(
+        projectRoot,
+        'src/renderer/phases/DiscoverPhase.jsx',
       );
+
+      expect(fs.existsSync(discoverPath)).toBe(true);
+
+      const discoverContent = fs.readFileSync(discoverPath, 'utf8');
       expect(discoverContent).toContain('getFileType');
       expect(discoverContent).toContain('analyzeFiles');
       expect(discoverContent.toLowerCase()).toContain('pdf');
@@ -102,25 +117,34 @@ describe('StratoSort React App', () => {
 
   describe('Undo/Redo System', () => {
     test('undo/redo system is imported and used', () => {
-      // Providers are wrapped in AppProviders
-      const providersContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/components/AppProviders.jsx'),
-        'utf8',
+      const projectRoot = path.resolve(__dirname, '..');
+      const providersPath = path.join(
+        projectRoot,
+        'src/renderer/components/AppProviders.jsx',
       );
+      const undoPath = path.join(
+        projectRoot,
+        'src/renderer/components/UndoRedoSystem.jsx',
+      );
+
+      expect(fs.existsSync(providersPath)).toBe(true);
+      expect(fs.existsSync(undoPath)).toBe(true);
+
+      // Providers are wrapped in AppProviders
+      const providersContent = fs.readFileSync(providersPath, 'utf8');
       expect(providersContent).toContain('UndoRedoProvider');
       expect(providersContent).toContain('NotificationProvider');
-      const undoContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx'),
-        'utf8',
-      );
+
+      const undoContent = fs.readFileSync(undoPath, 'utf8');
       expect(undoContent).toContain('useUndoRedo');
       expect(undoContent).toContain('UndoRedoToolbar');
     });
 
     test('undo/redo component file exists', () => {
+      const projectRoot = path.resolve(__dirname, '..');
       const candidates = [
-        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.js'),
-        path.join(__dirname, '../src/renderer/components/UndoRedoSystem.jsx'),
+        path.join(projectRoot, 'src/renderer/components/UndoRedoSystem.js'),
+        path.join(projectRoot, 'src/renderer/components/UndoRedoSystem.jsx'),
       ];
       expect(candidates.some((p) => fs.existsSync(p))).toBe(true);
     });
@@ -128,10 +152,12 @@ describe('StratoSort React App', () => {
 
   describe('Integration Testing', () => {
     test('React DOM rendering is properly configured', () => {
-      const indexContent = fs.readFileSync(
-        path.join(__dirname, '../src/renderer/index.js'),
-        'utf8',
-      );
+      const projectRoot = path.resolve(__dirname, '..');
+      const indexPath = path.join(projectRoot, 'src/renderer/index.js');
+
+      expect(fs.existsSync(indexPath)).toBe(true);
+
+      const indexContent = fs.readFileSync(indexPath, 'utf8');
 
       // Modern React entry should use createRoot and render <App />
       expect(indexContent).toContain('createRoot');

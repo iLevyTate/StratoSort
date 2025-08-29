@@ -2,20 +2,22 @@
   "productName": "StratoSort",
   "appId": "com.stratosort.app",
   "asar": true,
-  "asarUnpack": ["**/*.node", "**/*.dll"],
+  "asarUnpack": [
+    "**/*.node",
+    "**/*.dll",
+    "**/node_modules/sharp/**/*",
+    "**/node_modules/@img/**/*"
+  ],
   "files": [
     "dist/**/*",
-    "!dist/**/*.map",
+    "node_modules/chokidar/**",
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
-    "node_modules/**/*",
-    "!node_modules/**/test/**",
-    "!node_modules/**/*.md",
     "package.json"
   ],
   "extraMetadata": {
-    "main": "dist/main.js",
+    "main": "src/main/simple-main.js",
     "version": "1.0.0"
   },
   "directories": {

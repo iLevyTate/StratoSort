@@ -198,14 +198,71 @@ global.testDataGenerators = {
 };
 
 // Import and setup mock services
-const { mockOllamaService } = require('./mocks/ollama');
+const mockOllamaService = require('./mocks/ollama');
+
+// Create a mock logger to handle module resolution issues
+const mockLogger = {
+  error: jest.fn(),
+  warn: jest.fn(),
+  info: jest.fn(),
+  debug: jest.fn(),
+  trace: jest.fn(),
+  log: jest.fn(),
+  setLevel: jest.fn(),
+  setContext: jest.fn(),
+  enableFileLogging: jest.fn(),
+  disableConsoleLogging: jest.fn(),
+  fileOperation: jest.fn(),
+  aiAnalysis: jest.fn(),
+  phaseTransition: jest.fn(),
+  performance: jest.fn(),
+  actionTrack: jest.fn(),
+  ollamaCall: jest.fn(),
+  queueMetrics: jest.fn(),
+};
+
+// Mock the logger module
+jest.mock('../../src/shared/logger', () => ({
+  logger: mockLogger,
+  Logger: jest.fn(),
+  LOG_LEVELS: {
+    ERROR: 0,
+    WARN: 1,
+    INFO: 2,
+    DEBUG: 3,
+    TRACE: 4,
+  },
+  LOG_LEVEL_NAMES: ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'],
+}));
 
 // Make mock services globally available
 global.mockOllamaService = mockOllamaService;
+global.mockLogger = mockLogger;
+
+// Store original global state for restoration
+const originalGlobalState = {
+  console: { ...console },
+  document: global.document,
+  window: global.window,
+  performance: global.performance,
+  documentStore: global.documentStore,
+  processingQueue: global.processingQueue,
+  stateListeners: global.stateListeners,
+  progressListeners: global.progressListeners,
+  aiConfig: global.aiConfig,
+  testFileSystem: global.testFileSystem,
+  testUtils: global.testUtils,
+  performanceUtils: global.performanceUtils,
+  testDataGenerators: global.testDataGenerators,
+  mockOllamaService: global.mockOllamaService,
+};
 
 // Cleanup between tests
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.clearAllTimers();
+
+  // Reset all global state
   global.documentStore = [];
   global.processingQueue = [];
   global.stateListeners = [];
@@ -228,6 +285,63 @@ beforeEach(() => {
   mockOllamaService.isConnected.mockReturnValue(true);
 });
 
+// Comprehensive cleanup after each test
+afterEach(() => {
+  // Clear all mocks
+  jest.clearAllMocks();
+  jest.clearAllTimers();
+  jest.useRealTimers();
+
+  // Reset global state to prevent test pollution
+  global.documentStore = [];
+  global.processingQueue = [];
+  global.stateListeners = [];
+  global.progressListeners = [];
+
+  // Clear test file system
+  if (global.testFileSystem && global.testFileSystem.clear) {
+    global.testFileSystem.clear();
+  }
+
+  // Reset AI config to defaults
+  global.aiConfig = {
+    confidenceThreshold: 0.7,
+    folderNamingPattern: '{category}/{type}',
+    enableDateExtraction: true,
+    categories: ['Financial', 'Legal', 'Project', 'Personal', 'Technical'],
+  };
+
+  // Reset DOM mocks
+  if (global.document && typeof global.document.querySelector === 'function') {
+    global.document.querySelector.mockClear();
+    global.document.querySelectorAll.mockClear();
+    global.document.createElement.mockClear();
+  }
+
+  if (global.window && typeof global.window.addEventListener === 'function') {
+    global.window.addEventListener.mockClear();
+    global.window.removeEventListener.mockClear();
+  }
+
+  // Reset performance mocks
+  if (global.performance && typeof global.performance.mark === 'function') {
+    global.performance.mark.mockClear();
+    global.performance.measure.mockClear();
+    global.performance.now.mockClear();
+  }
+
+  // Clear any global event listeners that might have been added
+  if (typeof process !== 'undefined' && process.removeAllListeners) {
+    // Only remove listeners we know were added during tests
+    // Be careful not to remove critical process listeners
+  }
+
+  // Force garbage collection if available (for memory leak detection)
+  if (global.gc) {
+    global.gc();
+  }
+});
+
 // Test environment validation
 beforeAll(() => {
   // Increase max listeners to prevent EventEmitter memory leak warnings
@@ -244,6 +358,38 @@ afterAll(() => {
   // Reset max listeners to default after tests complete
   process.setMaxListeners(10);
 
-  console.log('✅ All Stratosort tests completed');
-  console.log('🧹 Test environment cleaned up');
+  // Final comprehensive cleanup and restoration
+  try {
+    // Restore original global state where possible
+    if (originalGlobalState.console) {
+      global.console = { ...originalGlobalState.console };
+    }
+
+    // Clear all global test state
+    delete global.documentStore;
+    delete global.processingQueue;
+    delete global.stateListeners;
+    delete global.progressListeners;
+    delete global.aiConfig;
+    delete global.testFileSystem;
+    delete global.testUtils;
+    delete global.performanceUtils;
+    delete global.testDataGenerators;
+    delete global.mockOllamaService;
+
+    // Clear mocks if they exist
+    jest.clearAllMocks();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+
+    // Force final garbage collection
+    if (global.gc) {
+      global.gc();
+    }
+
+    console.log('✅ All Stratosort tests completed');
+    console.log('🧹 Test environment completely cleaned up and restored');
+  } catch (error) {
+    console.error('Error during final test cleanup:', error);
+  }
 });

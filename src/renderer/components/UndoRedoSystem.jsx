@@ -161,9 +161,15 @@ class UndoStack {
 // Undo/Redo Provider Component
 export function UndoRedoProvider({ children }) {
   const [undoStack] = useState(() => new UndoStack());
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const [isHistoryVisibleRaw, setIsHistoryVisibleRaw] = useState(false);
+  const isHistoryVisible = isHistoryVisibleRaw;
+  const setIsHistoryVisible = (v) =>
+    mounted.current && setIsHistoryVisibleRaw(v);
   const { showSuccess, showError, showInfo } = useNotification();
 
   // Local confirmation dialog state for nicer UX than window.confirm

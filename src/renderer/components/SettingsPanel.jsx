@@ -12,6 +12,8 @@ import BackgroundModeSection from './settings/BackgroundModeSection';
 function SettingsPanel() {
   const { actions } = usePhase();
   const { addNotification } = useNotification();
+  const mounted = require('../hooks/useIsMounted').default();
+
   const [settings, setSettings] = useState({
     ollamaHost: 'http://127.0.0.1:11434',
     textModel: 'llama3.2:latest',
@@ -30,30 +32,48 @@ function SettingsPanel() {
     all: [],
   });
   const [ollamaHealth, setOllamaHealth] = useState(null);
-  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
-  const [testResults, setTestResults] = useState({});
-  const [isTestingApi, setIsTestingApi] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isRebuildingFolders, setIsRebuildingFolders] = useState(false);
-  const [isRebuildingFiles, setIsRebuildingFiles] = useState(false);
+  const [isRefreshingModelsRaw, setIsRefreshingModelsRaw] = useState(false);
+  const isRefreshingModels = isRefreshingModelsRaw;
+  const setIsRefreshingModels = (v) =>
+    mounted.current && setIsRefreshingModelsRaw(v);
+  const [testResults, setTestResultsRaw] = useState({});
+  const setTestResults = (v) => mounted.current && setTestResultsRaw(v);
+  const [isTestingApiRaw, setIsTestingApiRaw] = useState(false);
+  const isTestingApi = isTestingApiRaw;
+  const setIsTestingApi = (v) => mounted.current && setIsTestingApiRaw(v);
+  const [isSavingRaw, setIsSavingRaw] = useState(false);
+  const isSaving = isSavingRaw;
+  const setIsSaving = (v) => mounted.current && setIsSavingRaw(v);
+  const [isRebuildingFoldersRaw, setIsRebuildingFoldersRaw] = useState(false);
+  const isRebuildingFolders = isRebuildingFoldersRaw;
+  const setIsRebuildingFolders = (v) =>
+    mounted.current && setIsRebuildingFoldersRaw(v);
+  const [isRebuildingFilesRaw, setIsRebuildingFilesRaw] = useState(false);
+  const isRebuildingFiles = isRebuildingFilesRaw;
+  const setIsRebuildingFiles = (v) =>
+    mounted.current && setIsRebuildingFilesRaw(v);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [newModel, setNewModel] = useState('');
   const [modelToDelete, setModelToDelete] = useState('');
-  const [isAddingModel, setIsAddingModel] = useState(false);
-  const [isDeletingModel, setIsDeletingModel] = useState(false);
+  const [isAddingModelRaw, setIsAddingModelRaw] = useState(false);
+  const isAddingModel = isAddingModelRaw;
+  const setIsAddingModel = (v) => mounted.current && setIsAddingModelRaw(v);
+  const [isDeletingModelRaw, setIsDeletingModelRaw] = useState(false);
+  const isDeletingModel = isDeletingModelRaw;
+  const setIsDeletingModel = (v) => mounted.current && setIsDeletingModelRaw(v);
   const didAutoHealthCheckRef = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
+    let localMounted = true;
 
     const loadSettingsIfMounted = async () => {
-      if (mounted) {
+      if (localMounted) {
         await loadSettings();
       }
     };
 
     const loadOllamaModelsIfMounted = async () => {
-      if (mounted) {
+      if (localMounted) {
         await loadOllamaModels();
       }
     };
@@ -62,7 +82,7 @@ function SettingsPanel() {
     loadOllamaModelsIfMounted();
 
     return () => {
-      mounted = false;
+      localMounted = false;
     };
   }, []);
 
@@ -130,7 +150,8 @@ function SettingsPanel() {
       }
     } catch (error) {
       console.error('Failed to load Ollama models:', error);
-      setOllamaModelLists({ text: [], vision: [], embedding: [], all: [] });
+      if (mounted.current)
+        setOllamaModelLists({ text: [], vision: [], embedding: [], all: [] });
     } finally {
       setIsRefreshingModels(false);
     }

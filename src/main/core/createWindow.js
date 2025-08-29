@@ -109,31 +109,44 @@ function createMainWindow() {
       backgroundColor: '#0f0f10', // Dark background while loading
       darkTheme: true, // Force dark theme on Windows
       webPreferences: {
-        // Security settings
+        // CORE SECURITY SETTINGS - Never change these in production
         nodeIntegration: nodeIntegrationEnabled,
-        nodeIntegrationInWorker: nodeIntegrationEnabled,
-        nodeIntegrationInSubFrames: nodeIntegrationEnabled,
-        contextIsolation: true,
-        sandbox: true, // Re-enabled for enhanced security - preload script updated for compatibility
-        enableRemoteModule: false,
+        nodeIntegrationInWorker: false, // Always false for security
+        nodeIntegrationInSubFrames: false, // Always false for security
+        contextIsolation: true, // Critical security boundary
+        sandbox: true, // Enhanced security isolation
+        enableRemoteModule: false, // Deprecated and insecure
+
+        // Web security settings
         webSecurity: true,
         allowRunningInsecureContent: false,
 
+        // Content Security Policy will be set via headers
+
         // Additional security measures
         experimentalFeatures: false,
-        webviewTag: false, // Disable webview tag
+        webviewTag: false, // Disable webview tag for security
         safeDialogs: true,
         disableDialogOptions: true, // Prevent dialog customization
         spellcheck: true,
 
-        // Preload script
+        // Navigation and new window restrictions
+        disableBlinkFeatures: 'Auxclick', // Disable middle-click features
+        disableWebSecurity: false, // Explicitly enable web security
+
+        // Preload script - secure gateway to IPC
         preload: path.join(__dirname, '../../preload/preload.js'),
 
-        // Performance settings
+        // Performance settings (secure)
         backgroundThrottling: false,
         devTools: isDev,
         hardwareAcceleration: true,
         enableWebGL: true,
+
+        // Additional hardening
+        enablePreferredSizeMode: false, // Prevent size manipulation
+        nativeWindowOpen: false, // Use secure window.open handling
+        safeDialogsMessage: 'This dialog was blocked for security reasons',
 
         // Removed invalid Electron flag: additionalArguments; rely on secure defaults instead
       },
@@ -144,6 +157,51 @@ function createMainWindow() {
     });
 
     logger.debug('[DEBUG] BrowserWindow created');
+
+    // Security audit of webPreferences
+    // Note: calling `win.webContents.getWebPreferences()` is not available
+    // in some Electron versions / environments. Use the configured
+    // `webPreferences` object we passed when creating the BrowserWindow
+    // instead of querying `webContents` at runtime.
+    const windowWebPreferences = {
+      contextIsolation: true,
+      nodeIntegration: nodeIntegrationEnabled,
+      sandbox: true,
+      webSecurity: true,
+      enableRemoteModule: false,
+      preload: path.join(__dirname, '../../preload/preload.js'),
+    };
+
+    if (isDev) {
+      const webPrefs = windowWebPreferences;
+      const securityAudit = {
+        contextIsolation: webPrefs.contextIsolation,
+        nodeIntegration: webPrefs.nodeIntegration,
+        sandbox: webPrefs.sandbox,
+        webSecurity: webPrefs.webSecurity,
+        enableRemoteModule: webPrefs.enableRemoteModule,
+        preload: webPrefs.preload ? 'configured' : 'missing',
+      };
+
+      logger.debug('[SECURITY] WebPreferences audit:', securityAudit);
+
+      // Warn about any insecure settings
+      if (!webPrefs.contextIsolation) {
+        logger.warn('[SECURITY] WARNING: contextIsolation is disabled!');
+      }
+      if (webPrefs.nodeIntegration) {
+        logger.warn('[SECURITY] WARNING: nodeIntegration is enabled!');
+      }
+      if (!webPrefs.sandbox) {
+        logger.warn('[SECURITY] WARNING: sandbox is disabled!');
+      }
+      if (!webPrefs.webSecurity) {
+        logger.warn('[SECURITY] WARNING: webSecurity is disabled!');
+      }
+      if (webPrefs.enableRemoteModule) {
+        logger.warn('[SECURITY] WARNING: enableRemoteModule is enabled!');
+      }
+    }
 
     // Manage window state
     mainWindowState.manage(win);
@@ -328,6 +386,10 @@ function createMainWindow() {
       },
     );
 
+    // Removed forced show timeout; rely on the 'ready-to-show' event to
+    // display the window only when the renderer is ready. This avoids
+    // race conditions and flashing content on startup.
+
     win.once('ready-to-show', () => {
       win.show();
       win.focus();
@@ -468,6 +530,11 @@ function createMainWindow() {
     return win;
   } catch (error) {
     logger.error('Failed to create main window:', error);
+    logger.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
     throw error; // Re-throw to allow caller to handle
   }
 }

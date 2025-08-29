@@ -4,6 +4,7 @@
 const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 const ModelVerifier = require('../services/ModelVerifier');
+const { logger } = require('../../shared/logger');
 
 // Shared service instances for performance
 let modelVerifier;
@@ -44,7 +45,7 @@ async function cleanupSharedServices() {
       await embeddingIndex.destroy();
     }
   } catch (error) {
-    console.error('[ANALYSIS-UTILS] Failed to cleanup shared services:', error);
+    logger.error('[ANALYSIS-UTILS] Failed to cleanup shared services:', error);
   }
 }
 

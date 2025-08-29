@@ -50,6 +50,8 @@ const { FileProcessingError } = require('../errors/AnalysisError');
 
 // Analysis queue and processing state
 const analysisQueue = [];
+// Limit queue size to prevent unbounded memory growth
+const MAX_QUEUE_SIZE = 200;
 const isProcessing = { value: false };
 
 // Circuit breaker for LLM service resilience
@@ -333,6 +335,17 @@ async function streamAnalyzeLargeDocument(
 // Public function for queued analysis
 async function queueDocumentAnalysis(filePath, smartFolders = []) {
   return new Promise((resolve, reject) => {
+    // Enforce queue size limit
+    if (analysisQueue.length >= MAX_QUEUE_SIZE) {
+      // Drop the oldest request to make room
+      const dropped = analysisQueue.shift();
+      try {
+        dropped.reject(new Error('Queue overflow - request dropped'));
+      } catch (e) {
+        // ignore if drop rejection fails
+      }
+    }
+
     analysisQueue.push({ filePath, smartFolders, resolve, reject });
     processAnalysisQueue();
   });

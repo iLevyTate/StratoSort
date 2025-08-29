@@ -11,7 +11,7 @@ describe('UndoRedoService', () => {
     tmpDir = path.join(os.tmpdir(), `stratosort-undo-redo-${Date.now()}`);
     await fs.mkdir(tmpDir, { recursive: true });
     jest.resetModules();
-    electron = require('./mocks/electron');
+    electron = require('electron');
     electron.app.getPath.mockReturnValue(tmpDir);
   });
 
@@ -59,7 +59,7 @@ describe('UndoRedoService', () => {
 
     // New instance should load persisted actions
     jest.resetModules();
-    const electronReloaded = require('./mocks/electron');
+    const electronReloaded = require('electron');
     electronReloaded.app.getPath.mockReturnValue(tmpDir);
     const UndoRedoServiceReloaded = require('../src/main/services/UndoRedoService');
     const serviceReloaded = new UndoRedoServiceReloaded();

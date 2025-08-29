@@ -3,6 +3,7 @@ const path = require('path');
 const { app } = require('electron');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
 const { atomicFileOps } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class UndoRedoService {
   constructor() {
@@ -13,6 +14,7 @@ class UndoRedoService {
     this.actions = [];
     this.currentIndex = -1; // Points to the last executed action
     this.initialized = false;
+    this.exitHandlersSetup = false; // Track if exit handlers have been registered
 
     // Debouncing for file writes
     this.saveTimeout = null;
@@ -39,16 +41,74 @@ class UndoRedoService {
     // Initialize paths first
     this._initPaths();
 
+    // Set up process exit handlers to ensure data is saved before exit
+    this._setupExitHandlers();
+
     try {
       await this.loadActions();
       this.initialized = true;
       console.log('UndoRedoService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize UndoRedoService:', error);
+      logger.error('Failed to initialize UndoRedoService:', error);
       this.actions = [];
       this.currentIndex = -1;
       this.initialized = true;
     }
+  }
+
+  /**
+   * Set up process exit handlers to ensure data is saved before shutdown
+   */
+  _setupExitHandlers() {
+    if (this.exitHandlersSetup) return;
+    this.exitHandlersSetup = true;
+
+    // Handle various exit scenarios
+    const handleExit = async (signal) => {
+      console.log(
+        `[UNDO-REDO] Received ${signal}, forcing save before exit...`,
+      );
+      try {
+        await this.forceSave();
+        console.log('[UNDO-REDO] Save completed successfully before exit');
+      } catch (error) {
+        logger.error('[UNDO-REDO] Failed to save before exit:', error);
+      }
+    };
+
+    // Handle different exit signals
+    process.on('beforeExit', () => handleExit('beforeExit'));
+    process.on('SIGTERM', () => handleExit('SIGTERM'));
+    process.on('SIGINT', () => handleExit('SIGINT'));
+
+    // Handle uncaught exceptions (last resort)
+    process.on('uncaughtException', async (error) => {
+      logger.error(
+        '[UNDO-REDO] Uncaught exception, attempting emergency save:',
+        error,
+      );
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error('[UNDO-REDO] Emergency save failed:', saveError);
+      }
+      // Re-throw to maintain original error handling
+      throw error;
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason, promise) => {
+      logger.error('[UNDO-REDO] Unhandled rejection, attempting save:', reason);
+      try {
+        await this.forceSave();
+      } catch (saveError) {
+        logger.error(
+          '[UNDO-REDO] Save failed during unhandled rejection:',
+          saveError,
+        );
+      }
+      // Don't throw, just log - this is for cleanup only
+    });
   }
 
   async loadActions() {
@@ -76,7 +136,7 @@ class UndoRedoService {
       JSON.stringify(data, null, 2),
     );
     if (!result.success) {
-      console.error('[UNDO-REDO] Failed to save actions:', result.error);
+      logger.error('[UNDO-REDO] Failed to save actions:', result.error);
     }
   }
 
@@ -96,7 +156,7 @@ class UndoRedoService {
           await this.saveActions();
           this.dirty = false;
         } catch (error) {
-          console.error('[UNDO-REDO] Failed to save actions:', error);
+          logger.error('[UNDO-REDO] Failed to save actions:', error);
           // Keep dirty flag so we retry later
         }
       }
@@ -167,7 +227,7 @@ class UndoRedoService {
         message: `Undid: ${action.description}`,
       };
     } catch (error) {
-      console.error('Failed to undo action:', error);
+      logger.error('Failed to undo action:', error);
       throw new Error(`Failed to undo action: ${error.message}`);
     }
   }
@@ -191,7 +251,7 @@ class UndoRedoService {
         message: `Redid: ${action.description}`,
       };
     } catch (error) {
-      console.error('Failed to redo action:', error);
+      logger.error('Failed to redo action:', error);
       throw new Error(`Failed to redo action: ${error.message}`);
     }
   }
@@ -282,7 +342,7 @@ class UndoRedoService {
             successfulOperations.push(operation);
           } catch (error) {
             batchError = error;
-            console.error(
+            logger.error(
               `[UNDO] Failed to reverse operation ${i + 1}/${reversedOperations.length}:`,
               error.message,
             );
@@ -300,7 +360,7 @@ class UndoRedoService {
                   await this.executeFileOperation(successfulOp);
                 } catch (rollbackError) {
                   rollbackErrors++;
-                  console.error(
+                  logger.error(
                     `[UNDO] Rollback failed for operation:`,
                     rollbackError.message,
                   );
@@ -308,7 +368,7 @@ class UndoRedoService {
               }
 
               if (rollbackErrors > 0) {
-                console.error(
+                logger.error(
                   `[UNDO] ${rollbackErrors} operations could not be rolled back - system may be in inconsistent state`,
                 );
               }
@@ -385,7 +445,7 @@ class UndoRedoService {
             await this.executeFileOperation(operation);
           }
         } catch (error) {
-          console.error('[REDO] Batch redo failed:', error);
+          logger.error('[REDO] Batch redo failed:', error);
           throw error;
         }
         break;

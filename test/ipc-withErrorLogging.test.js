@@ -1,3 +1,13 @@
+// Mock the logger before importing withErrorLogging
+jest.mock('../src/shared/logger', () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    actionTrack: jest.fn(),
+  },
+}));
+
 const {
   withErrorLogging,
   withValidation,
@@ -34,12 +44,17 @@ describe('withErrorLogging', () => {
     expect(mockLogger.error).not.toHaveBeenCalled();
   });
 
-  test('logs and re-throws errors from original function', async () => {
+  test('logs and returns structured error from original function', async () => {
     const testError = new Error('Test error');
     const originalFn = jest.fn().mockRejectedValue(testError);
     const wrappedFn = withErrorLogging(mockLogger, originalFn);
 
-    await expect(wrappedFn()).rejects.toThrow('Test error');
+    const result = await wrappedFn();
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Test error',
+    });
 
     expect(mockLogger.error).toHaveBeenCalledWith(
       '[IPC] mockConstructor failed:',
@@ -63,15 +78,19 @@ describe('withErrorLogging', () => {
       throw new Error('Logger error');
     });
 
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const { logger: mockDefaultLogger } = require('../src/shared/logger');
 
-    await expect(wrappedFn()).rejects.toThrow('Test error');
+    const result = await wrappedFn();
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(result).toEqual({
+      success: false,
+      error: 'Test error',
+    });
+
+    expect(mockDefaultLogger.error).toHaveBeenCalledWith(
       'Failed to log IPC error:',
       expect.any(Error),
     );
-    consoleSpy.mockRestore();
   });
 
   test('handles null logger gracefully', async () => {
@@ -79,7 +98,12 @@ describe('withErrorLogging', () => {
     const originalFn = jest.fn().mockRejectedValue(testError);
     const wrappedFn = withErrorLogging(null, originalFn);
 
-    await expect(wrappedFn()).rejects.toThrow('Test error');
+    const result = await wrappedFn();
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Test error',
+    });
   });
 
   test('handles undefined logger gracefully', async () => {
@@ -87,7 +111,12 @@ describe('withErrorLogging', () => {
     const originalFn = jest.fn().mockRejectedValue(testError);
     const wrappedFn = withErrorLogging(undefined, originalFn);
 
-    await expect(wrappedFn()).rejects.toThrow('Test error');
+    const result = await wrappedFn();
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Test error',
+    });
   });
 
   test('preserves function context and this binding', async () => {
@@ -199,9 +228,12 @@ describe('withValidation', () => {
 
     const wrappedFn = withValidation(mockLogger, mockSchema, mockHandler);
 
-    await expect(wrappedFn('event', 'payload')).rejects.toThrow(
-      'Validation wrapper error',
-    );
+    const result = await wrappedFn('event', 'payload');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Validation wrapper error',
+    });
 
     // Expect both the simple error call and the enhanced error call
     expect(mockLogger.error).toHaveBeenCalledWith(
@@ -228,9 +260,12 @@ describe('withValidation', () => {
 
     const wrappedFn = withValidation(mockLogger, mockSchema, mockHandler);
 
-    await expect(wrappedFn('event', 'payload')).rejects.toThrow(
-      'Handler error',
-    );
+    const result = await wrappedFn('event', 'payload');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Handler error',
+    });
   });
 
   test('handles null schema', () => {
@@ -245,6 +280,11 @@ describe('withValidation', () => {
 
     const wrappedFn = withValidation(mockLogger, mockSchema, null);
 
-    await expect(wrappedFn('event', 'payload')).rejects.toThrow();
+    const result = await wrappedFn('event', 'payload');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'handler is not a function',
+    });
   });
 });

@@ -2,6 +2,39 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
+// Mock shared services before importing analysis modules
+jest.mock('../src/main/analysis/analysisUtils', () => ({
+  getSharedServices: jest.fn().mockResolvedValue({
+    modelVerifier: {
+      checkOllamaConnection: jest
+        .fn()
+        .mockResolvedValue({ connected: false, error: 'Mocked offline' }),
+    },
+    embeddingIndex: {
+      initialize: jest.fn().mockResolvedValue(),
+      destroy: jest.fn().mockResolvedValue(),
+    },
+    folderMatcher: {
+      findBestMatch: jest
+        .fn()
+        .mockResolvedValue({ folder: 'Mocked', confidence: 0.5 }),
+    },
+  }),
+  validateAnalysisResult: jest.fn().mockReturnValue(true),
+  handleAnalysisError: jest.fn().mockReturnValue({ error: 'Mocked error' }),
+}));
+
+// Mock logger
+jest.mock('../src/shared/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    setContext: jest.fn(),
+  },
+}));
+
 const {
   analyzeImageFile,
 } = require('../src/main/analysis/ollamaImageAnalysis');
@@ -15,6 +48,9 @@ const {
  * NOTE:  Ollama calls are mocked implicitly by the existing jest mock in
  * ../mocks/ollama.js so tests run fast and offline.
  */
+
+// Set timeout for async operations to prevent hanging
+jest.setTimeout(10000); // 10 seconds
 
 describe('Analysis edge cases', () => {
   test('Image analyser rejects unsupported extension', async () => {

@@ -60,40 +60,51 @@ let selectedVisionModel = null;
 let selectedEmbeddingModel = null;
 
 // Check if Ollama server is running
-function checkOllamaConnection() {
-  return new Promise((resolve, reject) => {
-    const url = new URL(ollamaHost);
-    const client = url.protocol === 'https:' ? https : http;
+function checkOllamaConnection(timeoutMs = 5000) {
+  // Wrap the connection check in a timeout to avoid indefinite hangs
+  return Promise.race([
+    new Promise((resolve, reject) => {
+      const url = new URL(ollamaHost);
+      const client = url.protocol === 'https:' ? https : http;
 
-    const req = client.request(
-      {
-        hostname: url.hostname,
-        port: url.port,
-        path: '/api/tags',
-        method: 'GET',
-        timeout: 5000,
-      },
-      (res) => {
-        if (res.statusCode === 200) {
-          resolve();
-        } else {
-          reject(
-            new Error(`Ollama server responded with status ${res.statusCode}`),
-          );
-        }
-      },
-    );
+      const req = client.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: '/api/tags',
+          method: 'GET',
+          timeout: timeoutMs,
+        },
+        (res) => {
+          if (res.statusCode === 200) {
+            resolve({ connected: true });
+          } else {
+            reject(
+              new Error(
+                `Ollama server responded with status ${res.statusCode}`,
+              ),
+            );
+          }
+        },
+      );
 
-    req.on('error', (err) => {
-      reject(err);
-    });
+      req.on('error', (err) => {
+        reject(err);
+      });
 
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Connection timeout'));
-    });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Connection timeout'));
+      });
 
-    req.end();
+      req.end();
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timeout')), timeoutMs),
+    ),
+  ]).catch((err) => {
+    // normalize to consistent object shape
+    return { connected: false, error: err.message };
   });
 }
 
@@ -459,5 +470,24 @@ module.exports = {
   saveOllamaConfig,
   detectGPUSupport,
   getOptimizedOllamaConfig,
+  // Retry helper for Ollama calls
+  retryWithBackoff: async function retryWithBackoff(
+    fn,
+    attempts = 3,
+    baseDelay = 300,
+  ) {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await fn();
+      } catch (err) {
+        attempt += 1;
+        if (attempt >= attempts) throw err;
+        const delayMs = Math.min(baseDelay * 2 ** (attempt - 1), 5000);
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  },
   // Note: buildOllamaOptions is now exported from PerformanceService
 };

@@ -10,6 +10,8 @@ import {
 export function useKeyboardShortcuts() {
   const { actions, currentPhase, showSettings } = usePhase();
   const { addNotification } = useNotification();
+  const useIsMounted = require('./useIsMounted').default;
+  const mounted = useIsMounted();
 
   useEffect(() => {
     const handleKeyDown = async (event) => {
@@ -21,6 +23,7 @@ export function useKeyboardShortcuts() {
       ) {
         event.preventDefault();
         try {
+          if (!mounted.current) return;
           // Prefer calling renderer undo hook when available to keep UI state in sync
           if (window.electronAPI?.undoRedo?.undo)
             await window.electronAPI.undoRedo.undo();
@@ -38,6 +41,7 @@ export function useKeyboardShortcuts() {
       ) {
         event.preventDefault();
         try {
+          if (!mounted.current) return;
           if (window.electronAPI?.undoRedo?.redo)
             await window.electronAPI.undoRedo.redo();
           else window.electronAPI?.undoRedo?.redo?.();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import useIsMounted from '../hooks/useIsMounted';
 import { PHASES } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -12,7 +13,10 @@ function AISetupPhase() {
   const [aiStatus, setAiStatus] = useState('checking'); // checking, ready, error, skipped
   const [missingModels, setMissingModels] = useState([]);
   const [installationCommands, setInstallationCommands] = useState([]);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerifyingRaw, setIsVerifyingRaw] = useState(false);
+  const mounted = useIsMounted();
+  const setIsVerifying = (v) => mounted.current && setIsVerifyingRaw(v);
+  const isVerifying = isVerifyingRaw;
   const [skipVerification, setSkipVerification] = useState(false);
 
   const handleAiStatusUpdate = useCallback(

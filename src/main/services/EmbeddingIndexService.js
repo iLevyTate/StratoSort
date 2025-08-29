@@ -2,10 +2,18 @@ const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class EmbeddingIndexService {
   constructor() {
-    this.basePath = path.join(app.getPath('userData'), 'embeddings');
+    // Safely get base path with fallback for tests
+    try {
+      this.basePath = path.join(app.getPath('userData'), 'embeddings');
+    } catch (error) {
+      // Fallback for test environment where app might not be available
+      this.basePath = path.join(process.cwd(), 'test-data', 'embeddings');
+    }
+
     this.filesPath = path.join(this.basePath, 'file-embeddings.jsonl');
     this.foldersPath = path.join(this.basePath, 'folder-embeddings.jsonl');
     this.fileVectors = new Map();
@@ -26,7 +34,9 @@ class EmbeddingIndexService {
         this.writeQueue = this.writeQueue
           .then(() => this.flushWriteBuffer())
           .catch((error) => {
-            console.error('Background flush failed:', error);
+            logger.error('[EMBEDDING] Background flush failed:', {
+              error: error.message,
+            });
             return Promise.resolve(); // Continue the chain
           });
       }
@@ -57,7 +67,7 @@ class EmbeddingIndexService {
 
     // Check if we're in back-off period due to consecutive failures
     if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-      console.warn(
+      logger.warn(
         `[EMBEDDING] Persistence disabled after ${this.consecutiveFailures} consecutive failures. Will retry in ${this.failureBackoffMs}ms.`,
       );
       // Keep the buffer for retry instead of dropping data
@@ -66,7 +76,7 @@ class EmbeddingIndexService {
       setTimeout(() => {
         this.consecutiveFailures = 0;
         this.persistDisabled = false;
-        console.info(
+        logger.info(
           '[EMBEDDING] Re-enabling persistence after back-off period',
         );
         // Trigger a flush if we have buffered data
@@ -74,7 +84,9 @@ class EmbeddingIndexService {
           this.writeQueue = this.writeQueue
             .then(() => this.flushWriteBuffer())
             .catch((error) => {
-              console.error('[EMBEDDING] Retry flush failed:', error);
+              logger.error('[EMBEDDING] Retry flush failed:', {
+                error: error.message,
+              });
               return Promise.resolve();
             });
         }
@@ -103,7 +115,7 @@ class EmbeddingIndexService {
       // Reset consecutive failures on successful write
       this.consecutiveFailures = 0;
     } catch (error) {
-      console.error('[EMBEDDING] Batch write failed:', error);
+      logger.error('[EMBEDDING] Batch write failed:', { error: error.message });
       this.consecutiveFailures++;
 
       // Re-add failed items to buffer for retry
@@ -111,7 +123,7 @@ class EmbeddingIndexService {
 
       // If we've hit the failure limit, disable persistence temporarily
       if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        console.error(
+        logger.error(
           `[EMBEDDING] Too many consecutive write failures (${this.consecutiveFailures}). Disabling persistence temporarily.`,
         );
       }
@@ -127,7 +139,9 @@ class EmbeddingIndexService {
     try {
       await this.flushWriteBuffer();
     } catch (error) {
-      console.error('[EMBEDDING] Final flush failed during destroy:', error);
+      logger.error('[EMBEDDING] Final flush failed during destroy:', {
+        error: error.message,
+      });
     }
   }
 
@@ -146,19 +160,27 @@ class EmbeddingIndexService {
   }
 
   async loadJsonl(filePath, targetMap) {
+    // Ensure initialization has been performed before loading
+    if (!this.initialized && !this.initializing) {
+      await this.initialize();
+    }
+
     let skippedLines = 0;
     let loadedLines = 0;
+    let stream = null;
+    let rl = null;
 
     try {
       // Stream the JSONL file to avoid loading large files into memory
-      const stream = require('fs').createReadStream(filePath, {
+      stream = require('fs').createReadStream(filePath, {
         encoding: 'utf8',
       });
       const readline = require('readline');
-      const rl = readline.createInterface({
+      rl = readline.createInterface({
         input: stream,
         crlfDelay: Infinity,
       });
+
       for await (const line of rl) {
         if (!line || !line.trim()) continue;
         try {
@@ -168,13 +190,13 @@ class EmbeddingIndexService {
             loadedLines++;
           } else {
             skippedLines++;
-            console.debug(
+            logger.debug(
               `[EMBEDDING] Skipping line without valid id in ${filePath}`,
             );
           }
         } catch (e) {
           skippedLines++;
-          console.debug(
+          logger.debug(
             `[EMBEDDING] Skipping malformed JSON line in ${filePath}:`,
             e.message,
           );
@@ -182,17 +204,39 @@ class EmbeddingIndexService {
       }
 
       if (skippedLines > 0) {
-        console.info(
+        logger.info(
           `[EMBEDDING] Loaded ${loadedLines} entries, skipped ${skippedLines} malformed lines from ${filePath}`,
         );
       }
     } catch (e) {
       if (e.code !== 'ENOENT') {
-        console.error(
+        logger.error(
           `[EMBEDDING] Failed to load JSONL file ${filePath}:`,
           e.message,
         );
         throw e;
+      }
+    } finally {
+      // Ensure stream and readline interface are properly closed
+      if (rl) {
+        try {
+          rl.close();
+        } catch (closeError) {
+          logger.warn(
+            `[EMBEDDING] Failed to close readline interface for ${filePath}:`,
+            closeError.message,
+          );
+        }
+      }
+      if (stream) {
+        try {
+          stream.destroy();
+        } catch (destroyError) {
+          logger.warn(
+            `[EMBEDDING] Failed to destroy stream for ${filePath}:`,
+            destroyError.message,
+          );
+        }
       }
     }
   }
@@ -205,16 +249,18 @@ class EmbeddingIndexService {
       await this.bufferWrite(filePath, obj);
       return Promise.resolve();
     } catch (error) {
-      console.error(
+      logger.error(
         '[EMBEDDING] Batch buffer failed, falling back to direct write:',
-        error,
+        { error: error.message },
       );
       // Fallback to direct write if batch fails
       try {
         await fs.appendFile(filePath, JSON.stringify(obj) + '\n');
         return Promise.resolve();
       } catch (fallbackError) {
-        console.error('[EMBEDDING] Direct write also failed:', fallbackError);
+        logger.error('[EMBEDDING] Direct write also failed:', {
+          error: fallbackError.message,
+        });
         this.persistDisabled = true;
         return Promise.resolve();
       }

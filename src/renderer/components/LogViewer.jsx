@@ -11,13 +11,26 @@ const ipcRenderer = (typeof window !== 'undefined' &&
 };
 
 const LogViewer = ({ isOpen, onClose }) => {
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
+
   const [selectedType, setSelectedType] = useState('all');
-  const [logFiles, setLogFiles] = useState([]);
+  const [logFilesRaw, setLogFilesRaw] = useState([]);
+  const logFiles = logFilesRaw;
+  const setLogFiles = (v) => mounted.current && setLogFilesRaw(v);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [fileContent, setFileContent] = useState('');
-  const [recentLogs, setRecentLogs] = useState([]);
-  const [logStats, setLogStats] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [fileContentRaw, setFileContentRaw] = useState('');
+  const fileContent = fileContentRaw;
+  const setFileContent = (v) => mounted.current && setFileContentRaw(v);
+  const [recentLogsRaw, setRecentLogsRaw] = useState([]);
+  const recentLogs = recentLogsRaw;
+  const setRecentLogs = (v) => mounted.current && setRecentLogsRaw(v);
+  const [logStatsRaw, setLogStatsRaw] = useState(null);
+  const logStats = logStatsRaw;
+  const setLogStats = (v) => mounted.current && setLogStatsRaw(v);
+  const [loadingRaw, setLoadingRaw] = useState(false);
+  const loading = loadingRaw;
+  const setLoading = (v) => mounted.current && setLoadingRaw(v);
   const [searchTerm, setSearchTerm] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -37,6 +50,7 @@ const LogViewer = ({ isOpen, onClose }) => {
         setLogFiles(Array.isArray(result.files) ? result.files : []);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to fetch log files:', error);
     }
   };
@@ -95,7 +109,7 @@ const LogViewer = ({ isOpen, onClose }) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const filteredLogs = recentLogs.filter((log) => {
+  const filteredLogs = recentLogsRaw.filter((log) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (

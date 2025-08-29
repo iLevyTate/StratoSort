@@ -3,6 +3,8 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
+  useState,
 } from 'react';
 import { ToastContainer, useToast } from '../components/Toast';
 
@@ -20,11 +22,72 @@ export function NotificationProvider({ children }) {
     showInfo,
   } = useToast();
 
+  // Notification queue to prevent race conditions and spam
+  const [notificationQueue, setNotificationQueue] = useState([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+  const queueProcessorRef = useRef(null);
+
+  // Process notification queue sequentially
+  const processNotificationQueue = useCallback(async () => {
+    if (isProcessingQueue || notificationQueue.length === 0) return;
+
+    setIsProcessingQueue(true);
+
+    try {
+      while (notificationQueue.length > 0) {
+        const [nextNotification, ...remaining] = notificationQueue;
+
+        // Add the notification using the existing toast system
+        const toastId = addToast(
+          nextNotification.message,
+          nextNotification.severity,
+          nextNotification.duration,
+          nextNotification.groupKey,
+        );
+
+        // Update queue to remove processed notification
+        setNotificationQueue(remaining);
+
+        // Small delay between notifications to prevent spam
+        if (remaining.length > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+    } catch (error) {
+      console.error(
+        '[NOTIFICATION] Error processing notification queue:',
+        error,
+      );
+    } finally {
+      setIsProcessingQueue(false);
+    }
+  }, [notificationQueue, isProcessingQueue, addToast]);
+
+  // Process queue when it changes
+  useEffect(() => {
+    if (notificationQueue.length > 0 && !isProcessingQueue) {
+      processNotificationQueue();
+    }
+  }, [notificationQueue, isProcessingQueue, processNotificationQueue]);
+
   const addNotification = useCallback(
     (message, severity = 'info', duration = 3000, groupKey = null) => {
-      return addToast(message, severity, duration, groupKey);
+      // Add notification to queue instead of directly calling addToast
+      const notification = {
+        message,
+        severity,
+        duration,
+        groupKey,
+        timestamp: Date.now(),
+        id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      };
+
+      setNotificationQueue((prev) => [...prev, notification]);
+
+      // Return the notification ID for potential removal
+      return notification.id;
     },
-    [addToast],
+    [],
   );
 
   const removeNotification = useCallback(
@@ -33,6 +96,18 @@ export function NotificationProvider({ children }) {
     },
     [removeToast],
   );
+
+  // Clear notification queue (useful for emergency cleanup)
+  const clearNotificationQueue = useCallback(() => {
+    setNotificationQueue([]);
+    setIsProcessingQueue(false);
+  }, []);
+
+  // Enhanced clear all notifications that also clears the queue
+  const clearAllNotifications = useCallback(() => {
+    clearAllToasts();
+    clearNotificationQueue();
+  }, [clearAllToasts, clearNotificationQueue]);
 
   // Bridge main-process errors into our styled UI (toast/modal), avoiding OS dialogs
   useEffect(() => {
@@ -60,18 +135,22 @@ export function NotificationProvider({ children }) {
         notifications: toasts,
         addNotification,
         removeNotification,
-        clearAllNotifications: clearAllToasts,
+        clearAllNotifications,
+        clearNotificationQueue,
         showSuccess,
         showError,
         showWarning,
         showInfo,
+        // Debug info
+        queueLength: notificationQueue.length,
+        isProcessingQueue,
       }}
     >
       {children}
       <ToastContainer
         toasts={toasts}
         onRemoveToast={removeToast}
-        onClearAll={clearAllToasts}
+        onClearAll={clearAllNotifications}
       />
     </NotificationContext.Provider>
   );

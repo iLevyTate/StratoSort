@@ -9,15 +9,25 @@ export function useOrganizePhase() {
   const { actions, phaseData } = usePhase();
   const { addNotification } = useNotification();
   const { executeAction } = useUndoRedo();
+  const useIsMounted = require('../hooks/useIsMounted').default;
+  const mounted = useIsMounted();
 
-  const [organizedFiles, setOrganizedFiles] = useState([]);
-  const [isOrganizing, setIsOrganizing] = useState(false);
-  const [batchProgress, setBatchProgress] = useState({
+  const [organizedFilesRaw, setOrganizedFilesRaw] = useState([]);
+  const organizedFiles = organizedFilesRaw;
+  const setOrganizedFiles = (v) => mounted.current && setOrganizedFilesRaw(v);
+  const [isOrganizingRaw, setIsOrganizingRaw] = useState(false);
+  const isOrganizing = isOrganizingRaw;
+  const setIsOrganizing = (v) => mounted.current && setIsOrganizingRaw(v);
+  const [batchProgressRaw, setBatchProgressRaw] = useState({
     current: 0,
     total: 0,
     currentFile: '',
   });
-  const [organizePreview, setOrganizePreview] = useState([]);
+  const batchProgress = batchProgressRaw;
+  const setBatchProgress = (v) => mounted.current && setBatchProgressRaw(v);
+  const [organizePreviewRaw, setOrganizePreviewRaw] = useState([]);
+  const organizePreview = organizePreviewRaw;
+  const setOrganizePreview = (v) => mounted.current && setOrganizePreviewRaw(v);
   const [documentsPath, setDocumentsPath] = useState('');
   const [editingFiles, setEditingFiles] = useState({});
   const [selectedFiles, setSelectedFiles] = useState(new Set());

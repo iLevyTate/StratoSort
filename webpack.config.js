@@ -66,6 +66,10 @@ module.exports = (env, argv) => {
     },
     externals: {
       electron: 'require("electron")',
+      // Native modules that should not be bundled
+      sharp: 'commonjs sharp',
+      'node-tesseract-ocr': 'commonjs node-tesseract-ocr',
+      'pdf-parse': 'commonjs pdf-parse',
     },
     plugins: [
       new HtmlWebpackPlugin({
@@ -170,6 +174,12 @@ module.exports = (env, argv) => {
     },
     resolve: {
       extensions: ['.js'],
+    },
+    externals: {
+      // Native modules that should not be bundled in main process
+      sharp: 'commonjs sharp',
+      'node-tesseract-ocr': 'commonjs node-tesseract-ocr',
+      'pdf-parse': 'commonjs pdf-parse',
     },
     plugins: [
       new webpack.DefinePlugin({

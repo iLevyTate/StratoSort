@@ -40,7 +40,7 @@ module.exports = {
   },
   rules: {
     // General
-    'no-console': 'off',
+    'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
     'no-debugger': 'error',
     'no-unused-vars': 'off',
     'prefer-const': 'error',
@@ -80,6 +80,57 @@ module.exports = {
     'jsx-a11y/no-noninteractive-tabindex': 'off',
     'jsx-a11y/no-noninteractive-element-interactions': 'off',
     'no-control-regex': 'off',
+
+    // Custom Security Rules for Electron IPC
+    // Prevent insecure IPC patterns
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: 'CallExpression[callee.name="sendSync"]',
+        message:
+          'Synchronous IPC calls are blocking and should be avoided. Use invoke() instead.',
+      },
+      {
+        selector: 'CallExpression[callee.name="sendToHost"]',
+        message: 'sendToHost is insecure. Use proper IPC channels.',
+      },
+      {
+        selector: 'MemberExpression[object.name="remote"]',
+        message:
+          'Electron remote module is deprecated and insecure. Use IPC instead.',
+      },
+      {
+        selector: 'CallExpression[callee.object.name="remote"]',
+        message:
+          'Electron remote module is deprecated and insecure. Use IPC instead.',
+      },
+    ],
+
+    // Prevent insecure webPreferences
+    'no-restricted-properties': [
+      'error',
+      {
+        object: 'webPreferences',
+        property: 'nodeIntegration',
+        message:
+          'nodeIntegration should be false for security. Use contextBridge instead.',
+      },
+      {
+        object: 'webPreferences',
+        property: 'contextIsolation',
+        message: 'contextIsolation must be true for security.',
+      },
+      {
+        object: 'webPreferences',
+        property: 'enableRemoteModule',
+        message: 'enableRemoteModule should be false. Use IPC instead.',
+      },
+    ],
+
+    // Custom security warnings
+    'no-eval': 'error',
+    'no-implied-eval': 'error',
+    'no-new-func': 'error',
 
     // Code style
     indent: 'off',

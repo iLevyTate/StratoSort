@@ -1,0 +1,113 @@
+module.exports = {
+  projects: [
+    // Main Process Config
+    {
+      displayName: 'main',
+      testEnvironment: 'node',
+      testMatch: [
+        '<rootDir>/test/main/**/*.test.js',
+        '<rootDir>/test/integration/**/*.test.js',
+        '<rootDir>/test/analysis-*.test.js',
+        '<rootDir>/test/core-*.test.js',
+        '<rootDir>/test/errors-*.test.js',
+        '<rootDir>/test/folderScanner.test.js',
+        '<rootDir>/test/ipc-*.test.js',
+        '<rootDir>/test/model-verifier.test.js',
+        '<rootDir>/test/organize-resume-service.test.js',
+        '<rootDir>/test/perfMonitor.test.js',
+        '<rootDir>/test/preload-*.test.js',
+        '<rootDir>/test/processing-state-service.test.js',
+        '<rootDir>/test/services-*.test.js',
+        '<rootDir>/test/settings-service.test.js',
+        '<rootDir>/test/shared-*.test.js',
+        '<rootDir>/test/smartfolders-*.test.js',
+
+        '<rootDir>/test/test-ipc-integration.test.js',
+        '<rootDir>/test/undo-redo-service.test.js',
+        '<rootDir>/test/utilities-*.test.js',
+        '<rootDir>/test/embedding-index-service.test.js',
+        '<rootDir>/test/atomic-file-operations.test.js',
+        '<rootDir>/test/keyboard-shortcuts.test.js',
+        '<rootDir>/test/react-app.test.js',
+        '<rootDir>/test/legacy/core-createWindow.test.js',
+        '<rootDir>/test/legacy/GpuManager.test.js',
+        '<rootDir>/test/legacy/services-ModelManager.test.js',
+        '<rootDir>/test/legacy/systemAnalytics.gpu.test.js',
+        '<rootDir>/test/unit/**/*.test.js',
+      ],
+      roots: ['<rootDir>/src/main', '<rootDir>/test'],
+      setupFilesAfterEnv: ['<rootDir>/test/shared/test-setup.js'],
+      moduleNameMapper: {
+        '^electron$': '<rootDir>/__mocks__/electron.js',
+        '^ollama$': '<rootDir>/test/shared/mocks/ollama.js',
+        '^officeparser$': '<rootDir>/test/shared/mocks/officeparser.js',
+        '^node-tesseract-ocr$': '<rootDir>/test/shared/mocks/tesseract.js',
+        '^sharp$': '<rootDir>/test/shared/mocks/sharp.js',
+        '^xlsx-populate$': '<rootDir>/test/shared/mocks/xlsx.js',
+        '^sanitize-html$': '<rootDir>/test/shared/mocks/sanitize-html.js',
+        '^../../shared/logger$': '<rootDir>/src/shared/logger.js',
+        '^../shared/logger$': '<rootDir>/src/shared/logger.js',
+        '^./shared/logger$': '<rootDir>/src/shared/logger.js',
+      },
+    },
+    // Renderer Process Config
+    {
+      displayName: 'renderer',
+      testEnvironment: 'jsdom',
+      testMatch: [
+        '<rootDir>/test/renderer/**/*.test.js',
+        '<rootDir>/test/renderer/**/*.test.jsx',
+        '<rootDir>/test/components/**/*.test.js',
+        '<rootDir>/test/components/**/*.test.jsx',
+        '<rootDir>/test/legacy/useOrganizePhase.test.js',
+      ],
+      roots: ['<rootDir>/src/renderer', '<rootDir>/test'],
+      setupFilesAfterEnv: ['<rootDir>/renderer.setup.js'],
+      moduleNameMapper: {
+        '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+        '^electron$': '<rootDir>/__mocks__/electron.js',
+      },
+      transform: {
+        '^.+\\.(js|jsx)$': 'babel-jest',
+      },
+    },
+    // E2E Tests Config
+    {
+      displayName: 'e2e',
+      testEnvironment: 'node',
+      testMatch: [
+        '<rootDir>/test/e2e/**/*.test.js',
+        '<rootDir>/test/e2e/**/*.spec.js',
+      ],
+      roots: ['<rootDir>/test'],
+      setupFilesAfterEnv: ['<rootDir>/test/shared/test-setup.js'],
+      moduleNameMapper: {
+        '^electron$': '<rootDir>/__mocks__/electron.js',
+        '^ollama$': '<rootDir>/test/shared/mocks/ollama.js',
+        '^officeparser$': '<rootDir>/test/shared/mocks/officeparser.js',
+        '^node-tesseract-ocr$': '<rootDir>/test/shared/mocks/tesseract.js',
+        '^sharp$': '<rootDir>/test/shared/mocks/sharp.js',
+        '^xlsx-populate$': '<rootDir>/test/shared/mocks/xlsx.js',
+        '^sanitize-html$': '<rootDir>/test/shared/mocks/sanitize-html.js',
+      },
+    },
+  ],
+  // Temporarily disable coverage to ensure clean test execution
+  collectCoverage: false,
+  // Coverage will be re-enabled after HTML reporter issues are resolved
+  // collectCoverage: true,
+  // coverageDirectory: 'coverage',
+  // coverageReporters: ['json', 'lcov', 'text', 'clover'],
+  // coveragePathIgnorePatterns: [
+  //   '/node_modules/',
+  //   '\\.pdf$',
+  //   '\\.docx$',
+  //   '\\.xlsx$',
+  //   '\\.jpg$',
+  //   '\\.png$',
+  //   '\\.gif$',
+  //   '\\.svg$',
+  // ],
+  // Prevent HTML coverage reporter issues
+  reporters: ['default'],
+};

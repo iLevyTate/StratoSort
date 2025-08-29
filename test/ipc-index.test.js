@@ -126,6 +126,7 @@ describe('IPC registration', () => {
       shell: mockDependencies.shell,
       getMainWindow: mockDependencies.getMainWindow,
       getServiceIntegration: mockDependencies.getServiceIntegration,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerSmartFoldersIpc).toHaveBeenCalledWith({
@@ -137,6 +138,7 @@ describe('IPC registration', () => {
       setCustomFolders: mockDependencies.setCustomFolders,
       saveCustomFolders: mockDependencies.saveCustomFolders,
       buildOllamaOptions: mockDependencies.buildOllamaOptions,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
       getOllamaModel: mockDependencies.getOllamaModel,
       scanDirectory: mockDependencies.scanDirectory,
     });
@@ -147,6 +149,7 @@ describe('IPC registration', () => {
       logger: mockLogger,
       systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerAnalysisHistoryIpc).toHaveBeenCalledWith({
@@ -155,6 +158,7 @@ describe('IPC registration', () => {
       logger: mockLogger,
       systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerSystemIpc).toHaveBeenCalledWith({
@@ -163,6 +167,7 @@ describe('IPC registration', () => {
       logger: mockLogger,
       systemAnalytics: mockDependencies.systemAnalytics,
       getServiceIntegration: mockDependencies.getServiceIntegration,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerOllamaIpc).toHaveBeenCalledWith({
@@ -175,6 +180,7 @@ describe('IPC registration', () => {
       getOllamaVisionModel: mockDependencies.getOllamaVisionModel,
       getOllamaEmbeddingModel: mockDependencies.getOllamaEmbeddingModel,
       getOllamaHost: mockDependencies.getOllamaHost,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerAnalysisIpc).toHaveBeenCalledWith({
@@ -187,6 +193,7 @@ describe('IPC registration', () => {
       analyzeImageFile: mockDependencies.analyzeImageFile,
       getServiceIntegration: mockDependencies.getServiceIntegration,
       getCustomFolders: mockDependencies.getCustomFolders,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerSettingsIpc).toHaveBeenCalledWith({
@@ -200,6 +207,7 @@ describe('IPC registration', () => {
       setOllamaVisionModel: mockDependencies.setOllamaVisionModel,
       setOllamaEmbeddingModel: mockDependencies.setOllamaEmbeddingModel,
       onSettingsChanged: mockDependencies.onSettingsChanged,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerEmbeddingsIpc).toHaveBeenCalledWith({
@@ -209,6 +217,7 @@ describe('IPC registration', () => {
       systemAnalytics: mockDependencies.systemAnalytics,
       getCustomFolders: mockDependencies.getCustomFolders,
       getServiceIntegration: mockDependencies.getServiceIntegration,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
 
     expect(registerWindowIpc).toHaveBeenCalledWith({
@@ -217,6 +226,7 @@ describe('IPC registration', () => {
       logger: mockLogger,
       systemAnalytics: mockDependencies.systemAnalytics,
       getMainWindow: mockDependencies.getMainWindow,
+      ipcMonitor: expect.any(Object), // Added ipcMonitor parameter
     });
   });
 

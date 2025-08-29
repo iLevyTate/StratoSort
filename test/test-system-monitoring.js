@@ -1,5 +1,5 @@
 // Comprehensive test for system monitoring functionality
-const { fileLogger } = require('./src/shared/fileLogger');
+const { fileLogger } = require('../src/shared/fileLogger');
 
 async function testSystemMonitoring() {
   console.log('=== COMPREHENSIVE SYSTEM MONITORING TEST ===');

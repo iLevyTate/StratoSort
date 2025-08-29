@@ -1,5 +1,5 @@
 // Test the file logging system
-const { fileLogger } = require('./src/shared/fileLogger');
+const { fileLogger } = require('../src/shared/fileLogger');
 
 async function testLogging() {
   console.log('Testing file logger...');

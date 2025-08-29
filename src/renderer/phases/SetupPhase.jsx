@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useIsMounted from '../hooks/useIsMounted';
 import { PHASES } from '../../shared/constants';
 import { usePhase } from '../contexts/PhaseContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -25,8 +26,11 @@ function SetupPhase() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(null);
 
+  const mounted = useIsMounted();
+
   useEffect(() => {
     const initializeSetup = async () => {
+      if (!mounted.current) return;
       setIsLoading(true);
       try {
         await Promise.all([loadSmartFolders(), loadDefaultLocation()]);
@@ -34,7 +38,7 @@ function SetupPhase() {
         console.error('Failed to initialize setup:', error);
         showError('Failed to load setup data');
       } finally {
-        setIsLoading(false);
+        if (mounted.current) setIsLoading(false);
       }
     };
     initializeSetup();
@@ -43,8 +47,10 @@ function SetupPhase() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && editingFolder) {
-        setEditingFolder(null);
-        setIsEditingFolder(false);
+        if (mounted.current) {
+          setEditingFolder(null);
+          setIsEditingFolder(false);
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -157,14 +163,21 @@ function SetupPhase() {
         if (parentPath) {
           const parentStats =
             await window.electronAPI.files.getStats(parentPath);
-          if (!parentStats || !parentStats.isDirectory) {
+          // Guard against undefined/null and prefer optional chaining
+          if (!parentStats?.isDirectory) {
             showError(
               `Parent directory "${parentPath}" does not exist or is not accessible`,
             );
             return;
           }
         }
-      } catch {
+      } catch (err) {
+        // Provide more context for debugging while keeping user-friendly message
+        console.debug(
+          'Parent directory stat check failed for',
+          parentPath,
+          err?.message,
+        );
         showWarning(
           'Cannot verify parent directory permissions. Folder creation may fail.',
         );

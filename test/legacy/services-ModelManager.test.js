@@ -6,7 +6,7 @@ jest.mock('electron', () => ({
 }));
 
 // Mock PerformanceService at the top level
-jest.mock('../src/main/services/PerformanceService', () => ({
+jest.mock('../../src/main/services/PerformanceService', () => ({
   buildOllamaOptions: jest.fn().mockResolvedValue({}),
 }));
 
@@ -21,7 +21,7 @@ jest.spyOn(fs, 'readFile').mockResolvedValue('{}');
 jest.spyOn(fs, 'writeFile').mockResolvedValue();
 
 const path = require('path');
-const ModelManager = require('../src/main/services/ModelManager');
+const ModelManager = require('../../src/main/services/ModelManager');
 
 // Helper function to normalize paths for cross-platform testing
 const normalizePath = (filePath) => filePath.replace(/\\/g, '/');

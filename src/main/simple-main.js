@@ -31,7 +31,8 @@ try {
   );
 }
 
-// Import error handling system (not needed directly in this file)
+// Import comprehensive crash reporter and error handling system
+const crashReporter = require('./services/CrashReporter');
 
 const { scanDirectory } = require('./folderScanner');
 const {
@@ -54,6 +55,15 @@ const { systemMonitor } = require('./services/SystemMonitor');
 
 // Import service integration
 const ServiceIntegration = require('./services/ServiceIntegration');
+
+// Import GPU diagnostics system
+const gpuDiagnostics = require('./services/GPUDiagnostics');
+
+// Import Ollama process monitor
+const ollamaMonitor = require('./services/OllamaMonitor');
+
+// Import multi-layered debugging framework
+const debugFramework = require('./services/DebugFramework');
 
 // Import shared constants
 const { IPC_CHANNELS } = require('../shared/constants');
@@ -162,7 +172,7 @@ try {
     logger.warn('[GPU] Failed to apply GPU flags:', e?.message);
   } catch (logError) {
     // Silent catch for logging errors - critical path for GPU setup
-    console.error(
+    logger.error(
       '[GPU] Could not log GPU error:',
       logError?.message || logError,
     );
@@ -188,33 +198,42 @@ try {
     logger.debug('[GPU] App-level GPU assertion failed:', err?.message || err);
   }
 
-  // Ollama/CUDA setup: this is critical for model acceleration and may throw
+  // Ollama/CUDA setup: attempt to configure but treat failures as non-fatal
   (async () => {
     try {
       await configureOllamaCuda();
     } catch (e) {
-      logger.error('[GPU] Ollama CUDA initialization failed:', e?.message || e);
-      // Defer user dialog until app is ready, then show and exit
-      app.on('ready', () => {
-        try {
-          const { dialog } = require('electron');
-          dialog.showErrorBox(
-            'GPU Configuration Error',
-            `A critical error occurred while configuring the Ollama GPU environment. The application cannot continue.\n\nDetails: ${e?.message || e}`,
-          );
-        } catch (dialogErr) {
-          console.error(
-            '[GPU] Failed to show error dialog:',
-            dialogErr?.message || dialogErr,
-          );
-        } finally {
+      logger.warn(
+        '[GPU] Ollama CUDA initialization failed (non-fatal):',
+        e?.message || e,
+      );
+      // Do not exit the app; fall back to CPU mode and continue startup
+      try {
+        // Notify user when app is ready in a non-blocking way
+        app.on('ready', () => {
           try {
-            app.quit();
-          } catch (qErr) {
-            /* ignore */
+            const { dialog } = require('electron');
+            dialog.showMessageBox({
+              type: 'warning',
+              title: 'GPU Configuration Warning',
+              message:
+                'GPU initialization for Ollama failed. StratoSort will continue using CPU mode. For best performance ensure GPU drivers and Ollama are configured correctly.',
+              detail: e?.message || String(e),
+              buttons: ['OK'],
+            });
+          } catch (dialogErr) {
+            console.debug(
+              '[GPU] Failed to show GPU warning dialog:',
+              dialogErr?.message || dialogErr,
+            );
           }
-        }
-      });
+        });
+      } catch (notifyErr) {
+        logger.debug(
+          '[GPU] Failed to schedule GPU warning notification:',
+          notifyErr?.message || notifyErr,
+        );
+      }
     }
   })();
 } catch (err) {
@@ -359,17 +378,44 @@ function createWindow() {
     mainWindow.focus();
     return;
   }
-  mainWindow = createMainWindow();
-  // startupTimings.windowReady = Date.now();
-  mainWindow.on('close', (e) => {
-    if (!isQuitting && currentSettings?.backgroundMode) {
-      e.preventDefault();
-      mainWindow.hide();
+
+  try {
+    mainWindow = createMainWindow();
+    // startupTimings.windowReady = Date.now();
+
+    // Enable DevTools in development if debug framework is configured
+    if (isDev && debugFramework.layers?.renderer?.devToolsEnabled) {
+      try {
+        mainWindow.webContents.openDevTools();
+        logger.debug('[DEBUG] DevTools opened for main window');
+      } catch (e) {
+        logger.warn('[DEBUG] Failed to open DevTools:', e?.message);
+      }
     }
-  });
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+
+    mainWindow.on('close', (e) => {
+      if (!isQuitting && currentSettings?.backgroundMode) {
+        e.preventDefault();
+        mainWindow.hide();
+      }
+    });
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+  } catch (error) {
+    logger.error('[STARTUP] Failed to initialize:', error);
+    // Try to show a fallback window or error dialog
+    try {
+      const { dialog } = require('electron');
+      dialog.showErrorBox(
+        'StratoSort Startup Error',
+        `Failed to start the application: ${error.message}\n\nPlease check the logs for more details.`,
+      );
+    } catch (dialogError) {
+      logger.error('[STARTUP] Could not show error dialog:', dialogError);
+    }
+    // Don't exit the process immediately, let the user retry
+  }
 }
 
 function updateDownloadWatcher(settings) {
@@ -550,6 +596,50 @@ if (!gotTheLock) {
 
   // Initialize services after app is ready
   app.whenReady().then(async () => {
+    // Initialize comprehensive crash reporter first
+    try {
+      await crashReporter.initialize();
+      logger.info('[STARTUP] Crash reporter initialized');
+    } catch (e) {
+      logger.error(
+        '[STARTUP] Crash reporter initialization failed:',
+        e?.message,
+      );
+    }
+
+    // Initialize GPU diagnostics system
+    try {
+      await gpuDiagnostics.initialize();
+      logger.info('[STARTUP] GPU diagnostics initialized');
+    } catch (e) {
+      logger.error(
+        '[STARTUP] GPU diagnostics initialization failed:',
+        e?.message,
+      );
+    }
+
+    // Initialize Ollama process monitor
+    try {
+      await ollamaMonitor.initialize();
+      logger.info('[STARTUP] Ollama monitor initialized');
+    } catch (e) {
+      logger.error(
+        '[STARTUP] Ollama monitor initialization failed:',
+        e?.message,
+      );
+    }
+
+    // Initialize multi-layered debugging framework
+    try {
+      await debugFramework.initialize();
+      logger.info('[STARTUP] Debug framework initialized');
+    } catch (e) {
+      logger.error(
+        '[STARTUP] Debug framework initialization failed:',
+        e?.message,
+      );
+    }
+
     // Initialize file logger with userData path for consistent log locations
     try {
       const { initializeForMainProcess } = require('../shared/fileLogger');
@@ -1103,21 +1193,11 @@ app.on('activate', () => {
 // Error handling
 logger.info('✅ StratoSort main process initialized');
 
-// Add comprehensive error handling (single registration)
-process.on('uncaughtException', (error) => {
-  logger.error('UNCAUGHT EXCEPTION:', {
-    message: error.message,
-    stack: error.stack,
-  });
-});
+// Error handling is now managed by CrashReporter service
+// Process lifecycle monitoring is handled automatically
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('UNHANDLED REJECTION', { reason, promise: String(promise) });
-});
-
-// Keep the process alive for debugging
 logger.debug(
-  '[DEBUG] Process should stay alive. If you see this and the app closes, check for errors above.',
+  '[DEBUG] Process initialized with comprehensive error handling. Check crash reports for any issues.',
 );
 
 // All Analysis History and System metrics handlers are registered via ./ipc/* modules

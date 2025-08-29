@@ -2,6 +2,10 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
+// Mock Ollama service
+jest.mock('../src/main/analysis/ollamaDocumentAnalysis');
+jest.mock('../src/main/analysis/ollamaImageAnalysis');
+
 const {
   analyzeDocumentFile,
 } = require('../src/main/analysis/ollamaDocumentAnalysis');
@@ -10,6 +14,21 @@ const {
 } = require('../src/main/analysis/ollamaImageAnalysis');
 
 describe('Analysis success paths', () => {
+  beforeEach(() => {
+    // Configure mock implementations
+    analyzeDocumentFile.mockResolvedValue({
+      category: 'Invoice',
+      keywords: ['invoice', 'project', 'payment', 'due'],
+      confidence: 0.95,
+    });
+
+    analyzeImageFile.mockResolvedValue({
+      category: 'Document',
+      keywords: ['text', 'document'],
+      confidence: 0.88,
+    });
+  });
+
   test('Document analyser returns structured data for txt file', async () => {
     const tmpFile = path.join(os.tmpdir(), 'sample.txt');
     await fs.writeFile(

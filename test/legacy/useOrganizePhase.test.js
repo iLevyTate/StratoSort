@@ -1,7 +1,7 @@
 // Test the organize phase functionality integration
 // Testing the key logic components that support the useOrganizePhase hook
 
-const { PHASES } = require('../src/shared/constants');
+const { PHASES } = require('../../src/shared/constants');
 
 // Mock electron API
 const mockElectronAPI = {
@@ -18,14 +18,19 @@ const mockElectronAPI = {
   },
 };
 
-// Mock window.electronAPI
-Object.defineProperty(window, 'electronAPI', {
-  value: mockElectronAPI,
-  writable: true,
-});
+// Use existing window.electronAPI or set up mock if not present
+if (!window.electronAPI) {
+  Object.defineProperty(window, 'electronAPI', {
+    value: mockElectronAPI,
+    writable: true,
+  });
+} else {
+  // Extend the existing mock with our test-specific methods
+  Object.assign(window.electronAPI, mockElectronAPI);
+}
 
 // Mock the batch action creator
-jest.mock('../src/renderer/components/UndoRedoSystem', () => ({
+jest.mock('../../src/renderer/components/UndoRedoSystem', () => ({
   createOrganizeBatchAction: jest.fn(() => ({
     type: 'organize_batch',
     operations: [],
@@ -213,7 +218,7 @@ describe('Organize Phase Integration', () => {
     test('calls createOrganizeBatchAction with operations', () => {
       const {
         createOrganizeBatchAction,
-      } = require('../src/renderer/components/UndoRedoSystem');
+      } = require('../../src/renderer/components/UndoRedoSystem');
 
       const operations = [
         {

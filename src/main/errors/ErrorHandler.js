@@ -14,6 +14,7 @@ class ErrorHandler {
     this.currentLogFile = null;
     this.errorQueue = [];
     this.isInitialized = false;
+    this.handlingError = false;
   }
 
   async initialize() {
@@ -34,6 +35,7 @@ class ErrorHandler {
       this.isInitialized = true;
       await this.log('info', 'ErrorHandler initialized successfully');
     } catch (error) {
+      // Use console.error as fallback since logger might not be available yet
       console.error('Failed to initialize ErrorHandler:', error);
     }
   }
@@ -89,6 +91,7 @@ class ErrorHandler {
         break;
       default:
         // Info level errors are just logged, no user notification needed
+        // These are typically minor issues that don't affect functionality
         break;
     }
 
@@ -167,28 +170,35 @@ class ErrorHandler {
    * Handle critical errors that may crash the app
    */
   async handleCriticalError(message, error) {
-    console.error('CRITICAL ERROR:', message, error);
+    if (this.handlingError) return;
+    this.handlingError = true;
 
-    // Log to file
-    await this.log('critical', message, {
-      error: error?.toString(),
-      stack: error?.stack,
-    });
+    try {
+      console.error('CRITICAL ERROR:', message, error);
 
-    // Show error dialog
-    const response = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Critical Error',
-      message: 'Stratosort encountered a critical error',
-      detail: message,
-      buttons: ['Restart', 'Quit'],
-      defaultId: 0,
-    });
+      // Log to file
+      await this.log('critical', message, {
+        error: error?.toString(),
+        stack: error?.stack,
+      });
 
-    if (response.response === 0) {
-      app.relaunch();
+      // Show error dialog
+      const response = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Critical Error',
+        message: 'Stratosort encountered a critical error',
+        detail: message,
+        buttons: ['Restart', 'Quit'],
+        defaultId: 0,
+      });
+
+      if (response.response === 0) {
+        app.relaunch();
+      }
+      app.quit();
+    } finally {
+      this.handlingError = false;
     }
-    app.quit();
   }
 
   /**

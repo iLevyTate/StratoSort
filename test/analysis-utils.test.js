@@ -3,6 +3,17 @@ jest.mock('../src/main/services/EmbeddingIndexService');
 jest.mock('../src/main/services/FolderMatchingService');
 jest.mock('../src/main/services/ModelVerifier');
 
+// Mock logger before importing analysisUtils
+jest.mock('../src/shared/logger', () => ({
+  logger: {
+    error: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    setContext: jest.fn(),
+  },
+}));
+
 // Setup mock implementations
 const mockModelVerifier = { verifyModel: jest.fn() };
 const mockEmbeddingIndex = {
@@ -31,6 +42,9 @@ const {
   delay,
   processBatch,
 } = require('../src/main/analysis/analysisUtils');
+
+// Get the mocked logger
+const { logger: mockLogger } = require('../src/shared/logger');
 
 // Also test the original utils for compatibility
 const { normalizeAnalysisResult } = require('../src/main/analysis/utils');
@@ -203,16 +217,9 @@ describe('analysis utils', () => {
   });
 
   describe('handleAnalysisError', () => {
-    const mockLogger = {
-      error: jest.fn(),
-    };
-
     beforeEach(() => {
       jest.clearAllMocks();
-      // Mock the logger import
-      jest.doMock('../src/shared/logger', () => ({
-        logger: mockLogger,
-      }));
+      mockLogger.error.mockClear();
     });
 
     test('returns standardized error response', () => {

@@ -23,6 +23,18 @@ async function executeBatchOrganize(
   getServiceIntegration,
   logger,
 ) {
+  // Simple operation-level guard to prevent concurrent batch processing
+  if (!global.__fileOperationQueue) global.__fileOperationQueue = new Set();
+  const batchKey = operation.batchId || `batch_${Date.now()}`;
+  if (global.__fileOperationQueue.has(batchKey)) {
+    logger.warn('[BATCH-ORGANIZE] Operation already in progress for', batchKey);
+    return {
+      success: false,
+      error: 'Operation already in progress',
+      batchId: batchKey,
+    };
+  }
+  global.__fileOperationQueue.add(batchKey);
   const results = [];
   let successCount = 0;
   let failCount = 0;
@@ -189,6 +201,16 @@ async function executeBatchOrganize(
     logger.error(
       '[BATCH-ORGANIZE] Critical error in batch processing:',
       batchError.message,
+    );
+  }
+
+  // Ensure we always remove the operation from the in-progress set
+  try {
+    global.__fileOperationQueue.delete(batchKey);
+  } catch (e) {
+    logger.debug(
+      '[BATCH-ORGANIZE] Failed to cleanup operation queue:',
+      e?.message,
     );
   }
 

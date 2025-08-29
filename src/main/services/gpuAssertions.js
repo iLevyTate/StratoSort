@@ -1,13 +1,5 @@
 const { app } = require('electron');
-
-function log(msg) {
-  try {
-    const { logger } = require('../../shared/logger');
-    logger.info(`[GpuAssertions] ${msg}`);
-  } catch (e) {
-    console.log(`[GpuAssertions] ${msg}`);
-  }
-}
+const { logger } = require('../../shared/logger');
 
 /**
  * Non-fatal check for Electron/Chromium graphics pipeline availability.
@@ -17,7 +9,7 @@ function assertAppGraphics() {
   try {
     if (typeof app.getGPUFeatureStatus === 'function') {
       const status = app.getGPUFeatureStatus();
-      log(`Electron GPU feature status: ${JSON.stringify(status)}`);
+      logger.debug(`Electron GPU feature status: ${JSON.stringify(status)}`);
 
       // If critical features are disabled, consider graphics not available.
       const critical = [
@@ -30,15 +22,17 @@ function assertAppGraphics() {
         (k) => status[k] === 'disabled' || status[k] === 'unavailable',
       );
       if (unavailable.length > 0) {
-        log(`Graphics: missing features: ${unavailable.join(', ')}`);
+        logger.debug(`Graphics: missing features: ${unavailable.join(', ')}`);
         return false;
       }
       return true;
     }
-    log('app.getGPUFeatureStatus not available; assuming graphics available');
+    logger.debug(
+      'app.getGPUFeatureStatus not available; assuming graphics available',
+    );
     return true;
   } catch (error) {
-    log(`Graphics assertion failed: ${error.message}`);
+    logger.debug(`Graphics assertion failed: ${error.message}`);
     return false;
   }
 }
@@ -52,10 +46,12 @@ async function configureOllamaCuda({ preferredGpuId = null } = {}) {
   try {
     const gm = require('./gpuManager');
     const ok = await gm.initializeGpuEnvironment({ preferredGpuId });
-    log(`Ollama CUDA configuration result: ${ok}`);
+    logger.debug(`Ollama CUDA configuration result: ${ok}`);
     return ok;
   } catch (error) {
-    log(`Ollama CUDA configuration failed: ${error?.message || error}`);
+    logger.debug(
+      `Ollama CUDA configuration failed: ${error?.message || error}`,
+    );
     throw error;
   }
 }

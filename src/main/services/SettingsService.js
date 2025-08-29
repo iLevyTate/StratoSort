@@ -5,7 +5,18 @@ const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 class SettingsService {
   constructor() {
-    this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    // Safely get settings path with fallback for tests
+    try {
+      this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    } catch (error) {
+      // Fallback for test environment where app might not be available
+      this.settingsPath = path.join(
+        process.cwd(),
+        'test-data',
+        'settings.json',
+      );
+    }
+
     this.defaults = {
       // UI
       theme: 'system',

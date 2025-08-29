@@ -12,6 +12,17 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const { TIMEOUTS } = require('../../shared/constants');
 
+// Import tree-kill for proper process tree cleanup
+let treeKill;
+try {
+  treeKill = require('tree-kill');
+} catch (error) {
+  logger.warn(
+    '[SYSTEM-MONITOR] tree-kill not available, falling back to basic process killing',
+  );
+  treeKill = null;
+}
+
 class SystemMonitor {
   constructor() {
     this.isMonitoring = false;
@@ -39,17 +50,50 @@ class SystemMonitor {
       let stderr = '';
       let timedOut = false;
 
-      // Set up timeout
+      // Set up timeout with proper process tree cleanup
       const timeout = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGTERM');
 
-        // Force kill after grace period
-        setTimeout(() => {
-          if (!child.killed) {
-            child.kill('SIGKILL');
-          }
-        }, 1000);
+        // Use tree-kill if available, otherwise fallback to basic kill
+        if (treeKill && child.pid) {
+          logger.debug(
+            `[SYSTEM-MONITOR] Killing process tree for PID ${child.pid}`,
+          );
+          treeKill(child.pid, 'SIGTERM', (err) => {
+            if (err) {
+              logger.warn(
+                '[SYSTEM-MONITOR] Failed to kill process tree with SIGTERM, trying SIGKILL:',
+                err.message,
+              );
+              // Fallback to SIGKILL if SIGTERM fails
+              treeKill(child.pid, 'SIGKILL', (killErr) => {
+                if (killErr) {
+                  logger.error(
+                    '[SYSTEM-MONITOR] Failed to kill process tree:',
+                    killErr.message,
+                  );
+                }
+              });
+            } else {
+              logger.debug(
+                `[SYSTEM-MONITOR] Successfully killed process tree for PID ${child.pid}`,
+              );
+            }
+          });
+        } else {
+          // Fallback to basic process killing
+          logger.debug(
+            `[SYSTEM-MONITOR] Using basic process kill for PID ${child.pid || 'unknown'}`,
+          );
+          child.kill('SIGTERM');
+
+          // Force kill after grace period
+          setTimeout(() => {
+            if (!child.killed) {
+              child.kill('SIGKILL');
+            }
+          }, 1000);
+        }
       }, timeoutMs);
 
       // Collect stdout

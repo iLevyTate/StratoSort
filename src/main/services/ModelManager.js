@@ -8,6 +8,7 @@ const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class ModelManager {
   constructor(host = 'http://127.0.0.1:11434') {
@@ -17,9 +18,18 @@ class ModelManager {
     this.selectedModel = null;
     this.modelCapabilities = new Map();
     this.lastHealthCheck = null;
-    this.configPath = path
-      .join(app.getPath('userData'), 'model-config.json')
-      .replace(/\\/g, '/');
+
+    // Safely get config path with fallback for tests
+    try {
+      this.configPath = path
+        .join(app.getPath('userData'), 'model-config.json')
+        .replace(/\\/g, '/');
+    } catch (error) {
+      // Fallback for test environment where app might not be available
+      this.configPath = path
+        .join(process.cwd(), 'test-data', 'model-config.json')
+        .replace(/\\/g, '/');
+    }
 
     // Model categories and their capabilities
     this.modelCategories = {
@@ -88,7 +98,7 @@ class ModelManager {
       );
       return true;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Initialization failed:', error);
+      logger.error('[MODEL-MANAGER] Initialization failed:', error);
       return false;
     }
   }
@@ -111,7 +121,7 @@ class ModelManager {
       );
       return this.availableModels;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Failed to discover models:', error);
+      logger.error('[MODEL-MANAGER] Failed to discover models:', error);
       this.availableModels = [];
       return [];
     }
@@ -147,7 +157,13 @@ class ModelManager {
       capabilities.vision = true;
     }
 
-    if (modelName.includes('code') || modelName.includes('coder')) {
+    // Correctly check for code models
+    if (
+      Array.isArray(this.modelCategories.code) &&
+      this.modelCategories.code.some((pattern) =>
+        modelName.includes(pattern.toLowerCase()),
+      )
+    ) {
       capabilities.code = true;
     }
 
@@ -426,7 +442,7 @@ class ModelManager {
       try {
         await this.saveConfig();
       } catch (saveError) {
-        console.error('[MODEL-MANAGER] Failed to reset config:', saveError);
+        logger.error('[MODEL-MANAGER] Failed to reset config:', saveError);
       }
     }
   }
@@ -442,7 +458,7 @@ class ModelManager {
       };
       await backupAndReplace(this.configPath, JSON.stringify(config, null, 2));
     } catch (error) {
-      console.error('[MODEL-MANAGER] Error saving config:', error);
+      logger.error('[MODEL-MANAGER] Error saving config:', error);
     }
   }
 

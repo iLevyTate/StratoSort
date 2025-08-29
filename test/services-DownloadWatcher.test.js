@@ -18,6 +18,13 @@ jest.mock('electron', () => ({
   },
 }));
 
+// Mock constants to make FILE_STABILITY_CHECK immediate
+jest.mock('../src/shared/constants', () => ({
+  TIMEOUTS: {
+    FILE_STABILITY_CHECK: 0, // Make stability check immediate for testing
+  },
+}));
+
 // Mock atomic file operations
 jest.mock('../src/shared/atomicFileOperations', () => ({
   atomicFileOps: {
@@ -67,6 +74,15 @@ describe('DownloadWatcher', () => {
       .mockImplementation(() => Promise.resolve({ size: 1000 })); // Mock file stats for stability check
     jest.spyOn(fs, 'mkdir'); // Spy on fs.mkdir to track calls
 
+    // Mock fs.open for file stability check
+    const mockFileHandle = {
+      stat: jest.fn().mockResolvedValue({ size: 1000 }),
+      close: jest.fn().mockResolvedValue(),
+    };
+    jest
+      .spyOn(fs, 'open')
+      .mockImplementation(() => Promise.resolve(mockFileHandle));
+
     // Mock atomic file operations to track calls but still trigger fs.mkdir
     const { atomicFileOps } = require('../src/shared/atomicFileOperations');
     jest
@@ -112,6 +128,25 @@ describe('DownloadWatcher', () => {
 
       expect(chokidar.watch).toHaveBeenCalledWith(downloadsPath, {
         ignoreInitial: true,
+        // Enhanced configuration for better Windows compatibility
+        ignored: [
+          /(^|[/\\])\../, // dotfiles
+          /.*\.crdownload$/, // Chrome downloads
+          /.*\.tmp$/, // temp files
+          /.*\.download$/, // download files
+          /.*\.part$/, // partial files
+          /.*\.sw[a-z]$/, // vim swap files
+          /Thumbs\.db$/, // Windows thumbnails
+          /desktop\.ini$/, // Windows desktop.ini
+        ],
+        awaitWriteFinish: {
+          stabilityThreshold: 1000,
+          pollInterval: 100,
+        },
+        depth: 3,
+        followSymlinks: false,
+        usePolling: process.platform === 'win32',
+        interval: process.platform === 'win32' ? 1000 : undefined,
       });
       expect(mockWatcher.on).toHaveBeenCalledWith('add', expect.any(Function));
       expect(watcher.watcher).toBe(mockWatcher);

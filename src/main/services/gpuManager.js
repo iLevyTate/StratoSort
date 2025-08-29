@@ -1,40 +1,38 @@
-// Compatibility wrapper for case-sensitive import paths.
-// Some modules or build steps may require 'GpuManager' instead of 'gpuManager'.
-module.exports = require('./gpuManager');
-
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
+const { logger } = require('../../shared/logger');
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
-function log(message) {
-  console.log(`[GpuManager] ${message}`);
+// Exported for testing
+function parseNvidiaSmiOutput(stdout) {
+  if (!stdout) return [];
+  return stdout
+    .trim()
+    .split('\n')
+    .map((line) => {
+      const m = line.match(/^GPU (\d+):\s+(.+?)\s+\(UUID:/);
+      if (m) return { id: Number(m[1]), name: m[2].trim() };
+      return null;
+    })
+    .filter(Boolean);
 }
 
 async function detectNvidiaGpus() {
   try {
-    const { stdout } = await execPromise('nvidia-smi -L');
-    if (!stdout) return [];
-    return stdout
-      .trim()
-      .split('\n')
-      .map((line) => {
-        const m = line.match(/^GPU (\d+):\s+(.+?)\s+\(UUID:/);
-        if (m) return { id: Number(m[1]), name: m[2].trim() };
-        return null;
-      })
-      .filter(Boolean);
+    const { stdout } = await execFilePromise('nvidia-smi', ['-L']);
+    return parseNvidiaSmiOutput(stdout);
   } catch (e) {
-    log('nvidia-smi not available');
+    logger.debug('nvidia-smi not available');
     return [];
   }
 }
 
 async function initializeGpuEnvironment({ preferredGpuId = null } = {}) {
-  log('Initializing GPU environment');
+  logger.debug('Initializing GPU environment');
   const gpus = await detectNvidiaGpus();
   if (!gpus || gpus.length === 0) {
-    log('No NVIDIA GPUs detected');
+    logger.debug('No NVIDIA GPUs detected');
     return false;
   }
 
@@ -45,15 +43,19 @@ async function initializeGpuEnvironment({ preferredGpuId = null } = {}) {
 
   // Allow explicit opt-out so advanced users or system-wide Ollama can manage GPU selection
   if (process.env.OLLAMA_SKIP_CUDA_VISIBLE_DEVICES === 'true') {
-    log(
+    logger.debug(
       'Skipping setting CUDA_VISIBLE_DEVICES due to OLLAMA_SKIP_CUDA_VISIBLE_DEVICES=true',
     );
     return true;
   }
 
   process.env.CUDA_VISIBLE_DEVICES = String(selected.id);
-  log(`CUDA_VISIBLE_DEVICES=${process.env.CUDA_VISIBLE_DEVICES}`);
+  logger.debug(`CUDA_VISIBLE_DEVICES=${process.env.CUDA_VISIBLE_DEVICES}`);
   return true;
 }
 
-module.exports = { initializeGpuEnvironment, detectNvidiaGpus };
+module.exports = {
+  initializeGpuEnvironment,
+  detectNvidiaGpus,
+  parseNvidiaSmiOutput,
+};

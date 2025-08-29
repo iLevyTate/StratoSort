@@ -92,6 +92,8 @@ module.exports = {
       },
     },
   ],
+  // Configure Jest cache to avoid uid issues
+  cacheDirectory: '/tmp/jest-cache',
   // Temporarily disable coverage to ensure clean test execution
   collectCoverage: false,
   // Coverage will be re-enabled after HTML reporter issues are resolved

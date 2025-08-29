@@ -86,7 +86,8 @@ export function PhaseProvider({ children }) {
       const savedState = localStorage.getItem('stratosort_workflow_state');
       if (savedState) {
         const parsed = JSON.parse(savedState);
-        const age = Date.now() - parsed.timestamp;
+        const timestamp = Date.parse(parsed.timestamp);
+        const age = isNaN(timestamp) ? Infinity : Date.now() - timestamp;
         if (age < UI_WORKFLOW.RESTORE_MAX_AGE_MS) {
           dispatch({ type: 'RESTORE_STATE', payload: parsed });
         }
@@ -137,10 +138,15 @@ export function PhaseProvider({ children }) {
       () => dispatch({ type: 'TOGGLE_SETTINGS' }),
       [],
     ),
-    resetWorkflow: useCallback(() => {
-      try {
-        localStorage.removeItem('stratosort_workflow_state');
-      } catch {}
+    resetWorkflow: useCallback(async () => {
+      await new Promise((resolve) => {
+        try {
+          localStorage.removeItem('stratosort_workflow_state');
+          requestAnimationFrame(resolve);
+        } catch {
+          resolve();
+        }
+      });
       dispatch({ type: 'RESET_WORKFLOW' });
     }, []),
   };

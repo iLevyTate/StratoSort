@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 /**
  * ProcessingStateService
@@ -17,6 +18,9 @@ class ProcessingStateService {
     this.saveTimeout = null;
     this.dirty = false;
     this.DEBOUNCE_DELAY = 2000; // 2 seconds delay for saves
+    this.saving = false;
+    this.savePromise = null;
+    this.updateLock = false; // Prevent concurrent state updates
   }
 
   // Lazy initialize paths to avoid calling app.getPath before app is ready
@@ -40,6 +44,28 @@ class ProcessingStateService {
       this.state = this.createEmptyState();
       await this.forceSave();
       this.initialized = true;
+    }
+  }
+
+  /**
+   * Safely update state with locking to prevent race conditions
+   */
+  async updateState(updater) {
+    if (this.updateLock) {
+      // Wait for current update to complete
+      while (this.updateLock) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+
+    this.updateLock = true;
+    try {
+      if (typeof updater === 'function' && this.state) {
+        updater(this.state);
+        this.debouncedSave();
+      }
+    } finally {
+      this.updateLock = false;
     }
   }
 
@@ -97,7 +123,7 @@ class ProcessingStateService {
           await this.saveState();
           this.dirty = false;
         } catch (error) {
-          console.error('[PROCESSING-STATE] Failed to save state:', error);
+          logger.error('[PROCESSING-STATE] Failed to save state:', error);
           // Keep dirty flag so we retry later
         }
       }
@@ -108,15 +134,29 @@ class ProcessingStateService {
    * Force immediate save (for critical operations)
    */
   async forceSave() {
+    if (this.saving) {
+      return this.savePromise;
+    }
+    this.saving = true;
+
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
     }
 
-    if (this.dirty && this.state) {
-      await this.saveState();
-      this.dirty = false;
-    }
+    this.savePromise = (async () => {
+      try {
+        if (this.dirty && this.state) {
+          await this.saveState();
+          this.dirty = false;
+        }
+      } finally {
+        this.saving = false;
+        this.savePromise = null;
+      }
+    })();
+
+    return this.savePromise;
   }
 
   // ===== Analysis tracking =====
@@ -191,7 +231,8 @@ class ProcessingStateService {
   async markOrganizeOpStarted(batchId, index) {
     await this.initialize();
     const batch = this.state.organize.batches[batchId];
-    if (!batch) return;
+    if (!batch || !batch.operations) return;
+    if (!batch.operations[index]) return;
     batch.operations[index].status = 'in_progress';
     batch.operations[index].error = null;
     this.state.organize.lastUpdated = new Date().toISOString();

@@ -17,9 +17,26 @@ class SystemMonitor {
     this.isMonitoring = false;
     this.monitoringInterval = null;
     this.healthChecks = new Map();
+    this.maxHealthChecks = 1000; // Prevent unbounded growth
     this.systemInfo = {};
     this.gpuInfo = {};
     this.ollamaHealth = {};
+  }
+
+  /**
+   * Safely add health check with size limit
+   * @param {string} key - Health check key
+   * @param {object} check - Health check data
+   */
+  addHealthCheck(key, check) {
+    if (this.healthChecks.size >= this.maxHealthChecks) {
+      // Remove oldest entry (first inserted)
+      const firstKey = this.healthChecks.keys().next().value;
+      if (firstKey) {
+        this.healthChecks.delete(firstKey);
+      }
+    }
+    this.healthChecks.set(key, { ...check, timestamp: Date.now() });
   }
 
   /**
@@ -186,7 +203,21 @@ class SystemMonitor {
     logger.info('[SYSTEM-MONITOR] Initial system assessment completed', {
       gpuDetected: !!this.gpuInfo.available,
       ollamaHealthy: this.ollamaHealth.healthy,
-      memoryUsage: `${Math.round((this.systemInfo.totalMemory - this.systemInfo.freeMemory) / 1024 / 1024)}MB/${Math.round(this.systemInfo.totalMemory / 1024 / 1024)}MB`,
+      memoryUsage: (() => {
+        const totalMB =
+          this.systemInfo.totalMemory > 0
+            ? Math.round(this.systemInfo.totalMemory / 1024 / 1024)
+            : 0;
+        const usedMB =
+          this.systemInfo.totalMemory > 0
+            ? Math.round(
+                (this.systemInfo.totalMemory - this.systemInfo.freeMemory) /
+                  1024 /
+                  1024,
+              )
+            : 0;
+        return `${usedMB}MB/${totalMB}MB`;
+      })(),
     });
   }
 

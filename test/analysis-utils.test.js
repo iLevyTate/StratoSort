@@ -2,6 +2,7 @@
 jest.mock('../src/main/services/EmbeddingIndexService');
 jest.mock('../src/main/services/FolderMatchingService');
 jest.mock('../src/main/services/ModelVerifier');
+jest.mock('../src/shared/logger');
 
 // Setup mock implementations
 const mockModelVerifier = { verifyModel: jest.fn() };
@@ -10,16 +11,17 @@ const mockEmbeddingIndex = {
   resetFolders: jest.fn(),
 };
 const mockFolderMatcher = { upsertFolderEmbedding: jest.fn() };
+const mockLogger = {
+  error: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  setContext: jest.fn(),
+};
 
-require('../src/main/services/ModelVerifier').mockImplementation(
-  () => mockModelVerifier,
-);
-require('../src/main/services/EmbeddingIndexService').mockImplementation(
-  () => mockEmbeddingIndex,
-);
-require('../src/main/services/FolderMatchingService').mockImplementation(
-  () => mockFolderMatcher,
-);
+// Mock modules directly
+jest.mock('../src/shared/logger', () => ({
+  logger: mockLogger,
+}));
 
 const {
   getSharedServices,
@@ -34,6 +36,16 @@ const {
 
 // Also test the original utils for compatibility
 const { normalizeAnalysisResult } = require('../src/main/analysis/utils');
+
+// Mock the services after require to avoid hoisting issues
+const ModelVerifier = require('../src/main/services/ModelVerifier');
+const EmbeddingIndexService = require('../src/main/services/EmbeddingIndexService');
+const FolderMatchingService = require('../src/main/services/FolderMatchingService');
+
+// Replace the constructors with our mocks
+ModelVerifier.mockImplementation(() => mockModelVerifier);
+EmbeddingIndexService.mockImplementation(() => mockEmbeddingIndex);
+FolderMatchingService.mockImplementation(() => mockFolderMatcher);
 
 describe('analysis utils', () => {
   describe('normalizeAnalysisResult', () => {
@@ -203,16 +215,8 @@ describe('analysis utils', () => {
   });
 
   describe('handleAnalysisError', () => {
-    const mockLogger = {
-      error: jest.fn(),
-    };
-
     beforeEach(() => {
       jest.clearAllMocks();
-      // Mock the logger import
-      jest.doMock('../src/shared/logger', () => ({
-        logger: mockLogger,
-      }));
     });
 
     test('returns standardized error response', () => {

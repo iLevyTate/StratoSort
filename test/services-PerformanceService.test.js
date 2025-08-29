@@ -63,10 +63,19 @@ describe('PerformanceService', () => {
   describe('detectNvidiaGpu', () => {
     test('detects NVIDIA GPU successfully', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -110,10 +119,19 @@ describe('PerformanceService', () => {
       });
 
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -142,10 +160,19 @@ describe('PerformanceService', () => {
 
     test('handles spawn errors', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -169,10 +196,19 @@ describe('PerformanceService', () => {
 
     test('handles process close with non-zero code', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -196,10 +232,19 @@ describe('PerformanceService', () => {
 
     test('handles empty stdout', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -230,10 +275,19 @@ describe('PerformanceService', () => {
 
     test('handles malformed CSV output', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -269,10 +323,19 @@ describe('PerformanceService', () => {
       os.cpus = jest.fn().mockReturnValue(new Array(8));
 
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -306,10 +369,19 @@ describe('PerformanceService', () => {
       os.cpus = jest.fn().mockReturnValue('not an array');
 
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -332,10 +404,19 @@ describe('PerformanceService', () => {
   describe('buildOllamaOptions', () => {
     test('builds options for text task without GPU', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -363,10 +444,19 @@ describe('PerformanceService', () => {
 
     test('builds options for vision task with high-end GPU', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -401,10 +491,19 @@ describe('PerformanceService', () => {
 
     test('builds options for text task with mid-range GPU', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -439,10 +538,19 @@ describe('PerformanceService', () => {
 
     test('builds options for text task with low-end GPU', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);
@@ -477,10 +585,19 @@ describe('PerformanceService', () => {
 
     test('defaults to text task when no task specified', async () => {
       const mockProc = {
-        stdout: { on: jest.fn() },
-        stderr: { on: jest.fn() },
+        stdout: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeAllListeners: jest.fn(),
+        },
         on: jest.fn(),
+        removeAllListeners: jest.fn(),
         error: { on: jest.fn() },
+        kill: jest.fn(),
+        killed: false,
       };
 
       spawnSpy.mockReturnValue(mockProc);

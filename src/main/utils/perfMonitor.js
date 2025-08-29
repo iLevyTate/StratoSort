@@ -3,8 +3,10 @@ module.exports = function createPerfMonitor(logger) {
   const log = (...args) => {
     try {
       logger?.debug?.(...args);
-    } catch {
-      // ignore logging failures in perf paths
+    } catch (error) {
+      // Log to stderr as fallback
+      if (process.stderr)
+        process.stderr.write(`[PERF-LOG-ERROR] ${error.message}\n`);
     }
   };
 

@@ -117,11 +117,14 @@ describe('DownloadWatcher', () => {
       expect(watcher.watcher).toBe(mockWatcher);
     });
 
-    test('does not start if already watching', async () => {
+    test('restarts watcher if already watching', async () => {
       watcher.watcher = mockWatcher;
       await watcher.start();
 
-      expect(chokidar.watch).not.toHaveBeenCalled();
+      // Should close existing watcher and create a new one
+      expect(mockWatcher.close).toHaveBeenCalled();
+      expect(chokidar.watch).toHaveBeenCalled();
+      expect(watcher.watcher).toBe(mockWatcher); // Should be replaced with new watcher
     });
   });
 

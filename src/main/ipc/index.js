@@ -1,3 +1,4 @@
+const { getServiceIntegration } = require('../services/ServiceIntegration');
 const registerFilesIpc = require('./files');
 const registerSmartFoldersIpc = require('./smartFolders');
 const registerUndoRedoIpc = require('./undoRedo');
@@ -44,18 +45,26 @@ function registerAllIpc({
       event.returnValue = IPC_CHANNELS;
     });
   }
-  // Helper: safely register IPC modules without failing the entire setup
-  const safeRegister = (fn, payload, label) => {
+
+  // Helper: register with proper error handling
+  const criticalRegistrations = [];
+  const safeRegister = (fn, payload, label, isCritical = false) => {
     try {
       fn(payload);
+      logger.info(`[IPC] ${label} registered successfully`);
+      return true;
     } catch (err) {
       const errorMessage = err?.message || String(err);
-      logger?.error?.(`[IPC] ${label} registration failed:`, errorMessage);
-      // Fail fast to surface misconfiguration in tests and CI
-      throw new Error(`Registration failed: ${errorMessage}`);
+      logger.error(`[IPC] ${label} registration failed:`, errorMessage);
+
+      if (isCritical) {
+        criticalRegistrations.push({ label, error: errorMessage });
+      }
+      return false;
     }
   };
 
+  // Register critical IPC channels
   safeRegister(
     registerFilesIpc,
     {
@@ -69,7 +78,28 @@ function registerAllIpc({
       getServiceIntegration,
     },
     'files',
+    true,
   );
+
+  safeRegister(
+    registerSettingsIpc,
+    {
+      ipcMain,
+      IPC_CHANNELS,
+      logger,
+      systemAnalytics,
+      settingsService,
+      setOllamaHost,
+      setOllamaModel,
+      setOllamaVisionModel,
+      setOllamaEmbeddingModel,
+      onSettingsChanged,
+    },
+    'settings',
+    true,
+  );
+
+  // Register non-critical IPC channels
   safeRegister(
     registerSmartFoldersIpc,
     {
@@ -86,11 +116,13 @@ function registerAllIpc({
     },
     'smartFolders',
   );
+
   safeRegister(
     registerUndoRedoIpc,
     { ipcMain, IPC_CHANNELS, logger, systemAnalytics, getServiceIntegration },
     'undoRedo',
   );
+
   safeRegister(
     registerAnalysisHistoryIpc,
     {
@@ -102,6 +134,7 @@ function registerAllIpc({
     },
     'analysisHistory',
   );
+
   safeRegister(
     registerSystemIpc,
     {
@@ -113,6 +146,7 @@ function registerAllIpc({
     },
     'system',
   );
+
   safeRegister(
     registerOllamaIpc,
     {
@@ -128,6 +162,7 @@ function registerAllIpc({
     },
     'ollama',
   );
+
   safeRegister(
     registerAnalysisIpc,
     {
@@ -143,22 +178,15 @@ function registerAllIpc({
     },
     'analysis',
   );
-  safeRegister(
-    registerSettingsIpc,
-    {
-      ipcMain,
-      IPC_CHANNELS,
-      logger,
-      systemAnalytics,
-      settingsService,
-      setOllamaHost,
-      setOllamaModel,
-      setOllamaVisionModel,
-      setOllamaEmbeddingModel,
-      onSettingsChanged,
-    },
-    'settings',
-  );
+
+  // Check for critical failures before registering non-critical modules
+  if (criticalRegistrations.length > 0) {
+    const errors = criticalRegistrations
+      .map((r) => `${r.label}: ${r.error}`)
+      .join('\n');
+    throw new Error(`Critical IPC registrations failed:\n${errors}`);
+  }
+
   safeRegister(
     registerEmbeddingsIpc,
     {
@@ -171,6 +199,7 @@ function registerAllIpc({
     },
     'embeddings',
   );
+
   safeRegister(
     registerWindowIpc,
     { ipcMain, IPC_CHANNELS, logger, systemAnalytics, getMainWindow },

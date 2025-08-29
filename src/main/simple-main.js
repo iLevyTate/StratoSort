@@ -7,6 +7,7 @@ const {
   Menu,
   Tray,
   nativeImage,
+  crashReporter,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
@@ -37,8 +38,13 @@ const SettingsService = require('./services/SettingsService');
 const DownloadWatcher = require('./services/DownloadWatcher');
 const { systemMonitor } = require('./services/SystemMonitor');
 
+// Additional services will be initialized as needed
+
 // Import service integration
-const ServiceIntegration = require('./services/ServiceIntegration');
+const {
+  ServiceIntegration,
+  getServiceIntegration,
+} = require('./services/ServiceIntegration');
 
 // Import shared constants
 const { IPC_CHANNELS } = require('../shared/constants');
@@ -52,23 +58,499 @@ let tesseract;
 // Lazy load services
 let ModelManager, ProcessingStateService, AnalysisHistoryService;
 
+// Initialize app after services are ready
+async function initializeApp() {
+  try {
+    // 1. Initialize crash reporter FIRST
+    await crashReporter.initialize();
+
+    // 2. Initialize settings service
+    settingsService = new SettingsService();
+    currentSettings = await settingsService.load();
+
+    // 3. Initialize service integration
+    serviceIntegration = new ServiceIntegration();
+    await serviceIntegration.initialize();
+
+    // Initialize file logger with userData path for consistent log locations
+    try {
+      const { initializeForMainProcess } = require('../shared/fileLogger');
+      initializeForMainProcess(app.getPath('userData'));
+    } catch (e) {
+      logger.warn('[STARTUP] File logger initialization failed:', e?.message);
+    }
+
+    // Initialize critical services synchronously
+    logger.info('[STARTUP] Initializing critical services...');
+
+    // Initialize comprehensive system monitoring
+    try {
+      await systemMonitor.initialize();
+      logger.info('[STARTUP] System monitoring initialized');
+    } catch (e) {
+      logger.warn(
+        '[STARTUP] System monitoring initialization failed:',
+        e?.message,
+      );
+    }
+
+    // Ensure Ollama is started with GPU-enabled configuration
+    try {
+      await ensureOllamaWithGpu();
+      logger.info('[STARTUP] Ollama GPU configuration initialized');
+    } catch (e) {
+      logger.debug('[OLLAMA] GPU startup check failed:', e?.message);
+    }
+
+    logger.info('[STARTUP] Service integration initialized');
+
+    perfMonitor.mark('app.whenReady() completed');
+
+    // Now create window after critical services are ready
+    // Load custom folders
+    const loadedCustomFolders = await perfMonitor.measure(
+      'loadCustomFolders()',
+      async () => await loadCustomFolders(),
+    );
+    customFolders = Array.isArray(loadedCustomFolders)
+      ? loadedCustomFolders
+      : [];
+    logger.info(
+      '[STARTUP] Loaded custom folders:',
+      customFolders.length,
+      'folders',
+    );
+
+    // Add memory monitoring and cleanup with progressive thresholds
+    let lastGcTime = 0;
+    const GC_COOLDOWN_MS = SERVICE_LIMITS.GC_COOLDOWN;
+
+    setInterval(() => {
+      try {
+        const memUsage = process.memoryUsage();
+        const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+        const heapTotalMB = memUsage.heapTotal / 1024 / 1024;
+        const heapUsagePercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
+
+        // Progressive thresholds with different actions
+        if (heapUsedMB > MEMORY_THRESHOLDS.CRITICAL_MB) {
+          logger.error('[MEMORY] Critical memory usage:', {
+            heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+            heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+            usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+            recommendation: 'Consider restarting the application',
+          });
+
+          // Force GC only if cooldown period has passed
+          const now = Date.now();
+          if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
+            global.gc();
+            lastGcTime = now;
+            logger.warn(
+              '[MEMORY] Forced garbage collection due to critical usage',
+            );
+          }
+        } else if (heapUsedMB > MEMORY_THRESHOLDS.HIGH_MB) {
+          logger.warn('[MEMORY] High memory usage:', {
+            heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+            heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+            usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+            recommendation: 'Monitor for potential memory leaks',
+          });
+
+          // Force GC only if cooldown period has passed
+          const now = Date.now();
+          if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
+            global.gc();
+            lastGcTime = now;
+            logger.info('[MEMORY] Forced garbage collection due to high usage');
+          }
+        } else if (heapUsedMB > 1024) {
+          // 1GB - Moderate
+          logger.info('[MEMORY] Moderate memory usage:', {
+            heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+            heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+            usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+          });
+
+          // Only force GC for moderate usage if it's been very long
+          const now = Date.now();
+          if (global.gc && now - lastGcTime > GC_COOLDOWN_MS * 2) {
+            global.gc();
+            lastGcTime = now;
+            logger.debug('[MEMORY] Periodic garbage collection');
+          }
+        } else if (heapUsagePercent > 80) {
+          // High percentage regardless of absolute size
+          logger.info('[MEMORY] High memory percentage:', {
+            usagePercent: `${heapUsagePercent.toFixed(1)}%`,
+            heapUsed: `${heapUsedMB.toFixed(2)}MB`,
+            heapTotal: `${heapTotalMB.toFixed(2)}MB`,
+          });
+        }
+      } catch (error) {
+        logger.debug('[MEMORY] Memory monitoring failed:', error.message);
+      }
+    }, 120000); // Check every 2 minutes (reduced frequency)
+    perfMonitor.mark('Settings loaded');
+
+    // Resume any incomplete organize batches (best-effort)
+    try {
+      const incompleteBatches =
+        serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() ||
+        [];
+      if (incompleteBatches.length > 0) {
+        logger.warn(
+          `[RESUME] Found ${incompleteBatches.length} incomplete organize batch(es). They will resume when a new organize request starts.`,
+        );
+      }
+    } catch (resumeErr) {
+      logger.warn(
+        '[RESUME] Failed to check incomplete batches:',
+        resumeErr.message,
+      );
+    }
+
+    // Decide whether to skip AI model verification based on settings (default: false)
+    const skipVerification =
+      typeof currentSettings.skipAIModelVerification === 'boolean'
+        ? currentSettings.skipAIModelVerification
+        : false;
+
+    if (skipVerification) {
+      logger.info(
+        '[STARTUP] Skipping AI model verification for better performance',
+      );
+      // Send notification to renderer about skipped AI status
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('ai-status-update', {
+          status: 'skipped',
+          message: 'AI model verification skipped for performance',
+        });
+      }
+    }
+
+    // Register IPC groups now that services and state are ready
+    const getMainWindow = () => mainWindow;
+    const getServiceIntegration = () => serviceIntegration;
+    const getCustomFolders = () => customFolders;
+    const setCustomFolders = (folders) => {
+      customFolders = folders;
+    };
+
+    // Add IPC sync handler for preload script
+    ipcMain.on('get-ipc-channels', (event) => {
+      event.returnValue = IPC_CHANNELS;
+    });
+
+    // Grouped IPC registration (single entry)
+    perfMonitor.measure('registerAllIpc()', () => {
+      registerAllIpc({
+        ipcMain,
+        IPC_CHANNELS,
+        logger,
+        dialog,
+        shell,
+        systemAnalytics,
+        getMainWindow,
+        getServiceIntegration,
+        getCustomFolders,
+        setCustomFolders,
+        saveCustomFolders,
+        analyzeDocumentFile: getAnalyzeDocumentFile,
+        analyzeImageFile: getAnalyzeImageFile,
+        tesseract: getTesseract,
+        getOllama,
+        getOllamaModel,
+        getOllamaVisionModel,
+        getOllamaEmbeddingModel,
+        getOllamaHost,
+        buildOllamaOptions,
+        scanDirectory,
+        settingsService,
+        setOllamaHost,
+        setOllamaModel,
+        setOllamaVisionModel,
+        setOllamaEmbeddingModel,
+        onSettingsChanged: handleSettingsChanged,
+      });
+    });
+    perfMonitor.mark('IPC registered');
+
+    // Create application menu with theme
+    createApplicationMenu();
+
+    // 5. Create window AFTER services ready
+    await createWindow();
+
+    // 6. Background services can initialize after
+    setTimeout(() => {
+      try {
+        if (serviceIntegration) {
+          perfMonitor.measure('serviceIntegration.initializeBackground()', () =>
+            serviceIntegration.initializeBackground(),
+          );
+          logger.info('[STARTUP] Background services initialized');
+        } else {
+          logger.warn('ServiceIntegration not available for background init');
+        }
+      } catch (error) {
+        logger.warn(
+          '[STARTUP] Service integration background init failed:',
+          error.message,
+        );
+      }
+    }, 1000);
+
+    handleSettingsChanged(currentSettings);
+
+    // Start periodic system metrics broadcast to renderer
+    try {
+      const metricsInterval = setInterval(async () => {
+        try {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (!win || win.isDestroyed()) return;
+          const metrics = await systemAnalytics.collectMetrics();
+          win.webContents.send('system-metrics', metrics);
+        } catch (metricsError) {
+          // Silent catch for metrics collection - non-critical background task
+          logger.debug(
+            '[METRICS] Failed to collect system metrics:',
+            metricsError?.message,
+          );
+        }
+      }, 300000); // Increased from 30s to 5 minutes for better performance
+      if (metricsInterval && typeof metricsInterval.unref === 'function') {
+        try {
+          metricsInterval.unref();
+        } catch (e) {
+          /* ignore */
+        }
+      }
+    } catch (intervalError) {
+      // Silent catch for metrics interval setup - non-critical feature
+      logger.warn(
+        '[METRICS] Failed to setup metrics collection interval:',
+        intervalError?.message,
+      );
+    }
+
+    // Create system tray with quick actions
+    try {
+      createSystemTray();
+    } catch (e) {
+      logger.warn('[TRAY] Failed to initialize tray:', e.message);
+    }
+
+    // Handle app command-line tasks (Windows Jump List)
+    try {
+      const args = process.argv.slice(1);
+      if (args.includes('--open-documents')) {
+        try {
+          const docs = app.getPath('documents');
+          shell.openPath(docs);
+        } catch (shellError) {
+          // Silent catch for shell operations - non-critical feature
+          logger.debug(
+            '[SHELL] Failed to open documents path:',
+            shellError?.message,
+          );
+        }
+      }
+      if (args.includes('--analyze-folder')) {
+        // Bring window to front and trigger select directory
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win && !win.isDestroyed()) {
+          win.focus();
+          try {
+            win.webContents.send('operation-progress', {
+              type: 'hint',
+              message: 'Use Select Directory to analyze a folder',
+            });
+          } catch (ipcError) {
+            // Silent catch for IPC operations - window might be destroyed
+            logger.debug(
+              '[IPC] Failed to send hint message:',
+              ipcError?.message,
+            );
+          }
+        }
+      }
+    } catch (argsError) {
+      // Silent catch for command line argument processing - non-critical feature
+      logger.debug(
+        '[ARGS] Failed to process command line arguments:',
+        argsError?.message,
+      );
+    }
+    // Windows Jump List tasks
+    try {
+      if (process.platform === 'win32') {
+        app.setAppUserModelId('com.stratosort.app');
+        app.setJumpList([
+          {
+            type: 'tasks',
+            items: [
+              {
+                type: 'task',
+                title: 'Analyze Folder…',
+                program: process.execPath,
+                args: '--analyze-folder',
+                iconPath: process.execPath,
+                iconIndex: 0,
+              },
+              {
+                type: 'task',
+                title: 'Open Documents Folder',
+                program: process.execPath,
+                args: '--open-documents',
+                iconPath: process.execPath,
+                iconIndex: 0,
+              },
+            ],
+          },
+        ]);
+      }
+    } catch (jumpListError) {
+      // Silent catch for Jump List setup - Windows-specific feature
+      logger.debug(
+        '[JUMPLIST] Failed to setup Windows Jump List:',
+        jumpListError?.message,
+      );
+    }
+    // Fire-and-forget resume of incomplete batches shortly after window is ready
+    setTimeout(() => {
+      try {
+        const getMainWindow = () => mainWindow;
+        resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
+      } catch (e) {
+        logger.warn(
+          '[RESUME] Failed to schedule resume of incomplete batches:',
+          e?.message,
+        );
+      }
+    }, 500);
+
+    // Defer Ollama config loading for better startup performance
+    setTimeout(async () => {
+      try {
+        const cfg = await loadOllamaConfig();
+        if (cfg.selectedTextModel) await setOllamaModel(cfg.selectedTextModel);
+        if (cfg.selectedVisionModel)
+          await setOllamaVisionModel(cfg.selectedVisionModel);
+        if (cfg.selectedEmbeddingModel)
+          await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
+        logger.info('[STARTUP] Ollama configuration loaded');
+      } catch (error) {
+        logger.warn('[STARTUP] Failed to load Ollama config:', error.message);
+      }
+    }, 2000);
+
+    // Install React DevTools in development (opt-in to avoid noisy warnings)
+    try {
+      if (isDev && process.env.REACT_DEVTOOLS === 'true') {
+        const {
+          default: installExtension,
+          REACT_DEVELOPER_TOOLS,
+        } = require('electron-devtools-installer');
+        await installExtension(REACT_DEVELOPER_TOOLS).catch((installError) => {
+          logger.debug(
+            '[DEVTOOLS] Failed to install React DevTools:',
+            installError?.message,
+          );
+        });
+      }
+    } catch (devToolsError) {
+      // Silent catch for dev tools installation - development-only feature
+      logger.debug(
+        '[DEVTOOLS] Failed to setup React DevTools:',
+        devToolsError?.message,
+      );
+    }
+
+    // Auto-updates (production only)
+    try {
+      if (!isDev) {
+        autoUpdater.autoDownload = true;
+        autoUpdater.on('error', (err) => logger.error('[UPDATER] Error:', err));
+        autoUpdater.on('update-available', () => {
+          logger.info('[UPDATER] Update available');
+          try {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win && !win.isDestroyed())
+              win.webContents.send('app:update', { status: 'available' });
+          } catch (updateError) {
+            // Silent catch for update notification - window might be destroyed
+            logger.debug(
+              '[UPDATE] Failed to send update notification:',
+              updateError?.message,
+            );
+          }
+        });
+        autoUpdater.on('update-not-available', () => {
+          logger.info('[UPDATER] No updates available');
+          try {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win && !win.isDestroyed())
+              win.webContents.send('app:update', { status: 'none' });
+          } catch (updateError) {
+            // Silent catch for update notification - window might be destroyed
+            logger.debug(
+              '[UPDATE] Failed to send no-update notification:',
+              updateError?.message,
+            );
+          }
+        });
+        autoUpdater.on('update-downloaded', () => {
+          logger.info('[UPDATER] Update downloaded');
+          try {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win && !win.isDestroyed())
+              win.webContents.send('app:update', { status: 'ready' });
+          } catch (updateError) {
+            // Silent catch for update notification - window might be destroyed
+            logger.debug(
+              '[UPDATE] Failed to send update-ready notification:',
+              updateError?.message,
+            );
+          }
+        });
+        autoUpdater
+          .checkForUpdatesAndNotify()
+          .catch((e) => logger.error('[UPDATER] check failed', e));
+      }
+    } catch (updaterError) {
+      // Silent catch for auto-updater setup - non-critical feature
+      logger.debug(
+        '[UPDATER] Failed to setup auto-updater:',
+        updaterError?.message,
+      );
+    }
+  } catch (error) {
+    logger.error('[STARTUP] Critical initialization failed:', error);
+    // Create window anyway but with error handling
+    try {
+      createWindow();
+    } catch (windowError) {
+      logger.error(
+        '[STARTUP] Failed to create window after critical init failure:',
+        windowError,
+      );
+      app.quit();
+    }
+  }
+}
+
 // Lazy loading functions
 async function getAnalyzeDocumentFile() {
   if (!analyzeDocumentFile) {
     try {
-      const module = require('./analysis/ollamaDocumentAnalysis');
-      analyzeDocumentFile = module.analyzeDocumentFile;
+      analyzeDocumentFile =
+        require('./analysis/ollamaDocumentAnalysis').analyzeDocumentFile;
     } catch (error) {
-      logger.error(
-        '[LAZY-LOAD] Failed to load document analysis module:',
-        error,
-      );
-      // Return a fallback function that throws a meaningful error
-      analyzeDocumentFile = async () => {
-        throw new Error(
-          'Document analysis module failed to load. Please check logs for details.',
-        );
-      };
+      logger.error('[LAZY] Document analysis failed:', error);
+      analyzeDocumentFile = () =>
+        Promise.reject(new Error('Document analysis unavailable'));
     }
   }
   return analyzeDocumentFile;
@@ -77,16 +559,12 @@ async function getAnalyzeDocumentFile() {
 async function getAnalyzeImageFile() {
   if (!analyzeImageFile) {
     try {
-      const module = require('./analysis/ollamaImageAnalysis');
-      analyzeImageFile = module.analyzeImageFile;
+      analyzeImageFile =
+        require('./analysis/ollamaImageAnalysis').analyzeImageFile;
     } catch (error) {
-      logger.error('[LAZY-LOAD] Failed to load image analysis module:', error);
-      // Return a fallback function that throws a meaningful error
-      analyzeImageFile = async () => {
-        throw new Error(
-          'Image analysis module failed to load. Please check logs for details.',
-        );
-      };
+      logger.error('[LAZY] Image analysis failed:', error);
+      analyzeImageFile = () =>
+        Promise.reject(new Error('Image analysis unavailable'));
     }
   }
   return analyzeImageFile;
@@ -112,7 +590,12 @@ async function getTesseract() {
   return tesseract;
 }
 
+// Ollama utility functions are imported above
+
+// Analysis functions are loaded lazily via getAnalyzeDocumentFile() and getAnalyzeImageFile()
+
 let mainWindow;
+const trayIcon = null;
 let customFolders = []; // Initialize customFolders at module level
 
 // Initialize service integration
@@ -333,6 +816,10 @@ function handleSettingsChanged(settings) {
   }
 }
 
+const onSettingsChanged = (settings) => {
+  handleSettingsChanged(settings);
+};
+
 // ===== IPC HANDLERS =====
 // ALL IPC handlers must be registered BEFORE app.whenReady()
 const { registerAllIpc } = require('./ipc');
@@ -485,469 +972,12 @@ if (!gotTheLock) {
     logger.info('[DEVELOPMENT] GPU acceleration flags enabled for development');
   }
 
-  // Initialize services after app is ready
-  app.whenReady().then(async () => {
-    // Initialize file logger with userData path for consistent log locations
-    try {
-      const { initializeForMainProcess } = require('../shared/fileLogger');
-      initializeForMainProcess(app.getPath('userData'));
-    } catch (e) {
-      logger.warn('[STARTUP] File logger initialization failed:', e?.message);
-    }
-
-    // Initialize comprehensive system monitoring
-    try {
-      await systemMonitor.initialize();
-      logger.info('[STARTUP] System monitoring initialized');
-    } catch (e) {
-      // Non-fatal: log and continue startup
-      logger.warn(
-        '[STARTUP] System monitoring initialization failed:',
-        e?.message,
-      );
-    }
-
-    // Ensure Ollama is started with GPU-enabled configuration on app startup
-    try {
-      await ensureOllamaWithGpu();
-    } catch (e) {
-      // Non-fatal: log and continue startup
-      logger.debug('[OLLAMA] GPU startup check failed:', e?.message);
-    }
-    perfMonitor.mark('app.whenReady() completed');
-    try {
-      // Load custom folders
-      const loadedCustomFolders = await perfMonitor.measure(
-        'loadCustomFolders()',
-        async () => await loadCustomFolders(),
-      );
-      customFolders = Array.isArray(loadedCustomFolders)
-        ? loadedCustomFolders
-        : [];
-      logger.info(
-        '[STARTUP] Loaded custom folders:',
-        customFolders.length,
-        'folders',
-      );
-
-      // Initialize service integration (deferred for better startup performance)
-      serviceIntegration = new ServiceIntegration();
-      // Use background initialization to avoid blocking the UI on heavy I/O
-      setTimeout(() => {
-        try {
-          perfMonitor.measure('serviceIntegration.initializeBackground()', () =>
-            serviceIntegration.initializeBackground(),
-          );
-        } catch (error) {
-          logger.warn(
-            '[MAIN] Service integration background init failed:',
-            error.message,
-          );
-        }
-      }, 1000);
-
-      // Add memory monitoring and cleanup with progressive thresholds
-      let lastGcTime = 0;
-      const GC_COOLDOWN_MS = SERVICE_LIMITS.GC_COOLDOWN;
-
-      setInterval(() => {
-        try {
-          const memUsage = process.memoryUsage();
-          const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
-          const heapTotalMB = memUsage.heapTotal / 1024 / 1024;
-          const heapUsagePercent =
-            (memUsage.heapUsed / memUsage.heapTotal) * 100;
-
-          // Progressive thresholds with different actions
-          if (heapUsedMB > MEMORY_THRESHOLDS.CRITICAL_MB) {
-            logger.error('[MEMORY] Critical memory usage:', {
-              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
-              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
-              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
-              recommendation: 'Consider restarting the application',
-            });
-
-            // Force GC only if cooldown period has passed
-            const now = Date.now();
-            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
-              global.gc();
-              lastGcTime = now;
-              logger.warn(
-                '[MEMORY] Forced garbage collection due to critical usage',
-              );
-            }
-          } else if (heapUsedMB > MEMORY_THRESHOLDS.HIGH_MB) {
-            logger.warn('[MEMORY] High memory usage:', {
-              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
-              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
-              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
-              recommendation: 'Monitor for potential memory leaks',
-            });
-
-            // Force GC only if cooldown period has passed
-            const now = Date.now();
-            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS) {
-              global.gc();
-              lastGcTime = now;
-              logger.info(
-                '[MEMORY] Forced garbage collection due to high usage',
-              );
-            }
-          } else if (heapUsedMB > 1024) {
-            // 1GB - Moderate
-            logger.info('[MEMORY] Moderate memory usage:', {
-              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
-              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
-              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
-            });
-
-            // Only force GC for moderate usage if it's been very long
-            const now = Date.now();
-            if (global.gc && now - lastGcTime > GC_COOLDOWN_MS * 2) {
-              global.gc();
-              lastGcTime = now;
-              logger.debug('[MEMORY] Periodic garbage collection');
-            }
-          } else if (heapUsagePercent > 80) {
-            // High percentage regardless of absolute size
-            logger.info('[MEMORY] High memory percentage:', {
-              usagePercent: `${heapUsagePercent.toFixed(1)}%`,
-              heapUsed: `${heapUsedMB.toFixed(2)}MB`,
-              heapTotal: `${heapTotalMB.toFixed(2)}MB`,
-            });
-          }
-        } catch (error) {
-          logger.debug('[MEMORY] Memory monitoring failed:', error.message);
-        }
-      }, 120000); // Check every 2 minutes (reduced frequency)
-      // Initialize settings service
-      settingsService = new SettingsService();
-      const initialSettings = await perfMonitor.measure(
-        'settingsService.load()',
-        async () => await settingsService.load(),
-      );
-      currentSettings = initialSettings;
-      perfMonitor.mark('Settings loaded');
-
-      // Resume any incomplete organize batches (best-effort)
-      try {
-        const incompleteBatches =
-          serviceIntegration?.processingState?.getIncompleteOrganizeBatches?.() ||
-          [];
-        if (incompleteBatches.length > 0) {
-          logger.warn(
-            `[RESUME] Found ${incompleteBatches.length} incomplete organize batch(es). They will resume when a new organize request starts.`,
-          );
-        }
-      } catch (resumeErr) {
-        logger.warn(
-          '[RESUME] Failed to check incomplete batches:',
-          resumeErr.message,
-        );
-      }
-
-      // Decide whether to skip AI model verification based on settings (default: false)
-      const skipVerification =
-        typeof currentSettings.skipAIModelVerification === 'boolean'
-          ? currentSettings.skipAIModelVerification
-          : false;
-      // startupTimings.modelVerificationStarted = Date.now();
-
-      if (skipVerification) {
-        logger.info(
-          '[STARTUP] Skipping AI model verification for better performance',
-        );
-        // Send notification to renderer about skipped AI status
-        if (mainWindow && mainWindow.webContents) {
-          mainWindow.webContents.send('ai-status-update', {
-            status: 'skipped',
-            message: 'AI model verification skipped for performance',
-          });
-        }
-      }
-
-      // startupTimings.modelVerificationCompleted = Date.now();
-
-      // Register IPC groups now that services and state are ready
-      const getMainWindow = () => mainWindow;
-      const getServiceIntegration = () => serviceIntegration;
-      const getCustomFolders = () => customFolders;
-      const setCustomFolders = (folders) => {
-        customFolders = folders;
-      };
-
-      // Grouped IPC registration (single entry)
-      perfMonitor.measure('registerAllIpc()', () => {
-        registerAllIpc({
-          ipcMain,
-          IPC_CHANNELS,
-          logger,
-          dialog,
-          shell,
-          systemAnalytics,
-          getMainWindow,
-          getServiceIntegration,
-          getCustomFolders,
-          setCustomFolders,
-          saveCustomFolders,
-          analyzeDocumentFile: getAnalyzeDocumentFile,
-          analyzeImageFile: getAnalyzeImageFile,
-          tesseract: getTesseract,
-          getOllama,
-          getOllamaModel,
-          getOllamaVisionModel,
-          getOllamaEmbeddingModel,
-          getOllamaHost,
-          buildOllamaOptions,
-          scanDirectory,
-          settingsService,
-          setOllamaHost,
-          setOllamaModel,
-          setOllamaVisionModel,
-          setOllamaEmbeddingModel,
-          onSettingsChanged: handleSettingsChanged,
-        });
-      });
-      perfMonitor.mark('IPC registered');
-
-      // Create application menu with theme
-      createApplicationMenu();
-
-      createWindow();
-      handleSettingsChanged(initialSettings);
-
-      // Start periodic system metrics broadcast to renderer
-      try {
-        const metricsInterval = setInterval(async () => {
-          try {
-            const win = BrowserWindow.getAllWindows()[0];
-            if (!win || win.isDestroyed()) return;
-            const metrics = await systemAnalytics.collectMetrics();
-            win.webContents.send('system-metrics', metrics);
-          } catch (metricsError) {
-            // Silent catch for metrics collection - non-critical background task
-            logger.debug(
-              '[METRICS] Failed to collect system metrics:',
-              metricsError?.message,
-            );
-          }
-        }, 300000); // Increased from 30s to 5 minutes for better performance
-        if (metricsInterval && typeof metricsInterval.unref === 'function') {
-          try {
-            metricsInterval.unref();
-          } catch (e) {
-            /* ignore */
-          }
-        }
-      } catch (intervalError) {
-        // Silent catch for metrics interval setup - non-critical feature
-        logger.warn(
-          '[METRICS] Failed to setup metrics collection interval:',
-          intervalError?.message,
-        );
-      }
-
-      // Create system tray with quick actions
-      try {
-        createSystemTray();
-      } catch (e) {
-        logger.warn('[TRAY] Failed to initialize tray:', e.message);
-      }
-
-      // Handle app command-line tasks (Windows Jump List)
-      try {
-        const args = process.argv.slice(1);
-        if (args.includes('--open-documents')) {
-          try {
-            const docs = app.getPath('documents');
-            shell.openPath(docs);
-          } catch (shellError) {
-            // Silent catch for shell operations - non-critical feature
-            logger.debug(
-              '[SHELL] Failed to open documents path:',
-              shellError?.message,
-            );
-          }
-        }
-        if (args.includes('--analyze-folder')) {
-          // Bring window to front and trigger select directory
-          const win = BrowserWindow.getAllWindows()[0];
-          if (win) {
-            win.focus();
-            try {
-              win.webContents.send('operation-progress', {
-                type: 'hint',
-                message: 'Use Select Directory to analyze a folder',
-              });
-            } catch (ipcError) {
-              // Silent catch for IPC operations - window might be destroyed
-              logger.debug(
-                '[IPC] Failed to send hint message:',
-                ipcError?.message,
-              );
-            }
-          }
-        }
-      } catch (argsError) {
-        // Silent catch for command line argument processing - non-critical feature
-        logger.debug(
-          '[ARGS] Failed to process command line arguments:',
-          argsError?.message,
-        );
-      }
-      // Windows Jump List tasks
-      try {
-        if (process.platform === 'win32') {
-          app.setAppUserModelId('com.stratosort.app');
-          app.setJumpList([
-            {
-              type: 'tasks',
-              items: [
-                {
-                  type: 'task',
-                  title: 'Analyze Folder…',
-                  program: process.execPath,
-                  args: '--analyze-folder',
-                  iconPath: process.execPath,
-                  iconIndex: 0,
-                },
-                {
-                  type: 'task',
-                  title: 'Open Documents Folder',
-                  program: process.execPath,
-                  args: '--open-documents',
-                  iconPath: process.execPath,
-                  iconIndex: 0,
-                },
-              ],
-            },
-          ]);
-        }
-      } catch (jumpListError) {
-        // Silent catch for Jump List setup - Windows-specific feature
-        logger.debug(
-          '[JUMPLIST] Failed to setup Windows Jump List:',
-          jumpListError?.message,
-        );
-      }
-      // Fire-and-forget resume of incomplete batches shortly after window is ready
-      setTimeout(() => {
-        try {
-          const getMainWindow = () => mainWindow;
-          resumeIncompleteBatches(serviceIntegration, logger, getMainWindow);
-        } catch (e) {
-          logger.warn(
-            '[RESUME] Failed to schedule resume of incomplete batches:',
-            e?.message,
-          );
-        }
-      }, 500);
-
-      // Defer Ollama config loading for better startup performance
-      setTimeout(async () => {
-        try {
-          const cfg = await loadOllamaConfig();
-          if (cfg.selectedTextModel)
-            await setOllamaModel(cfg.selectedTextModel);
-          if (cfg.selectedVisionModel)
-            await setOllamaVisionModel(cfg.selectedVisionModel);
-          if (cfg.selectedEmbeddingModel)
-            await setOllamaEmbeddingModel(cfg.selectedEmbeddingModel);
-          logger.info('[STARTUP] Ollama configuration loaded');
-        } catch (error) {
-          logger.warn('[STARTUP] Failed to load Ollama config:', error.message);
-        }
-      }, 2000);
-
-      // Install React DevTools in development (opt-in to avoid noisy warnings)
-      try {
-        if (isDev && process.env.REACT_DEVTOOLS === 'true') {
-          const {
-            default: installExtension,
-            REACT_DEVELOPER_TOOLS,
-          } = require('electron-devtools-installer');
-          await installExtension(REACT_DEVELOPER_TOOLS).catch(
-            (installError) => {
-              logger.debug(
-                '[DEVTOOLS] Failed to install React DevTools:',
-                installError?.message,
-              );
-            },
-          );
-        }
-      } catch (devToolsError) {
-        // Silent catch for dev tools installation - development-only feature
-        logger.debug(
-          '[DEVTOOLS] Failed to setup React DevTools:',
-          devToolsError?.message,
-        );
-      }
-
-      // Auto-updates (production only)
-      try {
-        if (!isDev) {
-          autoUpdater.autoDownload = true;
-          autoUpdater.on('error', (err) =>
-            logger.error('[UPDATER] Error:', err),
-          );
-          autoUpdater.on('update-available', () => {
-            logger.info('[UPDATER] Update available');
-            try {
-              const win = BrowserWindow.getAllWindows()[0];
-              if (win && !win.isDestroyed())
-                win.webContents.send('app:update', { status: 'available' });
-            } catch (updateError) {
-              // Silent catch for update notification - window might be destroyed
-              logger.debug(
-                '[UPDATE] Failed to send update notification:',
-                updateError?.message,
-              );
-            }
-          });
-          autoUpdater.on('update-not-available', () => {
-            logger.info('[UPDATER] No updates available');
-            try {
-              const win = BrowserWindow.getAllWindows()[0];
-              if (win && !win.isDestroyed())
-                win.webContents.send('app:update', { status: 'none' });
-            } catch (updateError) {
-              // Silent catch for update notification - window might be destroyed
-              logger.debug(
-                '[UPDATE] Failed to send no-update notification:',
-                updateError?.message,
-              );
-            }
-          });
-          autoUpdater.on('update-downloaded', () => {
-            logger.info('[UPDATER] Update downloaded');
-            try {
-              const win = BrowserWindow.getAllWindows()[0];
-              if (win && !win.isDestroyed())
-                win.webContents.send('app:update', { status: 'ready' });
-            } catch (updateError) {
-              // Silent catch for update notification - window might be destroyed
-              logger.debug(
-                '[UPDATE] Failed to send update-ready notification:',
-                updateError?.message,
-              );
-            }
-          });
-          autoUpdater
-            .checkForUpdatesAndNotify()
-            .catch((e) => logger.error('[UPDATER] check failed', e));
-        }
-      } catch (updaterError) {
-        // Silent catch for auto-updater setup - non-critical feature
-        logger.debug(
-          '[UPDATER] Failed to setup auto-updater:',
-          updaterError?.message,
-        );
-      }
-    } catch (error) {
-      logger.error('[STARTUP] Failed to initialize:', error);
-      createWindow();
-    }
-  });
+  // Initialize services after app is ready - use single handler to avoid race conditions
+  if (app.isReady()) {
+    initializeApp();
+  } else {
+    app.once('ready', initializeApp);
+  }
 }
 
 // ===== APP LIFECYCLE =====
@@ -1040,17 +1070,7 @@ app.on('activate', () => {
 // Error handling
 logger.info('✅ StratoSort main process initialized');
 
-// Add comprehensive error handling (single registration)
-process.on('uncaughtException', (error) => {
-  logger.error('UNCAUGHT EXCEPTION:', {
-    message: error.message,
-    stack: error.stack,
-  });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('UNHANDLED REJECTION', { reason, promise: String(promise) });
-});
+// Error handling already registered above
 
 // Keep the process alive for debugging
 logger.debug(

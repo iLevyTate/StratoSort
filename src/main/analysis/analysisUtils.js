@@ -4,6 +4,7 @@
 const EmbeddingIndexService = require('../services/EmbeddingIndexService');
 const FolderMatchingService = require('../services/FolderMatchingService');
 const ModelVerifier = require('../services/ModelVerifier');
+const { logger } = require('../../shared/logger');
 
 // Shared service instances for performance
 let modelVerifier;
@@ -40,11 +41,31 @@ async function getSharedServices() {
 // Cleanup function for shared services
 async function cleanupSharedServices() {
   try {
+    // Clean up embedding index
     if (embeddingIndex && typeof embeddingIndex.destroy === 'function') {
       await embeddingIndex.destroy();
+      embeddingIndex = null;
     }
+
+    // Clean up folder matcher (no specific cleanup needed, but clear reference)
+    if (folderMatcher) {
+      folderMatcher = null;
+    }
+
+    // Clean up model verifier (no specific cleanup needed, but clear reference)
+    if (modelVerifier) {
+      modelVerifier = null;
+    }
+
+    // Clear embedding cache
+    folderEmbeddingCache.clear();
+
+    logger.info('[ANALYSIS-UTILS] All shared services cleaned up successfully');
   } catch (error) {
-    console.error('[ANALYSIS-UTILS] Failed to cleanup shared services:', error);
+    logger.error(
+      '[ANALYSIS-UTILS] Failed to cleanup shared services:',
+      error.message,
+    );
   }
 }
 
@@ -132,8 +153,6 @@ async function performSemanticAnalysis(
 
 // Standardized error handling for analysis failures
 function handleAnalysisError(error, context = {}) {
-  const { logger } = require('../../shared/logger');
-
   // Log the error with context
   logger.error(`[ANALYSIS-ERROR] ${context.type || 'Unknown'} failed`, {
     error: error.message,

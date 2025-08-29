@@ -58,7 +58,7 @@ const PerformanceDashboard = ({ isOpen, onClose, onOpenLogViewer }) => {
       const interval = setInterval(fetchMetrics, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [isOpen, refreshInterval]);
+  }, [isOpen, refreshInterval, fetchMetrics]);
 
   const formatDuration = (ms) => {
     if (ms < 1000) return `${Math.round(ms)}ms`;

@@ -19,12 +19,14 @@ function registerSystemIpc({
     IPC_CHANNELS.SYSTEM.GET_APPLICATION_STATISTICS,
     withErrorLogging(logger, async () => {
       try {
-        const [analysisStats, historyRecent] = await Promise.all([
+        const [analysisStats, historyRecent] = await Promise.allSettled([
           getServiceIntegration()?.analysisHistory?.getStatistics?.() ||
             Promise.resolve({}),
           getServiceIntegration()?.analysisHistory?.getRecentAnalysis?.(20) ||
             Promise.resolve([]),
-        ]);
+        ]).then((results) =>
+          results.map((r) => (r.status === 'fulfilled' ? r.value : null)),
+        );
         return {
           analysis: analysisStats,
           recentActions:

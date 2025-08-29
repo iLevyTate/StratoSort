@@ -28,7 +28,11 @@ class DownloadWatcher {
   }
 
   async start() {
-    if (this.watcher) return;
+    // Close any existing watcher first
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+    }
 
     try {
       // Use Electron's built-in downloads path instead of hardcoded path
@@ -56,6 +60,20 @@ class DownloadWatcher {
       this.watcher.close();
       this.watcher = null;
     }
+  }
+
+  /**
+   * Complete cleanup method for proper resource management
+   */
+  destroy() {
+    this.stop();
+
+    // Clear references to prevent memory leaks
+    this.analyzeDocumentFile = null;
+    this.analyzeImageFile = null;
+    this.getCustomFolders = null;
+
+    logger.info('[DOWNLOAD-WATCHER] DownloadWatcher destroyed and cleaned up');
   }
 
   async handleFile(filePath) {

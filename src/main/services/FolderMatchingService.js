@@ -1,6 +1,7 @@
 const { getOllamaClient, getOllamaEmbeddingModel } = require('../ollamaUtils');
 const { buildOllamaOptions } = require('./PerformanceService');
 const crypto = require('crypto');
+const { logger } = require('../../shared/logger');
 
 // Helper function to compute content hash
 function computeHash(text) {
@@ -28,7 +29,7 @@ class FolderMatchingService {
       });
       return { vector: embedding, model };
     } catch (error) {
-      console.error('[FolderMatching] Embedding failed:', error.message);
+      logger.error('[FolderMatching] Embedding failed:', error.message);
       throw error;
     }
   }
@@ -91,7 +92,12 @@ class FolderMatchingService {
   }
 
   async matchFileToFolders(fileId, topK = 5) {
-    return this.embeddingStore.queryFolders(fileId, topK);
+    try {
+      return await this.embeddingStore.queryFolders(fileId, topK);
+    } catch (error) {
+      logger.error('[FolderMatching] Query folders failed:', error);
+      return [];
+    }
   }
 }
 

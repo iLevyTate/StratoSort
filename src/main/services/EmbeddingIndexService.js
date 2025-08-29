@@ -2,6 +2,7 @@ const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class EmbeddingIndexService {
   constructor() {
@@ -16,6 +17,8 @@ class EmbeddingIndexService {
     this.consecutiveFailures = 0;
     this.maxConsecutiveFailures = 5;
     this.failureBackoffMs = 30000; // 30 seconds
+    this.maxFileVectors = 10000; // Limit file vectors to prevent unbounded growth
+    this.maxFolderVectors = 1000; // Limit folder vectors
 
     // Performance optimizations
     this.writeBuffer = [];
@@ -26,7 +29,7 @@ class EmbeddingIndexService {
         this.writeQueue = this.writeQueue
           .then(() => this.flushWriteBuffer())
           .catch((error) => {
-            console.error('Background flush failed:', error);
+            logger.error('Background flush failed:', error);
             return Promise.resolve(); // Continue the chain
           });
       }
@@ -74,7 +77,7 @@ class EmbeddingIndexService {
           this.writeQueue = this.writeQueue
             .then(() => this.flushWriteBuffer())
             .catch((error) => {
-              console.error('[EMBEDDING] Retry flush failed:', error);
+              logger.error('[EMBEDDING] Retry flush failed:', error);
               return Promise.resolve();
             });
         }
@@ -103,7 +106,7 @@ class EmbeddingIndexService {
       // Reset consecutive failures on successful write
       this.consecutiveFailures = 0;
     } catch (error) {
-      console.error('[EMBEDDING] Batch write failed:', error);
+      logger.error('[EMBEDDING] Batch write failed:', error);
       this.consecutiveFailures++;
 
       // Re-add failed items to buffer for retry
@@ -111,7 +114,7 @@ class EmbeddingIndexService {
 
       // If we've hit the failure limit, disable persistence temporarily
       if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        console.error(
+        logger.error(
           `[EMBEDDING] Too many consecutive write failures (${this.consecutiveFailures}). Disabling persistence temporarily.`,
         );
       }
@@ -122,12 +125,16 @@ class EmbeddingIndexService {
   async destroy() {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
+      this.flushInterval = null;
     }
     // Ensure final flush completes
     try {
       await this.flushWriteBuffer();
     } catch (error) {
-      console.error('[EMBEDDING] Final flush failed during destroy:', error);
+      logger.error(
+        '[EMBEDDING] Final flush failed during destroy:',
+        error.message,
+      );
     }
   }
 
@@ -149,11 +156,17 @@ class EmbeddingIndexService {
     let skippedLines = 0;
     let loadedLines = 0;
 
+    let stream;
     try {
       // Stream the JSONL file to avoid loading large files into memory
-      const stream = require('fs').createReadStream(filePath, {
+      stream = require('fs').createReadStream(filePath, {
         encoding: 'utf8',
       });
+      stream.on('error', (error) => {
+        logger.error('Stream error:', error);
+        stream.destroy();
+      });
+      stream.on('end', () => stream.destroy());
       const readline = require('readline');
       const rl = readline.createInterface({
         input: stream,
@@ -188,11 +201,15 @@ class EmbeddingIndexService {
       }
     } catch (e) {
       if (e.code !== 'ENOENT') {
-        console.error(
+        logger.error(
           `[EMBEDDING] Failed to load JSONL file ${filePath}:`,
           e.message,
         );
         throw e;
+      }
+    } finally {
+      if (stream) {
+        stream.close();
       }
     }
   }
@@ -205,7 +222,7 @@ class EmbeddingIndexService {
       await this.bufferWrite(filePath, obj);
       return Promise.resolve();
     } catch (error) {
-      console.error(
+      logger.error(
         '[EMBEDDING] Batch buffer failed, falling back to direct write:',
         error,
       );
@@ -214,7 +231,7 @@ class EmbeddingIndexService {
         await fs.appendFile(filePath, JSON.stringify(obj) + '\n');
         return Promise.resolve();
       } catch (fallbackError) {
-        console.error('[EMBEDDING] Direct write also failed:', fallbackError);
+        logger.error('[EMBEDDING] Direct write also failed:', fallbackError);
         this.persistDisabled = true;
         return Promise.resolve();
       }
@@ -223,12 +240,34 @@ class EmbeddingIndexService {
 
   async upsertFolder(folder) {
     await this.initialize();
+
+    // Limit cache size to prevent unbounded growth
+    if (this.folderVectors.size >= this.maxFolderVectors) {
+      // Remove oldest entries (simple FIFO eviction)
+      const keysToDelete = Array.from(this.folderVectors.keys()).slice(
+        0,
+        Math.max(1, Math.floor(this.maxFolderVectors * 0.1)),
+      );
+      keysToDelete.forEach((key) => this.folderVectors.delete(key));
+    }
+
     this.folderVectors.set(folder.id, folder);
     await this.appendJsonl(this.foldersPath, folder);
   }
 
   async upsertFile(file) {
     await this.initialize();
+
+    // Limit cache size to prevent unbounded growth
+    if (this.fileVectors.size >= this.maxFileVectors) {
+      // Remove oldest entries (simple FIFO eviction)
+      const keysToDelete = Array.from(this.fileVectors.keys()).slice(
+        0,
+        Math.max(1, Math.floor(this.maxFileVectors * 0.1)),
+      );
+      keysToDelete.forEach((key) => this.fileVectors.delete(key));
+    }
+
     this.fileVectors.set(file.id, file);
     await this.appendJsonl(this.filesPath, file);
   }
@@ -253,11 +292,18 @@ class EmbeddingIndexService {
     await this.initialize();
     const file = this.fileVectors.get(fileId);
     if (!file) return [];
+
     const scores = [];
+    const maxFolders = 1000; // Safety limit to prevent unbounded growth
+    let folderCount = 0;
+
     for (const [, folder] of this.folderVectors) {
+      if (folderCount >= maxFolders) break;
       const score = this.cosine(file.vector, folder.vector);
       scores.push({ folderId: folder.id, name: folder.name, score });
+      folderCount++;
     }
+
     return scores.sort((a, b) => b.score - a.score).slice(0, topK);
   }
 

@@ -71,12 +71,36 @@ class ModelVerifier {
       });
 
       // Race between the actual request and timeout
+      if (typeof this.ollama?.list !== 'function') {
+        throw new Error('Ollama list method not available');
+      }
       const models = await Promise.race([this.ollama.list(), timeoutPromise]);
+
+      // Validate response structure
+      if (!models || typeof models !== 'object') {
+        return {
+          success: false,
+          error: 'Invalid response from Ollama API',
+          models: [],
+          total: 0,
+        };
+      }
+
+      // Ensure models array exists and is valid
+      const modelsArray = Array.isArray(models.models) ? models.models : [];
+      // Validate each model object
+      const validModels = modelsArray.filter(
+        (model) =>
+          model &&
+          typeof model === 'object' &&
+          typeof model.name === 'string' &&
+          model.name.trim().length > 0,
+      );
 
       return {
         success: true,
-        models: models.models || [],
-        total: models.models?.length || 0,
+        models: validModels,
+        total: validModels.length,
       };
     } catch (error) {
       return {
@@ -90,6 +114,33 @@ class ModelVerifier {
 
   async verifyEssentialModels() {
     logger.info('[MODEL-VERIFIER] Checking essential models...');
+
+    // Validate essential models array
+    if (
+      !Array.isArray(this.essentialModels) ||
+      this.essentialModels.length === 0
+    ) {
+      return {
+        success: false,
+        error: 'Invalid essential models configuration',
+        missingModels: [],
+        availableModels: [],
+      };
+    }
+
+    // Validate model names
+    const invalidModels = this.essentialModels.filter(
+      (model) =>
+        !model || typeof model !== 'string' || model.trim().length === 0,
+    );
+    if (invalidModels.length > 0) {
+      logger.warn('[MODEL-VERIFIER] Invalid model names found:', invalidModels);
+      // Filter out invalid models
+      this.essentialModels = this.essentialModels.filter(
+        (model) =>
+          model && typeof model === 'string' && model.trim().length > 0,
+      );
+    }
 
     const connectionCheck = await this.checkOllamaConnection();
     if (!connectionCheck.connected) {
@@ -254,6 +305,9 @@ class ModelVerifier {
     // Test Whisper (if available)
     try {
       // We can't easily test audio without a file, so just check if model responds
+      if (typeof this.ollama?.list !== 'function') {
+        throw new Error('Ollama list method not available');
+      }
       const whisperTest = await this.ollama.list();
       const hasWhisper = whisperTest.models?.some((m) =>
         m.name.toLowerCase().includes('whisper'),

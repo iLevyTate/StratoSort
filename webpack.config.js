@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
@@ -65,7 +66,9 @@ module.exports = (env, argv) => {
       },
     },
     externals: {
-      electron: 'require("electron")',
+      electron: 'commonjs electron',
+      'electron-store': 'commonjs electron-store',
+      sqlite3: 'commonjs sqlite3',
     },
     plugins: [
       new HtmlWebpackPlugin({
@@ -107,6 +110,11 @@ module.exports = (env, argv) => {
           headers: {
             'Content-Security-Policy':
               "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';",
+          },
+          onListening: function (devServer) {
+            const port = devServer.server.address().port;
+            const portFile = path.join(__dirname, '.webpack-dev-server-port');
+            fs.writeFileSync(portFile, String(port));
           },
         },
 
@@ -180,5 +188,21 @@ module.exports = (env, argv) => {
     ],
   };
 
-  return [mainConfig, rendererConfig];
+  const preloadConfig = {
+    mode: argv.mode || 'development',
+    entry: './src/preload/preload.js',
+    target: 'electron-preload',
+    output: {
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'preload.js',
+    },
+    resolve: {
+      extensions: ['.js'],
+    },
+    externals: {
+      electron: 'commonjs electron',
+    },
+  };
+
+  return [rendererConfig, mainConfig, preloadConfig];
 };

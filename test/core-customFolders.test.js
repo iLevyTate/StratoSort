@@ -18,6 +18,11 @@ jest.mock('../src/shared/logger', () => ({
   },
 }));
 
+// Mock atomic file operations
+jest.mock('../src/shared/atomicFileOperations', () => ({
+  backupAndReplace: jest.fn(),
+}));
+
 const {
   getCustomFoldersPath,
   loadCustomFolders,
@@ -261,11 +266,15 @@ describe('customFolders', () => {
         { name: 'Another Folder', path: 'relative\\path' },
       ];
 
-      jest.spyOn(fs, 'writeFile').mockResolvedValue();
+      const {
+        backupAndReplace,
+      } = require('../src/shared/atomicFileOperations');
+      backupAndReplace.mockResolvedValue({ success: true });
 
       await saveCustomFolders(folders);
 
-      expect(fs.writeFile).toHaveBeenCalledWith(
+      // Should use atomic backup and replace
+      expect(backupAndReplace).toHaveBeenCalledWith(
         path.join('/mock/user/data', 'custom-folders.json'),
         JSON.stringify(
           [
@@ -284,7 +293,10 @@ describe('customFolders', () => {
     });
 
     test('handles save errors gracefully', async () => {
-      jest.spyOn(fs, 'writeFile').mockRejectedValue(new Error('Disk full'));
+      const {
+        backupAndReplace,
+      } = require('../src/shared/atomicFileOperations');
+      backupAndReplace.mockRejectedValue(new Error('Disk full'));
 
       const folders = [{ name: 'Test Folder', path: '/test/path' }];
 
@@ -297,12 +309,15 @@ describe('customFolders', () => {
     });
 
     test('handles null or undefined folders', async () => {
-      jest.spyOn(fs, 'writeFile').mockResolvedValue();
+      const {
+        backupAndReplace,
+      } = require('../src/shared/atomicFileOperations');
+      backupAndReplace.mockResolvedValue('/mock/user/data/custom-folders.json');
 
       await saveCustomFolders(null);
       await saveCustomFolders(undefined);
 
-      expect(fs.writeFile).toHaveBeenCalledWith(
+      expect(backupAndReplace).toHaveBeenCalledWith(
         path.join('/mock/user/data', 'custom-folders.json'),
         JSON.stringify([], null, 2),
       );

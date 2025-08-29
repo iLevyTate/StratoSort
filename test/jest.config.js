@@ -13,6 +13,7 @@ module.exports = {
   },
   collectCoverageFrom: ['../src/**/*.{js}', '!../src/**/node_modules/**'],
   coverageDirectory: '../coverage',
+  coverageReporters: ['text', 'lcov', 'html', 'json'],
   setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
   // Sequential execution keeps Ollama mocks deterministic
   maxWorkers: 1,

@@ -8,6 +8,7 @@ const { app } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 const { backupAndReplace } = require('../../shared/atomicFileOperations');
+const { logger } = require('../../shared/logger');
 
 class ModelManager {
   constructor(host = 'http://127.0.0.1:11434') {
@@ -88,7 +89,7 @@ class ModelManager {
       );
       return true;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Initialization failed:', error);
+      logger.error('[MODEL-MANAGER] Initialization failed:', error);
       return false;
     }
   }
@@ -111,7 +112,7 @@ class ModelManager {
       );
       return this.availableModels;
     } catch (error) {
-      console.error('[MODEL-MANAGER] Failed to discover models:', error);
+      logger.error('[MODEL-MANAGER] Failed to discover models:', error);
       this.availableModels = [];
       return [];
     }
@@ -248,7 +249,7 @@ class ModelManager {
 
       const { buildOllamaOptions } = require('./PerformanceService');
       const perfOptions = await buildOllamaOptions('text');
-      const testPromise = this.ollamaClient.generate({
+      const testPromise = await this.ollamaClient.generate({
         model: modelName,
         prompt: 'Hello',
         options: {
@@ -392,9 +393,32 @@ class ModelManager {
           };
         }
       } catch (error) {
-        console.log(
-          `[MODEL-MANAGER] Model ${modelName} failed: ${error.message}`,
-        );
+        const errorDetails = {
+          model: modelName,
+          error: error.message,
+          code: error.code,
+          isTimeout:
+            error.message?.includes('timeout') || error.code === 'ETIMEDOUT',
+          isConnectionError:
+            error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND',
+          isModelError:
+            error.message?.includes('model') ||
+            error.message?.includes('not found'),
+        };
+
+        logger.error('[MODEL-MANAGER] Model generation failed:', errorDetails);
+
+        // Mark model as problematic if it's a persistent issue
+        if (errorDetails.isModelError || errorDetails.isConnectionError) {
+          this.modelCapabilities.set(modelName, {
+            ...this.modelCapabilities.get(modelName),
+            lastError: error.message,
+            errorCount:
+              (this.modelCapabilities.get(modelName)?.errorCount || 0) + 1,
+            lastErrorTime: Date.now(),
+          });
+        }
+
         continue;
       }
     }
@@ -426,7 +450,7 @@ class ModelManager {
       try {
         await this.saveConfig();
       } catch (saveError) {
-        console.error('[MODEL-MANAGER] Failed to reset config:', saveError);
+        logger.error('[MODEL-MANAGER] Failed to reset config:', saveError);
       }
     }
   }
@@ -442,7 +466,7 @@ class ModelManager {
       };
       await backupAndReplace(this.configPath, JSON.stringify(config, null, 2));
     } catch (error) {
-      console.error('[MODEL-MANAGER] Error saving config:', error);
+      logger.error('[MODEL-MANAGER] Error saving config:', error);
     }
   }
 

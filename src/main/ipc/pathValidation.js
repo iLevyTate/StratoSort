@@ -5,19 +5,45 @@ const path = require('path');
  * Returns true if the inputPath is considered safe; false otherwise.
  */
 function isSafePath(inputPath) {
+  if (!inputPath) return false;
   if (typeof inputPath !== 'string') return false;
-  const normalized = path.normalize(inputPath);
+
+  // Trim whitespace and check for empty string
+  const trimmed = inputPath.trim();
+  if (!trimmed) return false;
+
+  const normalized = path.normalize(trimmed);
+
   // Reject any directory traversal attempts
-  if (normalized.includes('../') || normalized.includes('..\\')) return false;
-  // Reject control characters and null bytes
+  if (
+    normalized.includes('../') ||
+    normalized.includes('..\\') ||
+    normalized.startsWith('..') ||
+    normalized.endsWith('..')
+  )
+    return false;
+
+  // Reject control characters, null bytes, and other dangerous characters
   if (
     inputPath.includes('\0') ||
     inputPath.includes('\n') ||
-    inputPath.includes('\r')
+    inputPath.includes('\r') ||
+    inputPath.includes('\t') ||
+    inputPath.includes('|') ||
+    inputPath.includes('<') ||
+    inputPath.includes('>') ||
+    inputPath.includes('"') ||
+    inputPath.includes('*') ||
+    inputPath.includes('?')
   )
     return false;
+
+  // Reject paths with consecutive slashes or unusual patterns
+  if (inputPath.includes('\\\\') || inputPath.includes('//')) return false;
+
   // Basic length guard
   if (inputPath.length > 4096) return false;
+
   return true;
 }
 

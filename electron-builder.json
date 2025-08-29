@@ -5,13 +5,17 @@
   "asarUnpack": ["**/*.node", "**/*.dll"],
   "files": [
     "dist/**/*",
+    "!dist/**/*.map",
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
+    "node_modules/**/*",
+    "!node_modules/**/test/**",
+    "!node_modules/**/*.md",
     "package.json"
   ],
   "extraMetadata": {
-    "main": "src/main/simple-main.js",
+    "main": "dist/main.js",
     "version": "1.0.0"
   },
   "directories": {

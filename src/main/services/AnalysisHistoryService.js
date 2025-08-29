@@ -26,7 +26,9 @@ class AnalysisHistoryService {
   // Lazy initialize paths to avoid calling app.getPath before app is ready
   _initPaths() {
     if (!this.userDataPath) {
-      this.userDataPath = app.getPath('userData');
+      this.userDataPath = app.isReady()
+        ? app.getPath('userData')
+        : path.join(process.env.APPDATA || process.env.HOME, 'StratoSort');
       this.historyPath = path.join(this.userDataPath, 'analysis-history.json');
       this.indexPath = path.join(this.userDataPath, 'analysis-index.json');
       this.configPath = path.join(this.userDataPath, 'analysis-config.json');
@@ -375,7 +377,7 @@ class AnalysisHistoryService {
     await this.initialize();
     const entries = Object.values(this.analysisHistory.entries);
     return entries
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
       .slice(0, limit);
   }
 
@@ -394,8 +396,10 @@ class AnalysisHistoryService {
       tagsCount: tags.length,
       averageConfidence:
         count > 0
-          ? entries.reduce((sum, e) => sum + (e.analysis.confidence || 0), 0) /
-            count
+          ? entries.reduce(
+              (sum, e) => sum + (e?.analysis?.confidence || 0),
+              0,
+            ) / count
           : 0,
       averageProcessingTime:
         count > 0
@@ -407,13 +411,17 @@ class AnalysisHistoryService {
       oldestAnalysis:
         entries.length > 0
           ? entries.reduce((oldest, e) =>
-              new Date(e.timestamp) < new Date(oldest.timestamp) ? e : oldest,
+              Date.parse(e.timestamp) < Date.parse(oldest.timestamp)
+                ? e
+                : oldest,
             ).timestamp
           : null,
       newestAnalysis:
         entries.length > 0
           ? entries.reduce((newest, e) =>
-              new Date(e.timestamp) > new Date(newest.timestamp) ? e : newest,
+              Date.parse(e.timestamp) > Date.parse(newest.timestamp)
+                ? e
+                : newest,
             ).timestamp
           : null,
     };
@@ -435,7 +443,7 @@ class AnalysisHistoryService {
   async cleanupOldEntries() {
     const entries = Object.entries(this.analysisHistory.entries);
     const sortedEntries = entries.sort(
-      (a, b) => new Date(a[1].timestamp) - new Date(b[1].timestamp),
+      (a, b) => Date.parse(a[1].timestamp) - Date.parse(b[1].timestamp),
     );
 
     const toRemove = sortedEntries.slice(
@@ -459,7 +467,8 @@ class AnalysisHistoryService {
     let removedCount = 0;
 
     for (const [id, entry] of entries) {
-      if (new Date(entry.timestamp) < cutoffDate) {
+      const entryTimestamp = Date.parse(entry.timestamp);
+      if (!isNaN(entryTimestamp) && entryTimestamp < cutoffDate.getTime()) {
         delete this.analysisHistory.entries[id];
         this.analysisHistory.metadata.totalEntries--;
         await this.removeFromIndexes(entry);
@@ -557,7 +566,7 @@ class AnalysisHistoryService {
 
   async saveHistory() {
     this.analysisHistory.updatedAt = new Date().toISOString();
-    await backupAndReplace(
+    return await backupAndReplace(
       this.historyPath,
       JSON.stringify(this.analysisHistory, null, 2),
     );

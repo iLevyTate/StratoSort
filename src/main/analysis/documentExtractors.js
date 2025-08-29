@@ -14,7 +14,7 @@ const { FileProcessingError } = require('../errors/AnalysisError');
 async function extractTextFromPdf(filePath, fileName) {
   const dataBuffer = await fs.readFile(filePath);
   const pdfData = await pdf(dataBuffer);
-  if (!pdfData.text || pdfData.text.trim().length === 0) {
+  if (!pdfData || !pdfData.text || pdfData.text.trim().length === 0) {
     throw new FileProcessingError('PDF_NO_TEXT_CONTENT', fileName, {
       suggestion: 'PDF may be image-based or corrupted',
     });
@@ -59,7 +59,7 @@ async function extractTextFromDocx(filePath) {
         suggestion: 'Ensure the DOCX has readable text content',
       });
     }
-    return result.value;
+    return result.value && result.value.trim() ? result.value : '';
   } catch (error) {
     if (error instanceof FileProcessingError) throw error;
     throw new FileProcessingError(

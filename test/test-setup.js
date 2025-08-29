@@ -83,6 +83,15 @@ global.performance = {
   now: jest.fn(() => Date.now()),
 };
 
+// Mock performance.now to update continuously for tests
+const performanceInterval = setInterval(() => {
+  global.performance.now.mockReturnValue(Date.now());
+}, 100);
+
+afterAll(() => {
+  clearInterval(performanceInterval);
+});
+
 // Test utilities for document processing
 global.testUtils = {
   createMockDocument: (overrides = {}) => ({

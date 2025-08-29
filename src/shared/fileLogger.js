@@ -272,7 +272,11 @@ class FileLogger {
             stats.byType[type].size += fileStats.size;
             stats.totalSize += fileStats.size;
           } catch (error) {
-            // File might not exist
+            // Log error but continue processing
+            console.error(
+              `[FILE-LOGGER] Stat failed for ${file.path}:`,
+              error.message,
+            );
           }
         }
 

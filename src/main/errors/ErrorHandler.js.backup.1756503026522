@@ -46,15 +46,13 @@ class ErrorHandler {
     process.removeAllListeners('unhandledRejection');
 
     process.on('uncaughtException', (error) => {
-      Promise.resolve(
-        this.handleCriticalError('Uncaught Exception', error),
-      ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+      Promise.resolve(this.handleCriticalError('Uncaught Exception', error))
+        .catch(e => console.error('[ERROR-HANDLER] Uncaught handling failed:', e));
     });
 
     process.on('unhandledRejection', (reason) => {
-      Promise.resolve(
-        this.handleCriticalError('Unhandled Rejection', reason),
-      ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+      Promise.resolve(this.handleCriticalError('Unhandled Rejection', reason))
+        .catch(e => console.error('[ERROR-HANDLER] Rejection handling failed:', e));
     });
 
     if (app && app.removeAllListeners) {
@@ -62,15 +60,13 @@ class ErrorHandler {
       app.removeAllListeners('child-process-gone');
 
       app.on('render-process-gone', (_, __, details) => {
-        Promise.resolve(
-          this.handleCriticalError('Renderer Crashed', details),
-        ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+        Promise.resolve(this.handleCriticalError('Renderer Crashed', details))
+          .catch(e => console.error('[ERROR-HANDLER] Renderer crash handling failed:', e));
       });
 
       app.on('child-process-gone', (_, details) => {
-        Promise.resolve(
-          this.handleCriticalError('Child Crashed', details),
-        ).catch((e) => console.error('[ERROR-HANDLER] Failed:', e));
+        Promise.resolve(this.handleCriticalError('Child Crashed', details))
+          .catch(e => console.error('[ERROR-HANDLER] Child crash handling failed:', e));
       });
     }
   }
@@ -117,16 +113,10 @@ class ErrorHandler {
   parseError(error) {
     const errorInfo = {
       type: ERROR_TYPES.UNKNOWN,
-      message: error?.message || 'An unexpected error occurred',
+      message: error?.message || String(error) || 'An unexpected error occurred',
       details: {},
       stack: error?.stack || new Error().stack,
     };
-
-    // If it's a plain string or other non-Error object, keep the generic message
-    if (typeof error === 'string') {
-      errorInfo.message = 'An unexpected error occurred';
-      errorInfo.details.originalError = error;
-    }
 
     if (error instanceof Error) {
       errorInfo.message = error.message;
@@ -148,8 +138,8 @@ class ErrorHandler {
         errorInfo.type = ERROR_TYPES.NETWORK_ERROR;
         errorInfo.message = 'Network connection error';
       } else if (
-        error.message &&
-        (error.message.includes('AI') || error.message.includes('Ollama'))
+        (error.message && (error.message.includes('AI') ||
+        error.message.includes('Ollama')))
       ) {
         // AI service errors: Ollama unavailable, model issues, API failures
         errorInfo.type = ERROR_TYPES.AI_UNAVAILABLE;

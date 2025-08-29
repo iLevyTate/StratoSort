@@ -8,6 +8,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const { logger } = require('./logger');
 const crypto = require('crypto');
 const { isSafePath } = require('../main/ipc/pathValidation');
 
@@ -334,18 +335,22 @@ class AtomicFileOperations {
         }
       })();
 
-      await Promise.race([operationPromise, timeoutPromise]);
-      clearTimeout(timeoutId);
+      try {
+        await Promise.race([operationPromise, timeoutPromise]);
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       transaction.status = 'committed';
       // Transaction committed successfully
 
       // Clean up old backups after successful commit (optional)
-      const cleanupTimer = setTimeout(
-        () => this.cleanupBackups(transactionId),
-        60000,
-      ); // 1 minute delay
-      cleanupTimer.unref();
+      const cleanupTimer = setTimeout(() => {
+        this.cleanupBackups(transactionId).catch((error) => {
+          logger.error(`Backup cleanup failed: ${error.message}`);
+        });
+      }, 60000);
+      if (cleanupTimer.unref) cleanupTimer.unref();
 
       return { success: true, results };
     } catch (error) {
@@ -481,8 +486,12 @@ class AtomicFileOperations {
     for (const id of staleTransactions) {
       try {
         await this.cleanupBackups(id);
+        this.activeTransactions.delete(id); // FIXED: Remove from map
       } catch (error) {
-        // Ignore cleanup errors for stale transactions
+        logger.warn(
+          `[ATOMIC-OPS] Failed to cleanup stale transaction ${id}:`,
+          error.message,
+        );
       }
     }
 

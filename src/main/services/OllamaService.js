@@ -273,14 +273,28 @@ class OllamaService {
 
         try {
           const apiStartTime = Date.now();
-          const response = await ollama.embeddings({
-            model: item.model,
-            prompt: (item.text || '').slice(0, 2048),
-            options: {
-              ...item.perfOptions,
-              ...((item.options && item.options.ollamaOptions) || {}),
-            },
-          });
+          // Add timeout handling for embedding requests with proper cleanup
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            controller.abort();
+          }, 60000);
+
+          let response;
+          try {
+            response = await ollama.embeddings({
+              model: item.model,
+              prompt: (item.text || '').slice(0, 8192), // Ollama limit
+              options: {
+                ...item.perfOptions,
+                ...((item.options && item.options.ollamaOptions) || {}),
+              },
+            });
+            clearTimeout(timeoutId);
+          } catch (error) {
+            clearTimeout(timeoutId);
+            throw error;
+          }
+
           const apiDuration = Date.now() - apiStartTime;
 
           // Log successful embedding
@@ -446,17 +460,32 @@ class OllamaService {
 
         try {
           const apiStartTime = Date.now();
-          const response = await ollama.generate({
-            model: item.payload.model,
-            prompt: item.payload.prompt,
-            options: {
-              ...item.payload.perfOptions,
-              ...((item.payload.options &&
-                item.payload.options.ollamaOptions) ||
-                {}),
-            },
-            stream: false,
-          });
+          // Add timeout handling for text generation requests
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    'Text generation request timeout after 120 seconds',
+                  ),
+                ),
+              120000,
+            ),
+          );
+          const response = await Promise.race([
+            ollama.generate({
+              model: item.payload.model,
+              prompt: item.payload.prompt,
+              options: {
+                ...item.payload.perfOptions,
+                ...((item.payload.options &&
+                  item.payload.options.ollamaOptions) ||
+                  {}),
+              },
+              stream: false,
+            }),
+            timeoutPromise,
+          ]);
           const apiDuration = Date.now() - apiStartTime;
 
           // Log successful text analysis

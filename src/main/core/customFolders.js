@@ -2,6 +2,7 @@ const { app } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../../shared/logger');
+const { backupAndReplace } = require('../../shared/atomicFileOperations');
 
 function getCustomFoldersPath() {
   const userDataPath = app.getPath('userData');
@@ -84,7 +85,7 @@ async function saveCustomFolders(folders) {
   try {
     const filePath = getCustomFoldersPath();
     const toSave = normalizeFolderPaths(folders);
-    await fs.writeFile(filePath, JSON.stringify(toSave, null, 2));
+    await backupAndReplace(filePath, JSON.stringify(toSave, null, 2));
     logger.info('[STORAGE] Saved custom folders to:', filePath);
   } catch (error) {
     logger.error('[ERROR] Failed to save custom folders:', error);

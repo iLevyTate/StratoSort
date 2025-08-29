@@ -14,6 +14,7 @@ function registerEmbeddingsIpc({
 }) {
   const embeddingIndex = new EmbeddingIndexService();
   const folderMatcher = new FolderMatchingService(embeddingIndex);
+  let initialized = false;
 
   // Return the embedding index for cleanup purposes
   registerEmbeddingsIpc.embeddingIndex = embeddingIndex;
@@ -22,11 +23,17 @@ function registerEmbeddingsIpc({
     IPC_CHANNELS.EMBEDDINGS.REBUILD_FOLDERS,
     withErrorLogging(logger, async () => {
       try {
+        if (!initialized) {
+          await embeddingIndex.initialize();
+          initialized = true;
+        }
         const smartFolders = getCustomFolders().filter((f) => f && f.name);
-        await embeddingIndex.resetFolders();
-        await Promise.all(
-          smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
-        );
+        if (embeddingIndex) {
+          await embeddingIndex.resetFolders();
+          await Promise.all(
+            smartFolders.map((f) => folderMatcher.upsertFolderEmbedding(f)),
+          );
+        }
         return { success: true, folders: smartFolders.length };
       } catch (e) {
         logger.error('[EMBEDDINGS] Rebuild folders failed:', e);
@@ -39,6 +46,10 @@ function registerEmbeddingsIpc({
     IPC_CHANNELS.EMBEDDINGS.REBUILD_FILES,
     withErrorLogging(logger, async () => {
       try {
+        if (!initialized) {
+          await embeddingIndex.initialize();
+          initialized = true;
+        }
         const serviceIntegration =
           getServiceIntegration && getServiceIntegration();
         const historyService = serviceIntegration?.analysisHistory;
@@ -106,6 +117,10 @@ function registerEmbeddingsIpc({
     IPC_CHANNELS.EMBEDDINGS.CLEAR_STORE,
     withErrorLogging(logger, async () => {
       try {
+        if (!initialized) {
+          await embeddingIndex.initialize();
+          initialized = true;
+        }
         await embeddingIndex.resetAll();
         return { success: true };
       } catch (e) {

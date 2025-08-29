@@ -16,16 +16,16 @@ try {
 
 // Dynamically derive allowed send channels from centralized IPC_CHANNELS to prevent drift
 const ALLOWED_CHANNELS = {
-  FILES: Object.values(IPC_CHANNELS.FILES),
-  SMART_FOLDERS: Object.values(IPC_CHANNELS.SMART_FOLDERS),
-  ANALYSIS: Object.values(IPC_CHANNELS.ANALYSIS),
-  SETTINGS: Object.values(IPC_CHANNELS.SETTINGS),
-  OLLAMA: Object.values(IPC_CHANNELS.OLLAMA),
-  UNDO_REDO: Object.values(IPC_CHANNELS.UNDO_REDO),
-  ANALYSIS_HISTORY: Object.values(IPC_CHANNELS.ANALYSIS_HISTORY),
-  EMBEDDINGS: Object.values(IPC_CHANNELS.EMBEDDINGS),
-  SYSTEM: Object.values(IPC_CHANNELS.SYSTEM),
-  WINDOW: Object.values(IPC_CHANNELS.WINDOW || {}),
+  FILES: Object.values(IPC_CHANNELS?.FILES || {}),
+  SMART_FOLDERS: Object.values(IPC_CHANNELS?.SMART_FOLDERS || {}),
+  ANALYSIS: Object.values(IPC_CHANNELS?.ANALYSIS || {}),
+  SETTINGS: Object.values(IPC_CHANNELS?.SETTINGS || {}),
+  OLLAMA: Object.values(IPC_CHANNELS?.OLLAMA || {}),
+  UNDO_REDO: Object.values(IPC_CHANNELS?.UNDO_REDO || {}),
+  ANALYSIS_HISTORY: Object.values(IPC_CHANNELS?.ANALYSIS_HISTORY || {}),
+  EMBEDDINGS: Object.values(IPC_CHANNELS?.EMBEDDINGS || {}),
+  SYSTEM: Object.values(IPC_CHANNELS?.SYSTEM || {}),
+  WINDOW: Object.values(IPC_CHANNELS?.WINDOW || {}),
 };
 
 // Fast-path receive channels (Set-based for quick lookups)

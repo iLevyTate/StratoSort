@@ -35,13 +35,14 @@
       "url": "https://github.com/amilajack"
     }
   ],
-  "main": "./src/main/simple-main.js",
+  "main": "./dist/main.js",
   "scripts": {
     "build": "webpack --mode=production",
     "dev": "npm run start:dev",
     "build:dev": "webpack --mode=development",
+    "ensure-dist": "node -e \"const fs=require('fs'),path=require('path');const dist=path.join(__dirname,'dist'),src=path.join(__dirname,'src/renderer/index.html'),dst=path.join(dist,'index.html');if(!fs.existsSync(dist))fs.mkdirSync(dist,{recursive:true});if(fs.existsSync(src)&&!fs.existsSync(dst))fs.copyFileSync(src,dst);\"",
     "build:dll": "echo 'DLL build not required for current setup'",
-    "build:main": "webpack --mode=production --config webpack.config.js",
+    "build:main": "webpack --mode=production --target=electron-main",
     "build:renderer": "webpack --mode=production",
     "postinstall-disabled": "electron-builder install-app-deps",
     "lint": "cross-env NODE_ENV=development eslint \"src/**/*.{js,jsx,ts,tsx}\" \"test/**/*.{js,ts}\" --ext .js,.jsx,.ts,.tsx",
@@ -55,6 +56,7 @@
     "deps:update": "npm update",
     "validate": "npm run lint && npm run format:check && npm run typecheck && npm test",
     "fix": "npm run lint:fix && npm run format && npm run security:fix",
+    "fix-bugs": "node scripts/fix-bugs.js",
     "check": "npm run security:audit && npm run deps:check && npm run validate",
     "pre-pr": "node scripts/pre-pr.js",
     "diagnose": "node scripts/diagnose.js",
@@ -65,16 +67,18 @@
     "prepare": "husky install",
     "package": "rimraf dist && npm run build && electron-builder build --publish never",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start": "npm run start:dev",
-    "start:verified": "cross-env NODE_ENV=development electron . --enable-logging",
+    "start": "npm run ensure-dist && npm run start:dev",
+    "start:verified": "npm run ensure-dist && cross-env NODE_ENV=development electron . --enable-logging",
     "start:optimized": "node startup-check.js",
     "start:quick": "concurrently \"npm run start:renderer\" \"npm run start:main\"",
     "electron": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
     "start:simple": "electron .",
-    "start:dev": "npm run build:dev && cross-env NODE_ENV=development electron . --enable-logging",
-    "start:debug": "cross-env NODE_ENV=development electron . --enable-logging --inspect",
-    "start:production": "cross-env NODE_ENV=production electron .",
-    "start:check": "node startup-check.js",
+    "start:dev": "npm run build:dev && cross-env NODE_ENV=development USE_DEV_SERVER=false electron . --enable-logging",
+    "start:dev-server": "cross-env NODE_ENV=development USE_DEV_SERVER=true electron . --enable-logging",
+    "dev": "concurrently \"npm run start:renderer\" \"npm run start:dev-server\"",
+    "start:debug": "cross-env NODE_ENV=development USE_DEV_SERVER=false electron . --enable-logging --inspect",
+    "start:production": "cross-env NODE_ENV=production USE_DEV_SERVER=false electron .",
+    "start:check": "node scripts/startup-check.js",
     "start:no-check": "npm run start:simple",
     "start:legacy": "npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electron -r ts-node/register/transpile-only .",
@@ -111,7 +115,7 @@
     "ollama:models": "ollama pull gemma3:4b",
     "ollama:status": "npm run check:ollama",
     "dist": "npm run build && npx electron-builder --config electron-builder.json",
-    "dist:win": "set NODE_ENV=production && npm run build && npx electron-builder --win --config electron-builder.json",
+    "dist:win": "cross-env NODE_ENV=production npm run build && npx electron-builder --win --config electron-builder.json",
     "dist:mac": "npm run build && npx electron-builder --mac --config electron-builder.json",
     "dist:linux": "npm run build && npx electron-builder --linux --config electron-builder.json",
     "dist:all": "npm run build && npx electron-builder --mac --win --linux --config electron-builder.json",
@@ -146,6 +150,7 @@
     "@mui/icons-material": "^7.3.1",
     "@mui/material": "^7.3.1",
     "adm-zip": "^0.5.10",
+    "chokidar": "^3.5.3",
     "dotenv": "^16.5.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^5.4.3",
@@ -161,7 +166,8 @@
     "react-dom": "^18.3.1",
     "sanitize-html": "^2.17.0",
     "sharp": "^0.34.3",
-    "xlsx-populate": "^1.21.0"
+    "xlsx-populate": "^1.21.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",
@@ -237,8 +243,7 @@
     "webpack": "^5.99.9",
     "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^5.1.4",
-    "webpack-merge": "^6.0.1",
-    "zod": "^3.23.8"
+    "webpack-merge": "^6.0.1"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

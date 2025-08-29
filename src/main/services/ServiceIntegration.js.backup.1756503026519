@@ -35,7 +35,7 @@ class ServiceIntegration {
     this.undoRedo = new UndoRedoService();
     this.processingState = new ProcessingStateService();
 
-    return Promise.all([
+      return Promise.all([
       this.analysisHistory.initialize(),
       this.undoRedo.initialize(),
       this.processingState.initialize(),
@@ -55,7 +55,7 @@ class ServiceIntegration {
 
 // Delete lines 56-67 and replace with:
 module.exports = ServiceIntegration;
-module.exports.getServiceIntegration = function () {
+module.exports.getServiceIntegration = function() {
   if (!module.exports.instance) {
     module.exports.instance = new ServiceIntegration();
   }

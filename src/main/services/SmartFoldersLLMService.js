@@ -96,7 +96,7 @@ Please provide a JSON response with the following enhancements:
           const jsonMatch = rawResponse.match(
             /```(?:json)?\s*(\{[\s\S]*?\})\s*```/,
           );
-          if (jsonMatch) {
+          if (jsonMatch && jsonMatch.length > 1) {
             const extractedJson = jsonMatch[1];
             const enhancement = JSON.parse(extractedJson);
             if (enhancement && typeof enhancement === 'object') {

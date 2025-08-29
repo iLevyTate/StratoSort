@@ -13,7 +13,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
       });
     } catch (logError) {
       // eslint-disable-next-line no-console
-      console.error('Failed to log action start:', logError);
+      logger.error('Failed to log action start:', logError);
     }
 
     try {
@@ -28,7 +28,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
         });
       } catch (metricsError) {
         // eslint-disable-next-line no-console
-        console.error('Failed to record IPC metrics:', metricsError);
+        logger.error('Failed to record IPC metrics:', metricsError);
       }
 
       // Track successful action completion
@@ -49,7 +49,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
         }
       } catch (logError) {
         // eslint-disable-next-line no-console
-        console.error('Failed to log action success:', logError);
+        logger.error('Failed to log action success:', logError);
       }
 
       return result;
@@ -65,7 +65,7 @@ function withErrorLogging(logger, fn, systemAnalytics) {
         });
       } catch (metricsError) {
         // eslint-disable-next-line no-console
-        console.error('Failed to record IPC error metrics:', metricsError);
+        logger.error('Failed to record IPC error metrics:', metricsError);
       }
 
       try {

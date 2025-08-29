@@ -19,6 +19,8 @@ function registerSettingsIpc({
   setOllamaEmbeddingModel,
   onSettingsChanged,
 }) {
+  // Queue to prevent concurrent settings saves
+  const settingsSaveQueue = Promise.resolve();
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS.GET,
     withErrorLogging(logger, async () => {
@@ -55,33 +57,41 @@ function registerSettingsIpc({
     z && settingsSchema
       ? withValidation(logger, settingsSchema, async (event, settings) => {
           try {
-            const merged = await settingsService.save(settings);
-            if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
-            if (merged.textModel) await setOllamaModel(merged.textModel);
-            if (merged.visionModel)
-              await setOllamaVisionModel(merged.visionModel);
-            if (
-              merged.embeddingModel &&
-              typeof setOllamaEmbeddingModel === 'function'
-            )
-              await setOllamaEmbeddingModel(merged.embeddingModel);
-            if (typeof merged.launchOnStartup === 'boolean') {
+            // Queue settings save to prevent race conditions
+            return await settingsSaveQueue.then(async () => {
+              const merged = await settingsService.save(settings);
+              if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
+              if (merged.textModel) await setOllamaModel(merged.textModel);
+              if (merged.visionModel)
+                await setOllamaVisionModel(merged.visionModel);
+              if (
+                merged.embeddingModel &&
+                typeof setOllamaEmbeddingModel === 'function'
+              )
+                await setOllamaEmbeddingModel(merged.embeddingModel);
+              if (typeof merged.launchOnStartup === 'boolean') {
+                try {
+                  app.setLoginItemSettings({
+                    openAtLogin: merged.launchOnStartup,
+                  });
+                } catch (error) {
+                  logger.warn(
+                    '[SETTINGS] Failed to set login item settings:',
+                    error.message,
+                  );
+                }
+              }
+              logger.info('[SETTINGS] Saved settings');
               try {
-                app.setLoginItemSettings({
-                  openAtLogin: merged.launchOnStartup,
-                });
+                onSettingsChanged?.(merged);
               } catch (error) {
-                logger.warn(
-                  '[SETTINGS] Failed to set login item settings:',
-                  error.message,
+                logger.debug(
+                  '[SETTINGS] Settings change handler error:',
+                  error,
                 );
               }
-            }
-            logger.info('[SETTINGS] Saved settings');
-            try {
-              onSettingsChanged?.(merged);
-            } catch {}
-            return { success: true, settings: merged };
+              return { success: true, settings: merged };
+            });
           } catch (error) {
             logger.error('Failed to save settings:', error);
             return { success: false, error: error.message };
@@ -89,33 +99,41 @@ function registerSettingsIpc({
         })
       : withErrorLogging(logger, async (event, settings) => {
           try {
-            const merged = await settingsService.save(settings);
-            if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
-            if (merged.textModel) await setOllamaModel(merged.textModel);
-            if (merged.visionModel)
-              await setOllamaVisionModel(merged.visionModel);
-            if (
-              merged.embeddingModel &&
-              typeof setOllamaEmbeddingModel === 'function'
-            )
-              await setOllamaEmbeddingModel(merged.embeddingModel);
-            if (typeof merged.launchOnStartup === 'boolean') {
+            // Queue settings save to prevent race conditions
+            return await settingsSaveQueue.then(async () => {
+              const merged = await settingsService.save(settings);
+              if (merged.ollamaHost) await setOllamaHost(merged.ollamaHost);
+              if (merged.textModel) await setOllamaModel(merged.textModel);
+              if (merged.visionModel)
+                await setOllamaVisionModel(merged.visionModel);
+              if (
+                merged.embeddingModel &&
+                typeof setOllamaEmbeddingModel === 'function'
+              )
+                await setOllamaEmbeddingModel(merged.embeddingModel);
+              if (typeof merged.launchOnStartup === 'boolean') {
+                try {
+                  app.setLoginItemSettings({
+                    openAtLogin: merged.launchOnStartup,
+                  });
+                } catch (error) {
+                  logger.warn(
+                    '[SETTINGS] Failed to set login item settings:',
+                    error.message,
+                  );
+                }
+              }
+              logger.info('[SETTINGS] Saved settings');
               try {
-                app.setLoginItemSettings({
-                  openAtLogin: merged.launchOnStartup,
-                });
+                onSettingsChanged?.(merged);
               } catch (error) {
-                logger.warn(
-                  '[SETTINGS] Failed to set login item settings:',
-                  error.message,
+                logger.debug(
+                  '[SETTINGS] Settings change handler error:',
+                  error,
                 );
               }
-            }
-            logger.info('[SETTINGS] Saved settings');
-            try {
-              onSettingsChanged?.(merged);
-            } catch {}
-            return { success: true, settings: merged };
+              return { success: true, settings: merged };
+            });
           } catch (error) {
             logger.error('Failed to save settings:', error);
             return { success: false, error: error.message };

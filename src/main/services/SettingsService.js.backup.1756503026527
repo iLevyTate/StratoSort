@@ -11,7 +11,7 @@ class SettingsService {
     try {
       const { app } = require('electron');
       this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
-    } catch (error) {
+    } catch {
       const dir = path.join(os.tmpdir(), 'stratosort');
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       this.settingsPath = path.join(dir, 'settings.json');

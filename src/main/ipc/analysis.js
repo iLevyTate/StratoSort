@@ -33,7 +33,10 @@ function registerAnalysisIpc({
           schemas?.filePath || schemas?.string,
           async (event, filePath) => {
             try {
-              const startTime = performance.now();
+              const startTime =
+                typeof performance !== 'undefined'
+                  ? performance.now()
+                  : Date.now();
               logger.info(
                 `[IPC-ANALYSIS] Starting document analysis for: ${filePath}`,
               );
@@ -56,11 +59,34 @@ function registerAnalysisIpc({
                 `[IPC-ANALYSIS] Using ${folderCategories.length} smart folders for context:`,
                 folderCategories.map((f) => f.name).join(', '),
               );
-              const result = await analyzeDocumentFile(
-                filePath,
-                folderCategories,
-              );
-              const duration = performance.now() - startTime;
+              let result;
+              try {
+                result = await analyzeDocumentFile(filePath, folderCategories);
+              } catch (analysisError) {
+                logger.error(
+                  '[ANALYSIS] Document analysis failed:',
+                  analysisError,
+                );
+                // Return error result instead of throwing
+                return {
+                  error: analysisError.message,
+                  success: false,
+                  suggestedName: path.basename(
+                    filePath,
+                    path.extname(filePath),
+                  ),
+                  category: 'documents',
+                  keywords: [],
+                  confidence: 0,
+                  summary: '',
+                  extractedText: null,
+                  model: 'error',
+                };
+              }
+              const duration =
+                (typeof performance !== 'undefined'
+                  ? performance.now()
+                  : Date.now()) - startTime;
               systemAnalytics.recordProcessingTime(duration);
               try {
                 const stats = await require('fs').promises.stat(filePath);
@@ -390,13 +416,19 @@ function registerAnalysisIpc({
     z && stringSchema
       ? withValidation(logger, stringSchema, async (event, filePath) => {
           try {
-            const start = performance.now();
+            const start =
+              typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now();
             const text = await tesseract.recognize(filePath, {
               lang: 'eng',
               oem: 1,
               psm: 3,
             });
-            const duration = performance.now() - start;
+            const duration =
+              (typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now()) - start;
             systemAnalytics.recordProcessingTime(duration);
             return { success: true, text };
           } catch (error) {
@@ -407,13 +439,19 @@ function registerAnalysisIpc({
         })
       : withErrorLogging(logger, async (event, filePath) => {
           try {
-            const start = performance.now();
+            const start =
+              typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now();
             const text = await tesseract.recognize(filePath, {
               lang: 'eng',
               oem: 1,
               psm: 3,
             });
-            const duration = performance.now() - start;
+            const duration =
+              (typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now()) - start;
             systemAnalytics.recordProcessingTime(duration);
             return { success: true, text };
           } catch (error) {

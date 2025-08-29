@@ -136,7 +136,7 @@ class UndoStack {
   }
 
   getHistory() {
-    return this.stack.slice(0, this.pointer + 1);
+    return this.stack.slice(0, Math.max(0, this.pointer + 1));
   }
 
   clear() {

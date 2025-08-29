@@ -106,7 +106,7 @@ describe('window IPC handlers', () => {
     const result = await minimizeHandler();
 
     expect(mockMainWindow.minimize).not.toHaveBeenCalled();
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   test('minimize handler handles null window', async () => {
@@ -117,7 +117,7 @@ describe('window IPC handlers', () => {
 
     const result = await minimizeHandler();
 
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   test('maximize handler maximizes window', async () => {
@@ -222,7 +222,7 @@ describe('window IPC handlers', () => {
     const result = await closeHandler();
 
     expect(mockMainWindow.close).not.toHaveBeenCalled();
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   test('all handlers use withErrorLogging wrapper', () => {

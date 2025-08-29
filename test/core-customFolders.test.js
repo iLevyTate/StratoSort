@@ -1,6 +1,19 @@
-const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
+
+// Mock fs BEFORE requiring customFolders
+jest.mock('fs', () => ({
+  promises: {
+    writeFile: jest.fn(),
+    readFile: jest.fn(),
+    mkdir: jest.fn(),
+    access: jest.fn(),
+    stat: jest.fn(),
+    readdir: jest.fn(),
+  },
+}));
+
+const fs = require('fs').promises;
 
 // Mock electron BEFORE requiring customFolders
 jest.mock('electron', () => ({

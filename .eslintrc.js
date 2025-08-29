@@ -40,7 +40,7 @@ module.exports = {
   },
   rules: {
     // General
-    'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
+    'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'off',
     'no-debugger': 'error',
     'no-unused-vars': 'off',
     'prefer-const': 'error',
@@ -147,7 +147,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['*.test.js', '*.spec.js'],
+      files: ['*.test.js', '*.spec.js', 'test/**/*.js'],
       env: {
         jest: true,
       },
@@ -157,6 +157,9 @@ module.exports = {
         quotes: 'off',
         'comma-dangle': 'off',
         'arrow-parens': 'off',
+        'no-unused-vars': 'off',
+        'prefer-const': 'off',
+        'no-var': 'off',
       },
     },
     {

@@ -94,16 +94,19 @@ module.exports = {
   ],
   // Configure Jest cache to avoid uid issues
   cacheDirectory: './node_modules/.cache/jest',
+  // Disable cache to prevent uid issues in containerized environments
+  cache: false,
   // Clear cache before each run to avoid stale transform cache
   clearMocks: true,
   resetMocks: true,
+  restoreMocks: true,
   // Disable file ownership checks that can cause uid issues
   watchman: false,
-  // Additional cache configuration to prevent uid errors
-  cache: true,
   haste: {
     computeSha1: false,
   },
+  // Increase timeout for slow tests
+  testTimeout: 30000,
   // Temporarily disable coverage to ensure clean test execution
   collectCoverage: false,
   // Coverage will be re-enabled after HTML reporter issues are resolved

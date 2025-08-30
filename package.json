@@ -208,7 +208,7 @@
     "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^6.0.1",
     "webpack-merge": "^5.9.0",
-    "zod": "^4.0.17"
+    "zod": "^4.1.5"
   },
   "lint-staged": {
     "*.{js,jsx}": [

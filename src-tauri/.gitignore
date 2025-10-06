@@ -1,0 +1,45 @@
+# Tauri specific gitignore
+
+# Build outputs
+target/
+gen/
+data/
+
+# Test executables and debugging files
+*.exe
+*.pdb
+
+# Python files (from test scripts)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test reports and temporary files
+*.json
+!capabilities/*.json
+!tauri.conf.json
+test_*.exe
+*test_report.json
+ollama_*.json
+
+# Generated binaries
+/bin/
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.orig

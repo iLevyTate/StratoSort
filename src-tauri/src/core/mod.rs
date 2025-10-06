@@ -1,0 +1,23 @@
+pub mod archive_handler;
+pub mod document_processor;
+pub mod duplicate_detector;
+pub mod file_analyzer;
+pub mod image_processor;
+pub mod media_analyzer;
+pub mod ocr_processor;
+pub mod organizer;
+pub mod quarantine_manager;
+pub mod smart_folders;
+pub mod undo_redo;
+
+pub use archive_handler::ArchiveHandlerManager;
+pub use document_processor::DocumentProcessorManager;
+pub use duplicate_detector::DuplicateDetectorManager;
+pub use file_analyzer::FileAnalyzer;
+pub use image_processor::ImageProcessorManager;
+pub use media_analyzer::MediaAnalyzerManager;
+pub use ocr_processor::OcrProcessorManager;
+pub use organizer::Organizer;
+pub use quarantine_manager::QuarantineManager;
+pub use smart_folders::{ProtectedFolder, ProtectedFolderManager, SmartFolder, SmartFolderManager};
+pub use undo_redo::UndoRedoManager;

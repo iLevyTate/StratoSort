@@ -1,0 +1,19 @@
+[advisories]
+# Suppress advisories for transitive dependencies that can't be easily fixed
+ignore = [
+    "RUSTSEC-2023-0071", # RSA timing attack - transitive dependency through sqlx
+    "RUSTSEC-2024-0413", # GTK3 bindings unmaintained - core Tauri dependency
+    "RUSTSEC-2024-0416", # GTK3 sys bindings unmaintained - core Tauri dependency  
+    "RUSTSEC-2024-0388", # derivative unmaintained - used by notification system
+]
+
+[licenses]
+# Allow common open source licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause", 
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+]

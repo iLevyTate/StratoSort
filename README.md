@@ -1,7 +1,7 @@
 # StratoSort - AI-Powered File Organization
 
 <div align="center">
-  <img src="src-tauri/icons/stratosort-logo.png" alt="StratoSort Logo" width="200"/>
+  <img src="stratosort-logo.png" alt="StratoSort Logo" width="200"/>
 </div>
 
 **🚀 Production-Ready Backend** | **⚠️ Frontend: Basic Placeholder**
@@ -40,31 +40,31 @@ sequenceDiagram
     participant Organizer
     participant Database
     participant FileSystem
-
+    
     User->>Frontend: Drop files
     Frontend->>Commands: scan_directory()
     Commands->>FileAnalyzer: analyze_batch()
-
+    
     par Parallel Analysis
         FileAnalyzer->>AI Service: analyze_file()
         AI Service->>AI Service: Ollama/Fallback
         FileAnalyzer->>Database: generate_embeddings()
         Database->>Database: Store vectors
     end
-
+    
     FileAnalyzer-->>Commands: Analysis results
     Commands-->>Frontend: Progress events
-
+    
     Frontend->>Commands: apply_organization()
     Commands->>Organizer: organize_files()
-
+    
     Organizer->>Database: match_smart_folders()
     Database-->>Organizer: Best matches
-
+    
     Organizer->>Organizer: Check learned patterns
     Organizer->>FileSystem: Move files
     Organizer->>Database: Save undo history
-
+    
     Organizer-->>Commands: Success
     Commands-->>Frontend: Completion event
     Frontend-->>User: Updated UI

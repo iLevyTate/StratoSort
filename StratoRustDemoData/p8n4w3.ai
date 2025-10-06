@@ -1,0 +1,13 @@
+%!PS-Adobe-3.0 EPSF-3.0
+%%Title: Corporate Brand Identity Logo
+%%Creator: Adobe Illustrator
+%%BoundingBox: 0 0 500 500
+%%Description: Vector logo design for technology company
+%%Keywords: logo, brand, corporate identity, vector graphics
+/logo {
+  newpath
+  250 250 100 0 360 arc
+  closepath
+  0.2 0.4 0.8 setrgbcolor
+  fill
+} def

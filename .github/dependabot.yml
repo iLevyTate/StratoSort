@@ -1,0 +1,107 @@
+version: 2
+updates:
+  # Rust dependencies in src-tauri
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "maintainer-username"
+    assignees:
+      - "maintainer-username"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "rust"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "tauri"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlx"
+        update-types: ["version-update:semver-major"]
+    groups:
+      tauri:
+        patterns:
+          - "tauri*"
+        update-types:
+          - "minor"
+          - "patch"
+      tokio:
+        patterns:
+          - "tokio*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "maintainer-username"
+    assignees:
+      - "maintainer-username"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Frontend dependencies (if using npm/yarn for frontend)
+  # Uncomment if you have a separate frontend package.json
+  # - package-ecosystem: "npm"
+  #   directory: "/src"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "tuesday"
+  #     time: "06:00"
+  #     timezone: "UTC"
+  #   open-pull-requests-limit: 10
+  #   reviewers:
+  #     - "maintainer-username"
+  #   assignees:
+  #     - "maintainer-username"
+  #   commit-message:
+  #     prefix: "deps"
+  #     prefix-development: "deps-dev"
+  #     include: "scope"
+  #   labels:
+  #     - "dependencies" 
+  #     - "javascript"
+  #   ignore:
+  #     # Ignore major version updates for framework dependencies
+  #     - dependency-name: "react"
+  #       update-types: ["version-update:semver-major"]
+  #     - dependency-name: "next"
+  #       update-types: ["version-update:semver-major"]
+  #   groups:
+  #     react:
+  #       patterns:
+  #         - "react*"
+  #         - "@types/react*"
+  #       update-types:
+  #         - "minor"
+  #         - "patch"

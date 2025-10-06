@@ -1,0 +1,17 @@
+[EXCEL PLACEHOLDER]
+Spreadsheet: Quarterly Financial Report
+Sheet1: Income Statement
+  A1: Revenue
+  B1: Q1-2024
+  C1: Q2-2024
+  A2: Sales Revenue
+  B2: $1,250,000
+  C2: $1,380,000
+  A3: Operating Expenses
+  B3: $890,000
+  C3: $925,000
+  A4: Net Profit
+  B4: $360,000
+  C4: $455,000
+Sheet2: Balance Sheet
+Sheet3: Cash Flow Statement

@@ -1,0 +1,43 @@
+# Rust formatting configuration for StratoSort
+# See: https://rust-lang.github.io/rustfmt/
+
+# Edition
+edition = "2021"
+
+# Basic formatting
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+
+# Imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Function formatting
+fn_args_layout = "Tall"
+brace_style = "SameLineWhere"
+
+# Control flow
+control_brace_style = "AlwaysSameLine"
+
+# Comments and documentation
+wrap_comments = true
+format_code_in_doc_comments = true
+normalize_comments = true
+normalize_doc_attributes = true
+
+# String formatting
+format_strings = true
+
+# Misc
+trailing_semicolon = true
+trailing_comma = "Vertical"
+match_block_trailing_comma = false
+blank_lines_upper_bound = 1
+blank_lines_lower_bound = 0
+
+# Stability options (may require nightly)
+# unstable_features = true
+# format_macro_matchers = true
+# overflow_delimited_expr = true

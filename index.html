@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StratoSort Backend</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+      
+      .container {
+        text-align: center;
+        max-width: 600px;
+      }
+      
+      h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        font-weight: 700;
+      }
+      
+      .status {
+        font-size: 1.25rem;
+        margin-bottom: 2rem;
+        opacity: 0.9;
+      }
+      
+      .badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 2rem;
+        margin: 0.5rem;
+        backdrop-filter: blur(10px);
+      }
+      
+      .info {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-top: 2rem;
+        backdrop-filter: blur(10px);
+        text-align: left;
+      }
+      
+      .info h2 {
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+      }
+      
+      .info ul {
+        list-style: none;
+        padding: 0;
+      }
+      
+      .info li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      .info li:last-child {
+        border-bottom: none;
+      }
+      
+      code {
+        background: rgba(0, 0, 0, 0.2);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-family: 'Courier New', monospace;
+      }
+      
+      .pulse {
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 StratoSort Backend</h1>
+      <div class="status">
+        <div class="badge pulse">✅ Backend Ready</div>
+        <div class="badge" id="ollama-status">⏳ Checking Ollama...</div>
+        <div class="badge" id="db-status">⏳ Checking Database...</div>
+      </div>
+      
+      <div class="info">
+        <h2>Backend Services Active</h2>
+        <ul>
+          <li>🤖 <strong>AI Service</strong>: Ollama integration with fallback</li>
+          <li>💾 <strong>Database</strong>: SQLite with vector extensions</li>
+          <li>📁 <strong>File Operations</strong>: Scan, analyze, organize</li>
+          <li>🔍 <strong>Semantic Search</strong>: Vector-based file search</li>
+          <li>📂 <strong>Smart Folders</strong>: AI-powered organization rules</li>
+          <li>↩️ <strong>Undo/Redo</strong>: Full operation history</li>
+          <li>👁️ <strong>Watch Mode</strong>: Real-time file monitoring</li>
+          <li>📊 <strong>Monitoring</strong>: Health checks & diagnostics</li>
+        </ul>
+      </div>
+      
+      <div class="info" style="margin-top: 1rem;">
+        <h2>For Developers</h2>
+        <ul>
+          <li>📝 API docs in <code>README.md</code></li>
+          <li>🔌 119 Tauri commands exposed</li>
+          <li>📡 40+ real-time events</li>
+          <li>🧪 300+ backend tests passing</li>
+        </ul>
+      </div>
+      
+      <p style="margin-top: 2rem; opacity: 0.7; font-size: 0.875rem;">
+        This is a minimal frontend placeholder. Build your UI with React, Svelte, or any framework.
+      </p>
+    </div>
+
+    <script type="module">
+      // Tauri API check
+      if (window.__TAURI__) {
+        const { invoke } = window.__TAURI__.core;
+        
+        // Check Ollama status
+        invoke('check_ollama_status')
+          .then(status => {
+            const badge = document.getElementById('ollama-status');
+            if (status.connected) {
+              badge.textContent = '✅ Ollama Connected';
+              badge.classList.remove('pulse');
+            } else {
+              badge.textContent = '⚠️ Ollama Fallback Mode';
+              badge.style.background = 'rgba(255, 193, 7, 0.3)';
+            }
+          })
+          .catch(() => {
+            document.getElementById('ollama-status').textContent = '❌ Ollama Error';
+          });
+        
+        // Check database
+        invoke('check_database_health')
+          .then(() => {
+            const badge = document.getElementById('db-status');
+            badge.textContent = '✅ Database OK';
+            badge.classList.remove('pulse');
+          })
+          .catch(() => {
+            document.getElementById('db-status').textContent = '❌ Database Error';
+          });
+      } else {
+        console.log('Running in browser mode - Tauri API not available');
+      }
+    </script>
+  </body>
+</html>
+
+

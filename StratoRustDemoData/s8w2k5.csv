@@ -1,0 +1,8 @@
+date,transaction,category,amount,balance
+2024-01-15,Payroll Deposit,Income,5250.00,15750.00
+2024-01-16,Mortgage Payment,Housing,-2100.00,13650.00
+2024-01-18,Investment Transfer,Savings,-1000.00,12650.00
+2024-01-20,Utility Bills,Utilities,-285.50,12364.50
+2024-01-22,Dividend Income,Investment,127.35,12491.85
+2024-01-25,Insurance Premium,Insurance,-456.00,12035.85
+2024-01-28,Stock Purchase,Investment,-2500.00,9535.85

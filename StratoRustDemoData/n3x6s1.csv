@@ -1,0 +1,5 @@
+experiment_id,model_type,parameters,training_tokens,eval_score,task
+exp_001,transformer_llm,7B,1.2T,0.872,text_generation
+exp_002,vision_language_model,13B,2.1T,0.913,image_captioning
+exp_003,multimodal_ai,22B,3.5T,0.947,visual_qa
+exp_004,large_language_model,65B,5.2T,0.961,reasoning

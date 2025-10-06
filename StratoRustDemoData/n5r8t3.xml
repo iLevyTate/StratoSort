@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FinancialReport>
+  <Header>
+    <ReportType>Quarterly Earnings</ReportType>
+    <Period>Q3-2024</Period>
+    <Currency>USD</Currency>
+  </Header>
+  <Revenue>
+    <GrossRevenue>8750000</GrossRevenue>
+    <NetRevenue>7230000</NetRevenue>
+  </Revenue>
+  <Expenses>
+    <OperatingExpenses>4520000</OperatingExpenses>
+    <TaxExpenses>1100000</TaxExpenses>
+  </Expenses>
+  <Profit>
+    <EBITDA>2610000</EBITDA>
+    <NetProfit>1610000</NetProfit>
+  </Profit>
+  <Assets>
+    <CurrentAssets>12500000</CurrentAssets>
+    <FixedAssets>8900000</FixedAssets>
+  </Assets>
+</FinancialReport>

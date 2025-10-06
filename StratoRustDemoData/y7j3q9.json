@@ -1,0 +1,31 @@
+{
+  "portfolio": {
+    "account_number": "INV-789456",
+    "total_value": 125680.50,
+    "holdings": [
+      {
+        "symbol": "AAPL",
+        "shares": 150,
+        "purchase_price": 145.20,
+        "current_price": 178.50,
+        "gain_loss": 4995.00
+      },
+      {
+        "symbol": "MSFT",
+        "shares": 100,
+        "purchase_price": 285.30,
+        "current_price": 412.80,
+        "gain_loss": 12750.00
+      },
+      {
+        "symbol": "VOO",
+        "shares": 50,
+        "purchase_price": 380.25,
+        "current_price": 445.60,
+        "gain_loss": 3267.50
+      }
+    ],
+    "cash_balance": 8500.00,
+    "margin_available": 62840.25
+  }
+}

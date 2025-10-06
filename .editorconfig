@@ -1,0 +1,57 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+indent_style = tab
+indent_size = 4
+
+# TypeScript, JavaScript, JSON, and configuration files
+[*.{ts,js,mts,mjs,json,jsonc}]
+indent_style = space
+indent_size = 2
+
+# Svelte files
+[*.svelte]
+indent_style = space
+indent_size = 2
+
+# CSS, SCSS, and styling files
+[*.{css,scss,sass}]
+indent_style = space
+indent_size = 2
+
+# HTML files
+[*.html]
+indent_style = space
+indent_size = 2
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Rust files
+[*.rs]
+indent_style = space
+indent_size = 4
+
+# TOML files (Cargo.toml, etc.)
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# Configuration files
+[*.{conf,ini}]
+indent_style = space
+indent_size = 2

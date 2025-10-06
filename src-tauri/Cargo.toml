@@ -167,7 +167,7 @@ parking_lot = "0.12" # Faster locks for better concurrency
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 directories = "5"
-dirs = "5"
+dirs = "6"
 bytesize = "1"
 sysinfo = "0.32"  # System information
 regex = "1"  # Regular expressions

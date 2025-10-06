@@ -1,5 +1,9 @@
 # StratoSort - AI-Powered File Organization
 
+<div align="center">
+  <img src="src-tauri/icons/stratosort-logo.png" alt="StratoSort Logo" width="200"/>
+</div>
+
 **🚀 Production-Ready Backend** | **⚠️ Frontend: Basic Placeholder**
 
 ## 📊 Quick Status

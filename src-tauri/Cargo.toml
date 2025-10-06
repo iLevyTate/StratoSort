@@ -106,7 +106,7 @@ html5ever = { version = "0.27", optional = true }   # HTML parsing
 markup5ever = { version = "0.12", optional = true } # Markup utilities
 # scraper = { version = "0.20", optional = true }     # HTML scraping - removed due to fxhash security advisory
 pulldown-cmark = { version = "0.11", optional = true } # Markdown parsing
-comrak = { version = "0.26", optional = true }      # CommonMark + GFM
+comrak = { version = "0.43", optional = true }      # CommonMark + GFM
 yaml-rust = { version = "0.4", optional = true }    # YAML file parsing
 toml = { version = "0.8", optional = true }         # TOML configuration files
 serde_yaml = { version = "0.9", optional = true }   # YAML with serde support

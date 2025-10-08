@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
+use tokio_util::sync::CancellationToken;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use uuid::Uuid;
 
 /// Memory pressure threshold (80% of cache capacity)
@@ -64,12 +66,14 @@ pub struct AppState {
     pub monitoring_service: Arc<crate::services::MonitoringService>,
     pub analytics: Arc<AnalyticsTracker>,
     pub rate_limiter: Arc<RateLimiter>,
+    pub shutdown_token: CancellationToken,
+    pub active_tasks: Arc<AtomicUsize>,
 }
 
 impl AppState {
     pub async fn new(handle: AppHandle, config: Config) -> Result<Self> {
-        let database = Arc::new(Database::new(&handle, &config).await?);
-        let ai_service = Arc::new(AiService::new(&config).await?);
+        let database: Arc<Database> = Arc::new(Database::new(&handle, &config).await?);
+        let ai_service: Arc<AiService> = Arc::new(AiService::new(&config).await?);
         let config_arc = Arc::new(RwLock::new(config));
         let ocr_processor = Arc::new(OcrProcessorManager::new());
         let file_analyzer = Arc::new(FileAnalyzer::new(
@@ -89,6 +93,10 @@ impl AppState {
         let monitoring_service = Arc::new(crate::services::MonitoringService::new());
         let analytics = Arc::new(AnalyticsTracker::new());
         let rate_limiter = Arc::new(RateLimiter::new());
+
+        // Initialize graceful shutdown system
+        let shutdown_token = CancellationToken::new();
+        let active_tasks = Arc::new(AtomicUsize::new(0));
 
         Ok(Self {
             handle,
@@ -110,6 +118,8 @@ impl AppState {
             monitoring_service,
             analytics,
             rate_limiter,
+            shutdown_token,
+            active_tasks,
         })
     }
 
@@ -151,6 +161,9 @@ impl AppState {
     pub async fn shutdown(&self) -> Result<()> {
         tracing::info!("Starting graceful shutdown of application services");
 
+        // Cancel shutdown token to signal all tasks to stop
+        self.shutdown_token.cancel();
+
         // 1. Stop file watcher first to prevent new operations
         let watcher_result = {
             let watcher_guard = self.file_watcher.read();
@@ -177,31 +190,35 @@ impl AppState {
             self.cancel_operation(operation_id);
         }
 
-        // 3. Wait a moment for operations to cancel gracefully
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // 3. Wait for all active tasks to complete or timeout
+        let shutdown_timeout = tokio::time::timeout(
+            tokio::time::Duration::from_secs(10),
+            async {
+                while self.active_tasks.load(Ordering::SeqCst) > 0 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
+            }
+        ).await;
 
-        // 4. Force cancel any remaining operations
-        let remaining = self.active_operations.len();
-        if remaining > 0 {
-            tracing::warn!("Force stopping {} remaining operations", remaining);
-            self.active_operations.clear();
+        if shutdown_timeout.is_err() {
+            tracing::warn!("Shutdown timeout reached, some tasks may not have completed cleanly");
         }
 
-        // 5. Clear file cache
+        // 4. Clear file cache
         {
             let cache_size = self.file_cache.entries.len();
             self.file_cache.entries.clear();
             tracing::info!("Cleared file cache ({} items)", cache_size);
         }
 
-        // 6. Perform final database operations
+        // 5. Perform final database operations
         if let Err(e) = self.database.close_connections().await {
             tracing::warn!("Error closing database connections: {}", e);
         } else {
             tracing::info!("Database connections closed successfully");
         }
 
-        // 7. Stop monitoring service
+        // 6. Stop monitoring service
         self.monitoring_service.shutdown().await;
 
         tracing::info!("Graceful shutdown completed");
@@ -754,32 +771,38 @@ impl AnalyticsTracker {
             timestamp: chrono::Utc::now(),
         };
 
-        let mut events = self.events.write();
-        events.push(event);
+        // Minimize lock duration by doing the event creation outside the lock
+        {
+            let mut events = self.events.write();
+            events.push(event);
 
-        // Keep only last 1000 events to prevent unbounded growth
-        if events.len() > 1000 {
-            events.remove(0);
+            // Keep only last 1000 events to prevent unbounded growth
+            if events.len() > 1000 {
+                events.remove(0);
+            }
         }
 
         Ok(())
     }
 
     pub async fn get_usage_stats(&self) -> Result<serde_json::Value> {
-        let events = self.events.read();
         let session_duration = self.start_time.elapsed().as_secs();
 
-        let event_counts =
-            events
+        // Minimize lock duration by collecting data outside the lock
+        let (total_events, event_counts) = {
+            let events = self.events.read();
+            let event_counts = events
                 .iter()
                 .fold(std::collections::HashMap::new(), |mut acc, event| {
                     *acc.entry(event.event_name.clone()).or_insert(0) += 1;
                     acc
                 });
+            (events.len(), event_counts)
+        };
 
         Ok(serde_json::json!({
             "session_duration_seconds": session_duration,
-            "total_events": events.len(),
+            "total_events": total_events,
             "event_counts": event_counts,
             "unique_events": event_counts.len(),
             "app_version": env!("CARGO_PKG_VERSION"),
@@ -810,27 +833,41 @@ impl RateLimiter {
 
     pub async fn check_rate_limit(&self, operation: &str) -> Result<()> {
         let now = chrono::Utc::now().timestamp();
-        let mut calls = self
-            .calls
-            .entry(operation.to_string())
-            .or_default();
+        let operation_key = operation.to_string();
 
-        // Remove calls older than 1 minute
-        while let Some(&time) = calls.front() {
-            if now - time > 60 {
-                calls.pop_front();
+        // Get the calls list without holding the lock during cleanup
+        let calls = {
+            let calls_guard = self.calls.get_mut(&operation_key);
+            if let Some(mut calls) = calls_guard {
+                // Remove calls older than 1 minute while holding lock briefly
+                while let Some(&time) = calls.front() {
+                    if now - time > 60 {
+                        calls.pop_front();
+                    } else {
+                        break;
+                    }
+                }
+                calls.clone()
             } else {
-                break;
+                VecDeque::new()
             }
-        }
+        };
 
+        // Check rate limit outside of lock
         if calls.len() >= self.max_calls_per_minute {
             return Err(crate::error::AppError::TooManyRequests {
                 message: format!("Rate limit exceeded for {}", operation),
             });
         }
 
-        calls.push_back(now);
+        // Update the calls list
+        let mut calls_mut = if let Some(calls) = self.calls.get_mut(&operation_key) {
+            calls
+        } else {
+            self.calls.insert(operation_key.clone(), VecDeque::new());
+            self.calls.get_mut(&operation_key).unwrap()
+        };
+        calls_mut.push_back(now);
         Ok(())
     }
 }

@@ -1,16 +1,20 @@
-use crate::{ai::AiServiceStatus, error::Result, state::AppState};
+use crate::{
+    ai::AiServiceStatus,
+    error::{AppError, Result},
+    state::AppState,
+};
 use tauri::{AppHandle, Emitter, State};
 
-/// Get current AI service status
+/// Get current AI service status with structured response
 #[tauri::command]
-pub async fn get_ai_status(state: State<'_, std::sync::Arc<AppState>>) -> Result<AiServiceStatus> {
+pub async fn get_ai_status(state: State<'_, std::sync::Arc<AppState>>) -> crate::error::Result<AiServiceStatus> {
     // Add timeout to prevent indefinite blocking
     let status = tokio::time::timeout(
         tokio::time::Duration::from_secs(5),
         state.ai_service.get_status(),
     )
     .await
-    .map_err(|_| crate::error::AppError::Timeout {
+    .map_err(|_| AppError::Timeout {
         message: "AI status check timed out".to_string(),
     })?;
 

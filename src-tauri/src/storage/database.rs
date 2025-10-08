@@ -867,7 +867,7 @@ impl Database {
     pub fn database_path(handle: &AppHandle) -> Result<PathBuf> {
         // Legacy sync method - use database_path_with_fallbacks for new code
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(Self::database_path_with_fallbacks(handle))
+            tauri::async_runtime::block_on(Self::database_path_with_fallbacks(handle))
         })
     }
 
@@ -984,17 +984,8 @@ impl Database {
                 .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                 .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
                 .busy_timeout(Duration::from_secs(timeout_seconds))
-                // Enhanced performance PRAGMAs for optimal throughput
-                .pragma("cache_size", "-64000") // 64MB cache for better performance
-                .pragma("temp_store", "memory") // Store temp tables in memory
-                .pragma("mmap_size", "268435456") // 256MB memory mapping for large files
-                .pragma("journal_size_limit", "67108864") // 64MB journal limit
-                .pragma("wal_autocheckpoint", "1000") // Checkpoint every 1000 WAL pages
-                .pragma("synchronous", "NORMAL") // Balance durability vs performance
-                .pragma("foreign_keys", "ON") // Enable foreign key constraints
-                .pragma("case_sensitive_like", "OFF") // Case-insensitive LIKE for better UX
-                .pragma("automatic_index", "ON") // Allow SQLite to create automatic indexes
-                .pragma("optimize", ""); // Run SQLite optimization after connection
+                // Keep compatibility with bundled SQLite (no extra pragmas)
+                .pragma("foreign_keys", "ON");
 
             // CRITICAL: Set connection pool limits for optimal performance
             let pool_options = sqlx::sqlite::SqlitePoolOptions::new()

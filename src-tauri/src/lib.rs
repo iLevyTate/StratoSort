@@ -21,7 +21,7 @@ use crate::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{async_runtime, generate_context, generate_handler, Emitter, Manager};
+use tauri::{generate_context, generate_handler, Emitter, Manager};
 use std::sync::atomic::Ordering;
 use tracing::{error, info, warn};
 
@@ -271,17 +271,21 @@ pub async fn run() -> crate::error::Result<()> {
 
             // Initialize Ollama service if configured
             if config.ai_provider.to_lowercase() == "ollama" && !config.ollama_host.is_empty() {
-                if let Err(e) = async_runtime::block_on(async {
-                    crate::ai::ollama_manager::initialize_ollama_service(&config).await
+                let config_for_ollama = config.clone();
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tauri::async_runtime::block_on(async {
+                        crate::ai::ollama_manager::initialize_ollama_service(&config_for_ollama).await
+                    })
                 }) {
                     warn!("Failed to initialize Ollama service: {}. Continuing with fallback mode.", e);
                 }
             }
 
             // Initialize app state asynchronously with proper retry logic
-            // We must use block_on here because Tauri's setup is synchronous
-            let state = Arc::new(async_runtime::block_on(async {
-                initialize_app_state_with_retry(handle.clone(), config.clone()).await
+            let state = Arc::new(tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    initialize_app_state_with_retry(handle.clone(), config.clone()).await
+                })
             })?);
             app.manage(state.clone());
 

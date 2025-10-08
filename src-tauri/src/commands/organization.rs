@@ -1,6 +1,7 @@
 use crate::{error::Result, state::AppState};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
+use tracing;
 
 /// Progress update interval for organization operations
 const ORGANIZATION_PROGRESS_UPDATE_INTERVAL: usize = 10;
@@ -449,11 +450,21 @@ pub async fn auto_organize_directory(
                 .unwrap_or(None)
                 .is_none()
             {
-                if let Ok(content) = std::fs::read_to_string(file_path) {
-                    if let Ok(analysis) = state.ai_service.analyze_file(&content, "").await {
-                        analyses.insert(file_path.clone(), analysis.category.clone());
-                        // Store analysis result for future use
-                        let _ = state.database.save_analysis(&analysis).await;
+                // Use spawn_blocking for file I/O to avoid blocking the async runtime
+                let file_path_owned = file_path.to_string();
+                match tokio::task::spawn_blocking(move || std::fs::read_to_string(&file_path_owned)).await {
+                    Ok(Ok(content)) => {
+                        if let Ok(analysis) = state.ai_service.analyze_file(&content, "").await {
+                            analyses.insert(file_path.clone(), analysis.category.clone());
+                            // Store analysis result for future use
+                            let _ = state.database.save_analysis(&analysis).await;
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Failed to read file for AI analysis: {}", e);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Task panicked while reading file: {}", e);
                     }
                 }
             }
@@ -932,59 +943,95 @@ pub async fn calculate_folder_match_confidence(file_path: &str, folder: &SmartFo
                 evaluate_condition(&rule.condition, &mime)
             }
             RuleType::FileSize => {
-                // Get file size for comparison
-                if let Ok(metadata) = std::fs::metadata(file_path) {
-                    let size_str = metadata.len().to_string();
-                    evaluate_condition(&rule.condition, &size_str)
-                } else {
-                    false
+                // Get file size for comparison using spawn_blocking
+                let file_path_owned = file_path.to_string();
+                match tokio::task::spawn_blocking(move || std::fs::metadata(&file_path_owned)).await {
+                    Ok(Ok(metadata)) => {
+                        let size_str = metadata.len().to_string();
+                        evaluate_condition(&rule.condition, &size_str)
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Failed to get file metadata for size comparison: {}", e);
+                        false
+                    }
+                    Err(e) => {
+                        tracing::warn!("Task panicked while getting file metadata: {}", e);
+                        false
+                    }
                 }
             }
             RuleType::FileContent => {
-                // Read file content for matching (first 10KB for performance)
-                if let Ok(content) = std::fs::read_to_string(file_path) {
-                    let preview = if content.len() > 10240 {
-                        &content[..10240]
-                    } else {
-                        &content
-                    };
-                    evaluate_condition(&rule.condition, preview)
-                } else {
-                    false
+                // Read file content for matching using spawn_blocking (first 10KB for performance)
+                let file_path_owned = file_path.to_string();
+                match tokio::task::spawn_blocking(move || std::fs::read_to_string(&file_path_owned)).await {
+                    Ok(Ok(content)) => {
+                        let preview = if content.len() > 10240 {
+                            &content[..10240]
+                        } else {
+                            &content
+                        };
+                        evaluate_condition(&rule.condition, preview)
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Failed to read file for content matching: {}", e);
+                        false
+                    }
+                    Err(e) => {
+                        tracing::warn!("Task panicked while reading file for content matching: {}", e);
+                        false
+                    }
                 }
             }
             RuleType::CreationDate => {
-                // Get creation date for comparison
-                if let Ok(metadata) = std::fs::metadata(file_path) {
-                    if let Ok(created) = metadata.created() {
-                        if let Ok(duration) = created.duration_since(std::time::UNIX_EPOCH) {
-                            let timestamp_str = duration.as_secs().to_string();
-                            evaluate_condition(&rule.condition, &timestamp_str)
+                // Get creation date for comparison using spawn_blocking
+                let file_path_owned = file_path.to_string();
+                match tokio::task::spawn_blocking(move || std::fs::metadata(&file_path_owned)).await {
+                    Ok(Ok(metadata)) => {
+                        if let Ok(created) = metadata.created() {
+                            if let Ok(duration) = created.duration_since(std::time::UNIX_EPOCH) {
+                                let timestamp_str = duration.as_secs().to_string();
+                                evaluate_condition(&rule.condition, &timestamp_str)
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
-                    } else {
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Failed to get file metadata for creation date: {}", e);
                         false
                     }
-                } else {
-                    false
+                    Err(e) => {
+                        tracing::warn!("Task panicked while getting file metadata for creation date: {}", e);
+                        false
+                    }
                 }
             }
             RuleType::ModificationDate => {
-                // Get modification date for comparison
-                if let Ok(metadata) = std::fs::metadata(file_path) {
-                    if let Ok(modified) = metadata.modified() {
-                        if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
-                            let timestamp_str = duration.as_secs().to_string();
-                            evaluate_condition(&rule.condition, &timestamp_str)
+                // Get modification date for comparison using spawn_blocking
+                let file_path_owned = file_path.to_string();
+                match tokio::task::spawn_blocking(move || std::fs::metadata(&file_path_owned)).await {
+                    Ok(Ok(metadata)) => {
+                        if let Ok(modified) = metadata.modified() {
+                            if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                                let timestamp_str = duration.as_secs().to_string();
+                                evaluate_condition(&rule.condition, &timestamp_str)
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
-                    } else {
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Failed to get file metadata for modification date: {}", e);
                         false
                     }
-                } else {
-                    false
+                    Err(e) => {
+                        tracing::warn!("Task panicked while getting file metadata for modification date: {}", e);
+                        false
+                    }
                 }
             }
             RuleType::Path => {

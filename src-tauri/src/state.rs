@@ -835,39 +835,26 @@ impl RateLimiter {
         let now = chrono::Utc::now().timestamp();
         let operation_key = operation.to_string();
 
-        // Get the calls list without holding the lock during cleanup
-        let calls = {
-            let calls_guard = self.calls.get_mut(&operation_key);
-            if let Some(mut calls) = calls_guard {
-                // Remove calls older than 1 minute while holding lock briefly
-                while let Some(&time) = calls.front() {
-                    if now - time > 60 {
-                        calls.pop_front();
-                    } else {
-                        break;
-                    }
-                }
-                calls.clone()
-            } else {
-                VecDeque::new()
-            }
-        };
+        let mut calls_entry = self
+            .calls
+            .entry(operation_key.clone())
+            .or_insert_with(VecDeque::new);
 
-        // Check rate limit outside of lock
-        if calls.len() >= self.max_calls_per_minute {
+        while let Some(&time) = calls_entry.front() {
+            if now - time > 60 {
+                calls_entry.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        if calls_entry.len() >= self.max_calls_per_minute {
             return Err(crate::error::AppError::TooManyRequests {
                 message: format!("Rate limit exceeded for {}", operation),
             });
         }
 
-        // Update the calls list
-        let mut calls_mut = if let Some(calls) = self.calls.get_mut(&operation_key) {
-            calls
-        } else {
-            self.calls.insert(operation_key.clone(), VecDeque::new());
-            self.calls.get_mut(&operation_key).unwrap()
-        };
-        calls_mut.push_back(now);
+        calls_entry.push_back(now);
         Ok(())
     }
 }

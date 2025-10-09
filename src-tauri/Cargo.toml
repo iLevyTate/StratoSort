@@ -262,6 +262,7 @@ exclude = [
 ]
 
 [profile.release]
+overflow-checks = true
 panic = "abort"  # Immediate abort prevents resource leaks and info disclosure
 codegen-units = 1
 lto = true

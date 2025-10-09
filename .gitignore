@@ -183,6 +183,7 @@ htmlcov/
 # Generated files
 *.generated.*
 gen/
+repomix-output.xml
 
 # Cache directories
 .cache/

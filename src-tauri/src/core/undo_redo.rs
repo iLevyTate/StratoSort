@@ -345,7 +345,14 @@ impl UndoRedoManager {
 
         if let Some(metadata) = &operation.metadata {
             // Estimate JSON size - this is an approximation
-            size += serde_json::to_string(metadata).unwrap_or_default().len();
+            match serde_json::to_string(metadata) {
+                Ok(serialized) => {
+                    size += serialized.len();
+                }
+                Err(error) => {
+                    tracing::warn!("Failed to serialize metadata for size estimation: {}", error);
+                }
+            }
         }
 
         size

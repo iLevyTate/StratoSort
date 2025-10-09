@@ -568,7 +568,10 @@ impl Database {
         let embedding_json = serde_json::to_string(embedding)?;
         let embedding_bytes = embedding_json.as_bytes().to_vec();
 
-        // Save to main table as fallback/backup
+        // Use transaction for atomic embedding storage across multiple tables
+        let mut tx = self.pool.begin().await?;
+
+        // Save to main table as fallback/backup within transaction
         sqlx::query(
             r#"
             UPDATE file_analysis
@@ -578,10 +581,10 @@ impl Database {
         )
         .bind(&embedding_bytes)
         .bind(path)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
-        // Save to embeddings_v3 table for improved organization
+        // Save to embeddings_v3 table for improved organization within transaction
         let model = model_name.unwrap_or("unknown");
         sqlx::query(
             r#"
@@ -592,10 +595,13 @@ impl Database {
         .bind(path)
         .bind(&embedding_bytes)
         .bind(model)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
-        // Save to vector table using proper extension if available
+        // Commit transaction first, then handle vector table separately if available
+        tx.commit().await?;
+
+        // Save to vector table using proper extension if available (separate from transaction)
         if self.vector_ext.is_available {
             if let Err(e) = self
                 .vector_ext
@@ -861,7 +867,7 @@ impl Database {
     pub fn database_path(handle: &AppHandle) -> Result<PathBuf> {
         // Legacy sync method - use database_path_with_fallbacks for new code
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(Self::database_path_with_fallbacks(handle))
+            tauri::async_runtime::block_on(Self::database_path_with_fallbacks(handle))
         })
     }
 
@@ -978,17 +984,16 @@ impl Database {
                 .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                 .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
                 .busy_timeout(Duration::from_secs(timeout_seconds))
-                .pragma("cache_size", "10000")
-                .pragma("temp_store", "memory")
-                .pragma("mmap_size", "268435456")
-                .pragma("journal_size_limit", "67108864"); // 64MB journal limit
+                // Keep compatibility with bundled SQLite (no extra pragmas)
+                .pragma("foreign_keys", "ON");
 
-            // CRITICAL: Set connection pool limits to prevent resource exhaustion
+            // CRITICAL: Set connection pool limits for optimal performance
             let pool_options = sqlx::sqlite::SqlitePoolOptions::new()
-                .max_connections(10) // Limit concurrent connections
+                .max_connections(5) // Reduced from 10 for better resource management
                 .min_connections(1) // Keep at least one connection warm
-                .acquire_timeout(Duration::from_secs(30))
-                .idle_timeout(Duration::from_secs(600)); // 10 minutes
+                .acquire_timeout(Duration::from_secs(10)) // Faster timeout for responsiveness
+                .idle_timeout(Duration::from_secs(300)) // 5 minutes instead of 10
+                .max_lifetime(Duration::from_secs(3600)); // Recycle connections after 1 hour
 
             match pool_options.connect_with(connection_options).await {
                 Ok(pool) => {
@@ -2260,6 +2265,55 @@ impl Database {
             .await?;
 
         Ok(result.rows_affected() as usize)
+    }
+
+    /// Execute multiple operations in a single transaction for better performance
+    /// This method is currently not used but kept for future batch operation support
+    #[allow(dead_code)]
+    pub async fn with_transaction<F, T>(&self, operation: F) -> Result<T>
+    where
+        F: FnOnce(sqlx::Transaction<'_, sqlx::Sqlite>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(T, sqlx::Transaction<'_, sqlx::Sqlite>)>> + Send + '_>>,
+    {
+        let tx = self.pool.begin().await?;
+        let (result, tx) = operation(tx).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    /// Execute batch file analysis storage for improved performance
+    pub async fn batch_save_analyses(&self, analyses: Vec<FileAnalysis>) -> Result<()> {
+        if analyses.is_empty() {
+            return Ok(());
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        for analysis in analyses {
+            let tags_json = serde_json::to_string(&analysis.tags)?;
+            let analyzed_at = chrono::Utc::now().timestamp();
+
+            sqlx::query(
+                r#"
+                INSERT OR REPLACE INTO file_analysis
+                (path, category, tags, summary, confidence, extracted_text, detected_language, analyzed_at, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(&analysis.path)
+            .bind(&analysis.category)
+            .bind(&tags_json)
+            .bind(&analysis.summary)
+            .bind(analysis.confidence)
+            .bind(&analysis.extracted_text)
+            .bind(&analysis.detected_language)
+            .bind(analyzed_at)
+            .bind(None::<&[u8]>) // NULL for embedding initially
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 }
 

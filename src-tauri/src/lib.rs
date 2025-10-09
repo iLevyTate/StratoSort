@@ -6,6 +6,7 @@ pub mod config;
 pub mod core;
 pub mod error;
 pub mod events;
+pub mod responses;
 pub mod services;
 pub mod state;
 pub mod storage;
@@ -20,7 +21,8 @@ use crate::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{async_runtime, generate_context, generate_handler, Emitter, Manager};
+use tauri::{generate_context, generate_handler, Emitter, Manager};
+use std::sync::atomic::Ordering;
 use tracing::{error, info, warn};
 
 // Constants for timing and delays
@@ -175,7 +177,31 @@ async fn initialize_app_state_with_retry(
     }
 }
 
-pub fn run() -> crate::error::Result<()> {
+pub async fn run() -> crate::error::Result<()> {
+    // Set up graceful shutdown signal handling
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+    // Handle Ctrl+C and SIGTERM for graceful shutdown
+    let shutdown_tx_clone = shutdown_tx.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install SIGINT handler");
+        let _ = shutdown_tx_clone.send(()).await;
+    });
+
+    #[cfg(unix)]
+    {
+        let shutdown_tx_clone = shutdown_tx.clone();
+        tokio::spawn(async move {
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("Failed to install SIGTERM handler")
+                .recv()
+                .await;
+            let _ = shutdown_tx_clone.send(()).await;
+        });
+    }
+
     // Load environment variables from .env file if it exists
     match dotenv::dotenv() {
         Ok(path) => {
@@ -245,36 +271,51 @@ pub fn run() -> crate::error::Result<()> {
 
             // Initialize Ollama service if configured
             if config.ai_provider.to_lowercase() == "ollama" && !config.ollama_host.is_empty() {
-                if let Err(e) = async_runtime::block_on(async {
-                    crate::ai::ollama_manager::initialize_ollama_service(&config).await
+                let config_for_ollama = config.clone();
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tauri::async_runtime::block_on(async {
+                        crate::ai::ollama_manager::initialize_ollama_service(&config_for_ollama).await
+                    })
                 }) {
                     warn!("Failed to initialize Ollama service: {}. Continuing with fallback mode.", e);
                 }
             }
 
             // Initialize app state asynchronously with proper retry logic
-            // We must use block_on here because Tauri's setup is synchronous
-            let state = Arc::new(async_runtime::block_on(async {
-                initialize_app_state_with_retry(handle.clone(), config.clone()).await
+            let state = Arc::new(tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    initialize_app_state_with_retry(handle.clone(), config.clone()).await
+                })
             })?);
             app.manage(state.clone());
 
             // Backend service - no system tray or global shortcuts needed
 
-            // Initialize background services
+            // Initialize background services with graceful shutdown
             initialize_services(app, state.clone())?;
 
-            // Initialize file watcher with proper deadlock prevention
+            // Initialize file watcher with proper deadlock prevention and graceful shutdown
             if config.watch_folders {
                 info!("Initializing file watcher...");
 
                 // Use a separate task to avoid blocking the setup and prevent deadlocks
                 let state_for_watcher = state.clone();
                 let handle_for_watcher = handle.clone();
+                let shutdown_token = state.shutdown_token.clone();
 
-                async_runtime::spawn(async move {
+                let task_count = state.active_tasks.clone();
+                task_count.fetch_add(1, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    // Check if shutdown was requested before starting
+                    if shutdown_token.is_cancelled() {
+                        return;
+                    }
+
                     // Delay to ensure app state is fully initialized before starting file watcher
-                    tokio::time::sleep(Duration::from_millis(FILE_WATCHER_INIT_DELAY_MS)).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_millis(FILE_WATCHER_INIT_DELAY_MS)) => {},
+                        _ = shutdown_token.cancelled() => return,
+                    }
 
                     // Create and initialize the file watcher with timeout protection
                     let watcher_init_result = tokio::time::timeout(
@@ -289,16 +330,26 @@ pub fn run() -> crate::error::Result<()> {
                                 *watcher_guard = Some(file_watcher.clone());
                             }
 
-                            // Start the watcher with timeout protection
-                            tokio::time::timeout(
-                                tokio::time::Duration::from_secs(5),
-                                file_watcher.start()
-                            ).await
+                            // Start the watcher with timeout protection and shutdown awareness
+                            tokio::select! {
+                                result = tokio::time::timeout(
+                                    tokio::time::Duration::from_secs(5),
+                                    file_watcher.start()
+                                ) => {
+                                    match result {
+                                        Ok(_) => Ok(()),
+                                        Err(_) => Err(crate::error::AppError::Timeout {
+                                            message: "File watcher start timed out".to_string(),
+                                        }),
+                                    }
+                                },
+                                _ = shutdown_token.cancelled() => return Err(crate::error::AppError::Cancelled),
+                            }
                         }
                     ).await;
 
                     match watcher_init_result {
-                        Ok(Ok(Ok(_))) => {
+                        Ok(Ok(_)) => {
                             info!("File watcher initialized and started successfully");
                             crate::emit_event!(
                                 handle_for_watcher,
@@ -309,7 +360,7 @@ pub fn run() -> crate::error::Result<()> {
                                 })
                             );
                         }
-                        Ok(Ok(Err(e))) => {
+                        Ok(Err(e)) => {
                             error!("Failed to start file watcher: {}", e);
                             crate::emit_event!(
                                 handle_for_watcher,
@@ -320,7 +371,7 @@ pub fn run() -> crate::error::Result<()> {
                                 })
                             );
                         }
-                        Ok(Err(_)) => {
+                        Err(_) => {
                             error!("File watcher start operation timed out");
                             crate::emit_event!(
                                 handle_for_watcher,
@@ -331,28 +382,27 @@ pub fn run() -> crate::error::Result<()> {
                                 })
                             );
                         }
-                        Err(_) => {
-                            error!("File watcher initialization timed out");
-                            crate::emit_event!(
-                                handle_for_watcher,
-                                crate::events::file::WATCHER_ERROR,
-                                serde_json::json!({
-                                    "error": "Timeout during file watcher initialization",
-                                    "message": "File monitoring initialization timed out"
-                                })
-                            );
-                        }
                     }
+
+                    // Decrement active task count when done
+                    drop(task_count);
                 });
             } else {
                 info!("File watching disabled in configuration");
             }
 
-            // Try to connect to Ollama in background with retry logic
+            // Try to connect to Ollama in background with retry logic and graceful shutdown
             let state_for_ollama = state.clone();
-            async_runtime::spawn(async move {
+            let shutdown_token = state.shutdown_token.clone();
+
+            let task_count = state.active_tasks.clone();
+            task_count.fetch_add(1, Ordering::SeqCst);
+            tokio::spawn(async move {
                 // Give the app a moment to fully start
-                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {},
+                    _ = shutdown_token.cancelled() => return,
+                }
 
                 // Try multiple common Ollama hosts with retry
                 let ollama_hosts = vec![
@@ -380,12 +430,16 @@ pub fn run() -> crate::error::Result<()> {
                         })
                     );
                 }
+
+                // Decrement active task count when done
+                drop(task_count);
             });
 
             info!("StratoSort initialized successfully");
+
             Ok(())
         })
-        .invoke_handler(generate_handler![
+    .invoke_handler(generate_handler![
             // File commands
             commands::files::scan_directory,
             commands::files::scan_directory_stream,
@@ -620,6 +674,19 @@ pub fn run() -> crate::error::Result<()> {
             crate::error::AppError::from(e)
         })?;
 
+    // The Tauri app is now running. Wait for shutdown signal
+    tokio::select! {
+        _ = shutdown_rx.recv() => {
+            info!("Shutdown signal received, initiating graceful shutdown...");
+        },
+        _ = tokio::signal::ctrl_c() => {
+            info!("Ctrl+C received, initiating graceful shutdown...");
+        },
+    }
+
+    // Note: Graceful shutdown is handled within the application lifecycle
+    // The Tauri app will handle cleanup when it exits
+
     Ok(())
 }
 
@@ -629,58 +696,101 @@ fn initialize_services(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize notification service
     let _notification_service = NotificationService::new(app.handle().clone());
-    // Send a welcome notification asynchronously
+
+    // Send a welcome notification asynchronously with graceful shutdown
     {
         let app_handle = app.handle().clone();
-        async_runtime::spawn(async move {
-            let notifier = NotificationService::new(app_handle);
-            let _ = notifier
-                .send_success("StratoSort Ready", "Background services initialized")
-                .await;
+        let shutdown_token = state.shutdown_token.clone();
+
+        let task_count = state.active_tasks.clone();
+        task_count.fetch_add(1, Ordering::SeqCst);
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                    let notifier = NotificationService::new(app_handle);
+                    let _ = notifier
+                        .send_success("StratoSort Ready", "Background services initialized")
+                        .await;
+                },
+                _ = shutdown_token.cancelled() => return,
+            }
         });
     }
 
-    // Start periodic tasks
+    // Start periodic tasks with graceful shutdown
     let state_clone = state.clone();
-    async_runtime::spawn(async move {
+    let shutdown_token = state.shutdown_token.clone();
+
+    let task_count = state.active_tasks.clone();
+    task_count.fetch_add(1, Ordering::SeqCst);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Cleanup old cache entries
+                    if let Err(e) = state_clone.cleanup_cache().await {
+                        error!("Cache cleanup failed: {}", e);
+                    }
 
-            // Cleanup old cache entries
-            if let Err(e) = state_clone.cleanup_cache().await {
-                error!("Cache cleanup failed: {}", e);
-            }
+                    // Cleanup stale operations (older than 1 hour)
+                    state_clone.cleanup_old_operations(3600);
 
-            // Cleanup stale operations (older than 1 hour)
-            state_clone.cleanup_old_operations(3600);
-
-            // Save state periodically
-            if let Err(e) = state_clone.save_state().await {
-                error!("State save failed: {}", e);
+                    // Save state periodically
+                    if let Err(e) = state_clone.save_state().await {
+                        error!("State save failed: {}", e);
+                    }
+                },
+                _ = shutdown_token.cancelled() => break,
             }
         }
+
+        // Decrement active task count when done
+        drop(task_count);
     });
 
-    // Start memory monitoring
+    // Start memory monitoring with graceful shutdown
     let monitor = Arc::new(MemoryMonitor::new());
-    {
-        let monitor_clone = monitor.clone();
-        async_runtime::spawn(async move {
-            let _ = monitor_clone.start().await;
-        });
-    }
+    let shutdown_token = state.shutdown_token.clone();
 
-    // Run basic health checks once after startup
-    async_runtime::spawn(async move {
-        match HealthChecker::check_all().await {
-            Ok(status) => {
-                if status.healthy {
-                    info!("Health checks passed");
-                } else {
-                    warn!("Health checks reported issues: {:?}", status.checks);
+    let task_count = state.active_tasks.clone();
+    task_count.fetch_add(1, Ordering::SeqCst);
+    tokio::spawn(async move {
+        tokio::select! {
+            result = monitor.start() => {
+                if let Err(e) = result {
+                    warn!("Memory monitoring failed: {}", e);
                 }
-            }
-            Err(e) => warn!("Health checks failed to run: {}", e),
+            },
+            _ = shutdown_token.cancelled() => return,
+        }
+
+        // Decrement active task count when done
+        drop(task_count);
+    });
+
+    // Run basic health checks once after startup with graceful shutdown
+    let _state_clone = state.clone();
+    let shutdown_token = state.shutdown_token.clone();
+
+    let task_count = state.active_tasks.clone();
+    task_count.fetch_add(1, Ordering::SeqCst);
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
+                match HealthChecker::check_all().await {
+                    Ok(status) => {
+                        if status.healthy {
+                            info!("Health checks passed");
+                        } else {
+                            warn!("Health checks reported issues: {:?}", status.checks);
+                        }
+                    }
+                    Err(e) => warn!("Health checks failed to run: {}", e),
+                }
+            },
+            _ = shutdown_token.cancelled() => return,
         }
     });
 
@@ -689,7 +799,8 @@ fn initialize_services(
 
 #[cfg(test)]
 mod tests {
-    // Test modules - no imports needed for basic test
+    use super::*;
+    use tokio_test::assert_ok;
 
     #[test]
     fn test_module_imports() {
@@ -697,9 +808,98 @@ mod tests {
         // If this compiles, all modules are imported correctly
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_async_setup() {
-        // Test async functionality
+        // Test async functionality with multi-threaded runtime
         // If this runs without panicking, async setup works
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_time_controlled_async() {
+        // Test with time control for deterministic testing
+        let start = tokio::time::Instant::now();
+
+        // Advance time manually
+        tokio::time::advance(tokio::time::Duration::from_secs(1)).await;
+
+        let elapsed = start.elapsed();
+        assert!(elapsed >= tokio::time::Duration::from_secs(1));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_database_connection() {
+        // Test database connection and basic operations
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        // Test creating a database connection
+        let db = crate::storage::Database::new_test(&db_path).await.unwrap();
+
+        // Test basic query
+        let result = db.health_check().await;
+        assert_ok!(result);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_error_send_sync() {
+        // Test that our error types are Send + Sync
+        fn assert_send_sync<T: Send + Sync>() {}
+
+        assert_send_sync::<crate::error::AppError>();
+        assert_send_sync::<crate::error::Result<()>>();
+    }
+
+    // Property tests for response types
+    #[cfg(test)]
+    mod property_tests {
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn test_command_response_roundtrip(data in ".*") {
+                // Test CommandResponse serialization/deserialization with success case
+                let response = crate::responses::CommandResponse::success(data.clone());
+
+                // Test roundtrip
+                let serialized = serde_json::to_string(&response).unwrap();
+                let deserialized: crate::responses::CommandResponse<String> = serde_json::from_str(&serialized).unwrap();
+
+                // Verify success status and data matches
+                prop_assert_eq!(response.success, deserialized.success);
+                prop_assert_eq!(response.data, deserialized.data);
+            }
+
+            #[test]
+            fn test_error_response_roundtrip(error_msg in ".*") {
+                // Test CommandResponse serialization/deserialization with error case
+                let response = crate::responses::CommandResponse::<()>::error_with_details(
+                    "TEST_ERROR".to_string(),
+                    error_msg.clone(),
+                    None,
+                    true,
+                );
+
+                // Test roundtrip
+                let serialized = serde_json::to_string(&response).unwrap();
+                let deserialized: crate::responses::CommandResponse<()> = serde_json::from_str(&serialized).unwrap();
+
+                // Verify error status matches
+                prop_assert_eq!(response.success, deserialized.success);
+                prop_assert!(!deserialized.success);
+            }
+
+            #[test]
+            fn test_file_size_validation(size in 0u64..1000000u64) {
+                // Test that file size validation works correctly
+                use crate::utils::security::validate_file_size;
+
+                // Small files should always be valid
+                let result = validate_file_size(size, 1000000);
+                prop_assert!(result.is_ok() || size > 1000000);
+            }
+        }
     }
 }

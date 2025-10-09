@@ -255,13 +255,20 @@ async fn scan_directory_internal(
     );
 
     if recursive {
-        // First pass: count total entries for progress calculation
+        // First pass: count total entries for progress calculation using spawn_blocking
         let max_depth = get_max_scan_depth(&state);
-        let total_entries = WalkDir::new(&sanitized_path)
-            .max_depth(max_depth)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .count();
+        let sanitized_path_clone = sanitized_path.clone();
+        let total_entries = tokio::task::spawn_blocking(move || {
+            WalkDir::new(&sanitized_path_clone)
+                .max_depth(max_depth)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .count()
+        }).await.map_err(|e| {
+            crate::error::AppError::ProcessingError {
+                message: format!("Failed to count directory entries: {}", e),
+            }
+        })?;
 
         state.update_progress(
             operation_id,
@@ -269,13 +276,22 @@ async fn scan_directory_internal(
             format!("Found {} items to scan", total_entries),
         );
 
-        // Second pass: process entries with progress updates
+        // Second pass: process entries with progress updates using spawn_blocking for WalkDir
         let mut processed = 0;
-        for entry in WalkDir::new(&sanitized_path)
-            .max_depth(max_depth)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        let sanitized_path_clone = sanitized_path.clone();
+        let entries: Vec<_> = tokio::task::spawn_blocking(move || {
+            WalkDir::new(&sanitized_path_clone)
+                .max_depth(max_depth)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .collect()
+        }).await.map_err(|e| {
+            crate::error::AppError::ProcessingError {
+                message: format!("Failed to collect directory entries: {}", e),
+            }
+        })?;
+
+        for entry in entries {
             // Check for cancellation atomically
             let is_cancelled = state
                 .active_operations
@@ -425,10 +441,20 @@ pub async fn scan_directory_stream(
 
         if recursive {
             let max_depth = get_max_scan_depth(&state_clone);
-            let entries = WalkDir::new(&sanitized_path)
-                .max_depth(max_depth)
-                .into_iter()
-                .filter_map(|e| e.ok());
+            let sanitized_path_clone = sanitized_path.clone();
+            let entries: Vec<_> = match tokio::task::spawn_blocking(move || {
+                WalkDir::new(&sanitized_path_clone)
+                    .max_depth(max_depth)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .collect()
+            }).await {
+                Ok(entries) => entries,
+                Err(e) => {
+                    tracing::error!("Failed to collect streaming directory entries: {}", e);
+                    return;
+                }
+            };
 
             for entry in entries {
                 // Check for cancellation

@@ -47,8 +47,8 @@ tauri-plugin-http = "2"
 # tauri-plugin-nosleep = "0.1"
 
 # Async runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time", "process"] }
-tokio-util = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time", "process", "signal", "rt"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 futures = "0.3"
 async-trait = "0.1"
 
@@ -240,6 +240,8 @@ tauri = { version = "2", features = ["test"] }
 zip = "2.2"
 tar = "0.4"
 flate2 = "1.0"
+# Coverage reporting
+cargo-tarpaulin = "0.27"
 
 # CI test configuration
 [profile.ci]
@@ -249,7 +251,18 @@ codegen-units = 256
 lto = false
 incremental = false
 
+# Coverage configuration for tarpaulin
+[package.metadata.coverage]
+exclude = [
+    "src/bin/*",           # Exclude binary files
+    "src/lib.rs",          # Exclude main library file from coverage (it's mostly setup)
+    "src/tests/*",         # Exclude test modules
+    "src/error.rs",        # Error types are simple and don't need extensive coverage
+    "src/responses.rs",    # Response types are simple data structures
+]
+
 [profile.release]
+overflow-checks = true
 panic = "abort"  # Immediate abort prevents resource leaks and info disclosure
 codegen-units = 1
 lto = true

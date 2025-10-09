@@ -401,16 +401,22 @@ impl StratoSortOrchestrator {
         // Find applicable patterns for this file
         for pattern in self.learning_patterns.iter() {
             if pattern.confidence >= 0.95 && pattern.occurrences >= 3 {
-                // Check if this pattern applies to the file
-                if Self::pattern_applies_to_file(&pattern, file_path) {
-                    let suggestion = OrganizationSuggestion {
-                        source_path: file_path.to_string(),
-                        target_folder: pattern.target_patterns.first().unwrap().clone(),
-                        reason: format!("Auto-applied learned pattern: {:?}", pattern.pattern_type),
-                        confidence: pattern.confidence,
-                    };
+                if let Some(target) = pattern.target_patterns.first() {
+                    if Self::pattern_applies_to_file(&pattern, file_path) {
+                        let suggestion = OrganizationSuggestion {
+                            source_path: file_path.to_string(),
+                            target_folder: target.clone(),
+                            reason: format!("Auto-applied learned pattern: {:?}", pattern.pattern_type),
+                            confidence: pattern.confidence,
+                        };
 
-                    return Ok(Some(suggestion));
+                        return Ok(Some(suggestion));
+                    }
+                } else {
+                    tracing::warn!(
+                        ?pattern.pattern_type,
+                        "Skipping auto-apply for pattern without target"
+                    );
                 }
             }
         }

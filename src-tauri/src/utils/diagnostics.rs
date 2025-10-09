@@ -72,18 +72,16 @@ impl HealthChecker {
         let name = "Database".to_string();
 
         // Try to perform a simple database operation with timeout
+        // Note: This is a basic check that verifies SQLite is functional
+        // The actual application database health is checked separately by the monitoring service
         let check_result = timeout(Duration::from_secs(5), async {
-            // We can't easily access the database connection here without dependency injection
-            // For now, we'll check if we can create a basic SQLite connection
-            let temp_db_path = std::env::temp_dir().join("health_check.db");
-
-            match sqlx::SqlitePool::connect(&format!("sqlite://{}", temp_db_path.display())).await {
+            // Create an in-memory database for health check
+            match sqlx::SqlitePool::connect("sqlite::memory:").await {
                 Ok(pool) => {
                     // Try a simple query
                     match sqlx::query("SELECT 1").execute(&pool).await {
                         Ok(_) => {
                             pool.close().await;
-                            let _ = tokio::fs::remove_file(&temp_db_path).await;
                             Ok(())
                         }
                         Err(e) => Err(format!("Query failed: {}", e)),
